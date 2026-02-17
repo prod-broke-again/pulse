@@ -1,0 +1,97 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pulse-app
+    container_name: pulse-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: pulse
+      DB_USERNAME: pulse
+      DB_PASSWORD: pulse
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
+    networks:
+      - pulse
+    depends_on:
+      - postgres
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: pulse-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - pulse
+    depends_on:
+      - app
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - pulse
+
+  redis:
+    image: redis:7-alpine
+    container_name: pulse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - pulse
+
+  reverb:
+    image: pulse-app
+    container_name: pulse-reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan reverb:start
+    volumes:
+      - .:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_DATABASE: pulse
+      DB_USERNAME: pulse
+      DB_PASSWORD: pulse
+      REDIS_HOST: redis
+      REVERB_HOST: 0.0.0.0
+      REVERB_PORT: 8080
+    ports:
+      - "8081:8080"
+    networks:
+      - pulse
+    depends_on:
+      - app
+      - redis
+
+networks:
+  pulse:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Pulse Omnichannel Support API
+  description: Webhooks and auth endpoints for Pulse.
+  version: 1.0.0
+
+servers:
+  - url: /
+    description: App base URL (e.g. https://pulse.example.com)
+
+paths:
+  /webhook/vk/{sourceId}:
+    post:
+      summary: VK webhook
+      description: Inbound webhook for VK Callback API. Payload must contain user id and message text.
+      operationId: webhookVk
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Source ID from sources table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: VK callback payload (type, object, etc.)
+      responses:
+        '200':
+          description: Processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '422':
+          description: Validation or processing error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+
+  /webhook/telegram/{sourceId}:
+    post:
+      summary: Telegram webhook
+      description: Inbound webhook for Telegram Bot API updates. Payload must contain message.from.id and message.text.
+      operationId: webhookTelegram
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Source ID from sources table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Telegram Update (update_id, message, etc.)
+      responses:
+        '200':
+          description: Processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '422':
+          description: Validation or processing error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+
+  /auth/{provider}/redirect:
+    get:
+      summary: Social login redirect
+      description: Redirects to OAuth provider (VK or Telegram).
+      operationId: authSocialRedirect
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [vkontakte, telegram]
+      responses:
+        '302':
+          description: Redirect to provider
+
+  /auth/{provider}/callback:
+    get:
+      summary: Social login callback
+      description: OAuth callback; logs in user and redirects to /admin.
+      operationId: authSocialCallback
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [vkontakte, telegram]
+      responses:
+        '302':
+          description: Redirect to /admin or intended URL

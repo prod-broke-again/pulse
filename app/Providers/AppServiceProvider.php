@@ -3,10 +3,15 @@
 namespace App\Providers;
 
 use Carbon\CarbonImmutable;
+use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use SocialiteProviders\Manager\SocialiteWasCalled;
+use SocialiteProviders\Telegram\TelegramExtendSocialite;
+use SocialiteProviders\VKontakte\VKontakteExtendSocialite;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +29,23 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->registerSocialiteProviders();
+        $this->registerFilamentSocialLoginHook();
+    }
+
+    private function registerFilamentSocialLoginHook(): void
+    {
+        Filament::registerRenderHook('panels::auth.login.form.after', function (): string {
+            return view('filament.auth.social-login-buttons')->render();
+        });
+    }
+
+    private function registerSocialiteProviders(): void
+    {
+        Event::listen(SocialiteWasCalled::class, function (SocialiteWasCalled $event): void {
+            (new VKontakteExtendSocialite)->handle($event);
+            (new TelegramExtendSocialite)->handle($event);
+        });
     }
 
     /**
