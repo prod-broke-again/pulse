@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\SocialAuthController;
+use App\Http\Controllers\WidgetApiController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -20,5 +21,11 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 
 Route::post('/webhook/vk/{sourceId}', [\App\Http\Controllers\WebhookController::class, 'vk'])->name('webhook.vk');
 Route::post('/webhook/telegram/{sourceId}', [\App\Http\Controllers\WebhookController::class, 'telegram'])->name('webhook.telegram');
+
+Route::prefix('/api/widget')->group(function (): void {
+    Route::post('/session', [WidgetApiController::class, 'session'])->name('api.widget.session');
+    Route::get('/messages', [WidgetApiController::class, 'messages'])->name('api.widget.messages');
+    Route::post('/messages', [WidgetApiController::class, 'send'])->name('api.widget.send');
+});
 
 require __DIR__.'/settings.php';

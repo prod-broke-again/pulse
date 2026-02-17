@@ -1,0 +1,118 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+@import 'tailwindcss';
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+/* Стили страницы чата (layout, список чатов, сообщения) */
+.chat-page-section {
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+.chat-list-sidebar {
+    width: 18rem;
+    flex-shrink: 0;
+    border-right: 1px solid rgb(229 231 235);
+    display: flex;
+    flex-direction: column;
+}
+
+.dark .chat-list-sidebar {
+    border-color: rgba(255 255 255 / 0.1);
+}
+
+.chat-list-item {
+    width: 100%;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgb(243 244 246);
+    transition: background-color 0.15s;
+}
+
+.dark .chat-list-item {
+    border-color: rgba(255 255 255 / 0.05);
+}
+
+.chat-list-item:hover {
+    background-color: rgb(249 250 251);
+}
+
+.dark .chat-list-item:hover {
+    background-color: rgba(255 255 255 / 0.05);
+}
+
+.chat-list-item.active {
+    background-color: rgb(255 251 235);
+    box-shadow: inset 0 0 0 1px rgba(245 158 11 / 0.2);
+}
+
+.dark .chat-list-item.active {
+    background-color: rgba(245 158 11 / 0.1);
+    box-shadow: inset 0 0 0 1px rgba(245 158 11 / 0.2);
+}
+
+.chat-messages-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.chat-messages-scroll {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    padding: 1rem;
+    gap: 0.5rem;
+}
+
+.chat-message-bubble {
+    max-width: 85%;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.chat-message-bubble.client {
+    background-color: rgb(243 244 246);
+    color: rgb(17 24 39);
+}
+
+.dark .chat-message-bubble.client {
+    background-color: rgb(31 41 55);
+    color: rgb(255 255 255);
+}
+
+.chat-message-bubble.moderator {
+    background-color: rgb(245 158 11);
+    color: white;
+}
+
+.chat-input-form {
+    border-top: 1px solid rgb(229 231 235);
+    padding: 1rem;
+}
+
+.dark .chat-input-form {
+    border-color: rgba(255 255 255 / 0.1);
+}
+
+.chat-input-field {
+    display: block;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(209 213 219);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.dark .chat-input-field {
+    border-color: rgba(255 255 255 / 0.2);
+    background-color: rgba(255 255 255 / 0.05);
+}
+
+.chat-input-field:focus {
+    outline: none;
+    border-color: rgb(245 158 11);
+    box-shadow: 0 0 0 2px rgba(245 158 11 / 0.2);
+}

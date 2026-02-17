@@ -11,11 +11,13 @@ final readonly class Message
     public function __construct(
         public int $id,
         public int $chatId,
+        public ?string $externalMessageId,
         public ?int $senderId,
         public SenderType $senderType,
         public string $text,
         /** @var array<string, mixed> */
         public array $payload,
         public bool $isRead,
+        public ?\DateTimeInterface $createdAt = null,
     ) {}
 }

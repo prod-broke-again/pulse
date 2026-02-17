@@ -25,15 +25,24 @@ final readonly class CreateMessage
         SenderType $senderType,
         ?int $senderId = null,
         array $payload = [],
+        ?string $externalMessageId = null,
     ): Message {
         $chat = $this->chatRepository->findById($chatId);
         if ($chat === null) {
             throw new \InvalidArgumentException("Chat not found: {$chatId}");
         }
 
+        if ($externalMessageId !== null) {
+            $existing = $this->messageRepository->findByChatAndExternalMessageId($chatId, $externalMessageId);
+            if ($existing !== null) {
+                return $existing;
+            }
+        }
+
         $message = new \App\Domains\Communication\Entity\Message(
             id: 0,
             chatId: $chatId,
+            externalMessageId: $externalMessageId,
             senderId: $senderId,
             senderType: $senderType,
             text: $text,

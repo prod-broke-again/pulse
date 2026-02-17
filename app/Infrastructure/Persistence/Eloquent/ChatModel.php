@@ -60,6 +60,23 @@ class ChatModel extends Model
         return $this->hasMany(MessageModel::class, 'chat_id');
     }
 
+    public function latestMessage(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(MessageModel::class, 'chat_id')->latestOfMany();
+    }
+
+    /** Chat has been without moderator response for more than 5 minutes. */
+    public function isUrgent(): bool
+    {
+        $last = MessageModel::where('chat_id', $this->id)
+            ->orderByDesc('id')
+            ->first();
+        if ($last === null || $last->sender_type === 'moderator' || $last->sender_type === 'system') {
+            return false;
+        }
+        return $last->created_at?->lt(now()->subMinutes(5)) ?? false;
+    }
+
     public function getStatusEnum(): ChatStatus
     {
         return ChatStatus::from($this->status);

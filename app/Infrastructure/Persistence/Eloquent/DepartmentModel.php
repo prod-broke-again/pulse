@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Persistence\Eloquent;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -42,5 +43,15 @@ class DepartmentModel extends Model
     public function chats(): HasMany
     {
         return $this->hasMany(ChatModel::class, 'department_id');
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            \App\Models\User::class,
+            'department_user',
+            foreignPivotKey: 'department_id',
+            relatedPivotKey: 'user_id',
+        );
     }
 }

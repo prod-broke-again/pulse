@@ -6,6 +6,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domains\Integration\ValueObject\SourceType;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -44,6 +45,16 @@ class SourceModel extends Model
     public function chats(): HasMany
     {
         return $this->hasMany(ChatModel::class, 'source_id');
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            \App\Models\User::class,
+            'source_user',
+            foreignPivotKey: 'source_id',
+            relatedPivotKey: 'user_id',
+        );
     }
 
     public function getTypeEnum(): SourceType

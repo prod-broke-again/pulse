@@ -39,6 +39,7 @@ final readonly class ProcessInboundWebhook
         $departmentId = $this->extractDepartmentId($payload, $sourceId);
         $text = $this->extractText($payload);
         $userMetadata = $this->extractUserMetadata($payload);
+        $externalMessageId = $this->extractExternalMessageId($payload);
 
         $chat = $this->chatRepository->findBySourceAndExternalUser($sourceId, $externalUserId);
 
@@ -57,6 +58,7 @@ final readonly class ProcessInboundWebhook
             senderType: SenderType::Client,
             senderId: null,
             payload: $payload,
+            externalMessageId: $externalMessageId,
         );
     }
 
@@ -105,5 +107,19 @@ final readonly class ProcessInboundWebhook
         }
 
         return $from;
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function extractExternalMessageId(array $payload): ?string
+    {
+        $id = $payload['message']['message_id']
+            ?? $payload['object']['message_id']
+            ?? $payload['message_id']
+            ?? $payload['update_id'] ?? null;
+        if ($id === null) {
+            return null;
+        }
+
+        return (string) $id;
     }
 }

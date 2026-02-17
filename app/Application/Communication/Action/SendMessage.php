@@ -38,6 +38,7 @@ final readonly class SendMessage
         $message = new \App\Domains\Communication\Entity\Message(
             id: 0,
             chatId: $chatId,
+            externalMessageId: null,
             senderId: $senderId,
             senderType: $senderType,
             text: $text,

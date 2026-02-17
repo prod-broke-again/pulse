@@ -29,8 +29,8 @@ Required for processing: user identifier (e.g. `object.user_id` or `from.id`), m
 
 **Response:**
 
-- `200`: `{"ok": true}`
-- `422`: `{"ok": false, "error": "message"}`
+- `200`: `{"ok": true}` — payload accepted and queued for processing. Processing is asynchronous (job).
+- `500`: `{"ok": false, "error": "Server error"}` — e.g. queue unavailable.
 
 **Example:**
 
@@ -58,8 +58,8 @@ User id is taken from `message.from.id`, text from `message.text`. If `departmen
 
 **Response:**
 
-- `200`: `{"ok": true}`
-- `422`: `{"ok": false, "error": "message"}`
+- `200`: `{"ok": true}` — payload accepted and queued for processing. Processing is asynchronous (job).
+- `500`: `{"ok": false, "error": "Server error"}` — e.g. queue unavailable.
 
 **Example:**
 
@@ -69,6 +69,37 @@ Content-Type: application/json
 
 {"update_id":1,"message":{"from":{"id":123,"first_name":"User"},"text":"Hello"}}
 ```
+
+---
+
+## Widget API (web source)
+
+These endpoints are used by the embeddable widget script.
+
+### POST /api/widget/session
+
+Create or resume a chat session for website visitor.
+
+Required JSON fields:
+- `source_identifier` (string) - must point to a `web` source.
+- `visitor_id` (string) - stable client-side id (stored in localStorage by widget).
+
+Optional:
+- `name`, `email`, `department_slug`, `meta`.
+
+Response:
+- `200`: `{ "ok": true, "chat_token": "...", "chat": { ... } }`
+
+### GET /api/widget/messages?chat_token=...
+
+Return latest messages for chat token.
+
+### POST /api/widget/messages
+
+Send visitor message:
+- `chat_token` (string)
+- `text` (string)
+- `payload` (optional object)
 
 ---
 
@@ -125,5 +156,5 @@ For real-time updates, subscribe to private channels (e.g. with Laravel Echo). A
 - **sources** — id, name, type (web|vk|tg), identifier, secret_key, settings (json)
 - **departments** — id, source_id, name, slug, is_active
 - **chats** — id, source_id, department_id, external_user_id, user_metadata (json), status (new|active|closed), assigned_to (user id)
-- **messages** — id, chat_id, sender_id, sender_type (client|moderator|system), text, payload (json), is_read
+- **messages** — id, chat_id, external_message_id (nullable, unique with chat_id for idempotency), sender_id, sender_type (client|moderator|system), text, payload (json), is_read
 - **roles** — Spatie: admin, moderator (guard web)

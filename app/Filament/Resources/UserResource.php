@@ -29,6 +29,18 @@ class UserResource extends Resource
                 ->relationship('roles', 'name')
                 ->multiple()
                 ->preload(),
+            \Filament\Forms\Components\Select::make('sources')
+                ->label('Projects (Sources)')
+                ->relationship('sources', 'name')
+                ->multiple()
+                ->searchable()
+                ->preload(),
+            \Filament\Forms\Components\Select::make('departments')
+                ->label('Departments (optional)')
+                ->relationship('departments', 'name')
+                ->multiple()
+                ->searchable()
+                ->preload(),
         ]);
     }
 
@@ -40,6 +52,8 @@ class UserResource extends Resource
                 TextColumn::make('name'),
                 TextColumn::make('email'),
                 TextColumn::make('roles.name')->badge()->separator(','),
+                TextColumn::make('sources.name')->badge()->separator(',')->label('Projects'),
+                TextColumn::make('departments.name')->badge()->separator(',')->label('Departments'),
             ])
             ->defaultSort('id');
     }
@@ -47,5 +61,25 @@ class UserResource extends Resource
     public static function getRelations(): array
     {
         return [];
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
     }
 }

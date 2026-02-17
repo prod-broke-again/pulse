@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $chat_id
+ * @property string|null $external_message_id
  * @property int|null $sender_id
  * @property string $sender_type
  * @property string $text
@@ -24,6 +25,7 @@ class MessageModel extends Model
 
     protected $fillable = [
         'chat_id',
+        'external_message_id',
         'sender_id',
         'sender_type',
         'text',

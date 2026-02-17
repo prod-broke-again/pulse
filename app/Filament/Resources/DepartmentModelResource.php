@@ -31,6 +31,12 @@ class DepartmentModelResource extends Resource
             TextInput::make('name')->required()->maxLength(255),
             TextInput::make('slug')->required()->maxLength(255),
             Toggle::make('is_active')->default(true),
+            Select::make('users')
+                ->label('Moderators / Admins')
+                ->relationship('users', 'name')
+                ->multiple()
+                ->searchable()
+                ->preload(),
         ]);
     }
 
@@ -43,6 +49,7 @@ class DepartmentModelResource extends Resource
                 TextColumn::make('name'),
                 TextColumn::make('slug'),
                 IconColumn::make('is_active')->boolean(),
+                TextColumn::make('users.name')->label('Users')->badge()->separator(','),
             ])
             ->defaultSort('id');
     }
@@ -50,5 +57,25 @@ class DepartmentModelResource extends Resource
     public static function getRelations(): array
     {
         return [];
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return auth()->user()?->hasRole('admin') ?? false;
     }
 }
