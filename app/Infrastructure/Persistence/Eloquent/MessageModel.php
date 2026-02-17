@@ -8,6 +8,8 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property int $id
@@ -19,8 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property array|null $payload
  * @property bool $is_read
  */
-class MessageModel extends Model
+class MessageModel extends Model implements HasMedia
 {
+    use InteractsWithMedia;
     protected $table = 'messages';
 
     protected $fillable = [

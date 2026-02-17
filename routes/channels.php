@@ -7,7 +7,16 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 });
 
 Broadcast::channel('chat.{chatId}', function ($user, $chatId) {
-    return $user->hasAnyRole(['admin', 'moderator']);
+    if (! $user->hasAnyRole(['admin', 'moderator'])) {
+        return false;
+    }
+
+    $chat = \App\Infrastructure\Persistence\Eloquent\ChatModel::find($chatId);
+    if ($chat === null) {
+        return false;
+    }
+
+    return $user->can('view', $chat);
 });
 
 Broadcast::channel('moderator.{userId}', function ($user, $userId) {
