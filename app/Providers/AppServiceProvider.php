@@ -7,6 +7,7 @@ use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -31,6 +32,11 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->registerSocialiteProviders();
         $this->registerFilamentSocialLoginHook();
+
+        Gate::policy(
+            \App\Infrastructure\Persistence\Eloquent\ChatModel::class,
+            \App\Policies\ChatPolicy::class,
+        );
     }
 
     private function registerFilamentSocialLoginHook(): void
@@ -46,6 +52,11 @@ class AppServiceProvider extends ServiceProvider
             (new VKontakteExtendSocialite)->handle($event);
             (new TelegramExtendSocialite)->handle($event);
         });
+
+        Event::listen(
+            \App\Events\NewChatMessage::class,
+            \App\Listeners\SendPushOnNewMessage::class,
+        );
     }
 
     /**
