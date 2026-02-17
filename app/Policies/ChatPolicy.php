@@ -9,14 +9,29 @@ use App\Models\User;
 
 final class ChatPolicy
 {
+    public function viewAny(User $user): bool
+    {
+        return $user->hasAnyRole(['admin', 'moderator']);
+    }
+
     public function view(User $user, ChatModel $chat): bool
     {
         return $this->hasAccess($user, $chat);
     }
 
+    public function create(User $user): bool
+    {
+        return $user->isAdmin();
+    }
+
     public function update(User $user, ChatModel $chat): bool
     {
         return $this->hasAccess($user, $chat);
+    }
+
+    public function delete(User $user, ChatModel $chat): bool
+    {
+        return $user->isAdmin();
     }
 
     private function hasAccess(User $user, ChatModel $chat): bool

@@ -19,11 +19,11 @@ final class ChatPage extends Page
 {
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Communication';
+    protected static string|\UnitEnum|null $navigationGroup = 'Коммуникации';
 
-    protected static ?string $navigationLabel = 'Chat';
+    protected static ?string $navigationLabel = 'Чат';
 
-    protected static ?string $title = 'Chat';
+    protected static ?string $title = 'Чат';
 
     protected static ?int $navigationSort = 1;
 
