@@ -5,8 +5,12 @@ Machine-readable spec: [openapi.yaml](openapi.yaml) (OpenAPI 3.0).
 ## Overview
 
 - **Base URL:** Your app URL (e.g. `https://pulse.example.com`).
-- **Auth:** Webhooks do not use HTTP auth; validation is done by payload structure and optional secret in source settings.
 - **Format:** Request/response JSON where applicable.
+
+**Два контура API:**
+
+1. **REST API v1** — для desktop/mobile клиентов: авторизация по токену (Sanctum), чаты, сообщения, загрузки, FCM, шаблоны ответов. Полное описание: **[api-v1.md](api-v1.md)**.
+2. **Webhooks и виджет** — входящие вебхуки (VK, Telegram), виджет для сайта; auth по payload/секрету или по токену сессии виджета.
 
 ---
 

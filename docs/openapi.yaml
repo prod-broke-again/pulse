@@ -1,14 +1,455 @@
 openapi: 3.0.3
 info:
   title: Pulse Omnichannel Support API
-  description: Webhooks and auth endpoints for Pulse.
+  description: |
+    - Webhooks and social auth (Filament).
+    - REST API v1 for desktop/mobile clients (Bearer token, see api-v1.md for details).
   version: 1.0.0
 
 servers:
   - url: /
     description: App base URL (e.g. https://pulse.example.com)
 
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        message: { type: string }
+        code: { type: string }
+        errors: { type: object }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        roles: { type: array; items: { type: string } }
+        source_ids: { type: array; items: { type: integer } }
+        department_ids: { type: array; items: { type: integer } }
+    Chat:
+      type: object
+      properties:
+        id: { type: integer }
+        source_id: { type: integer }
+        department_id: { type: integer }
+        external_user_id: { type: string }
+        user_metadata: { type: object }
+        status: { type: string; enum: [new, active, closed] }
+        assigned_to: { type: integer; nullable: true }
+        source: { type: object }
+        department: { type: object }
+        assignee: { type: object; nullable: true }
+        latest_message: { type: object; nullable: true }
+        is_urgent: { type: boolean }
+        created_at: { type: string; format: date-time }
+        updated_at: { type: string; format: date-time }
+    Message:
+      type: object
+      properties:
+        id: { type: integer }
+        chat_id: { type: integer }
+        sender_id: { type: integer; nullable: true }
+        sender_type: { type: string; enum: [client, moderator, system] }
+        text: { type: string }
+        payload: { type: object }
+        attachments: { type: array }
+        is_read: { type: boolean }
+        created_at: { type: string; format: date-time }
+        updated_at: { type: string; format: date-time }
+
 paths:
+  # ---------- REST API v1 (desktop/mobile) ----------
+  /api/v1/auth/login:
+    post:
+      summary: Login (get token)
+      description: Returns token for admin/moderator. Use in Authorization header for other v1 endpoints.
+      operationId: apiV1AuthLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string; format: email }
+                password: { type: string }
+                device_name: { type: string }
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      user: { $ref: '#/components/schemas/User' }
+        '422':
+          description: Invalid credentials or role
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/ApiError' }
+                  - { properties: { code: { example: VALIDATION_ERROR } } }
+
+  /api/v1/auth/logout:
+    post:
+      summary: Logout (revoke token)
+      operationId: apiV1AuthLogout
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/auth/me:
+    get:
+      summary: Current user profile
+      operationId: apiV1AuthMe
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/chats:
+    get:
+      summary: List chats
+      description: Paginated. Filters tab=my|unassigned|all, source_id, department_id, search, status=open|closed.
+      operationId: apiV1ChatsIndex
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: tab
+          in: query
+          schema: { type: string; enum: [my, unassigned, all] }
+        - name: source_id
+          in: query
+          schema: { type: integer }
+        - name: department_id
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string; enum: [open, closed] }
+        - name: per_page
+          in: query
+          schema: { type: integer; default: 20 }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array; items: { $ref: '#/components/schemas/Chat' } }
+                  meta: { type: object }
+                  links: { type: object }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/chats/{chat}/assign-me:
+    post:
+      summary: Assign chat to current user
+      operationId: apiV1ChatsAssignMe
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Chat' }
+        '401':
+        '403':
+        '404':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/chats/{chat}/close:
+    post:
+      summary: Close chat
+      operationId: apiV1ChatsClose
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Chat' }
+        '401':
+        '403':
+        '404':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/chats/{chat}/messages:
+    get:
+      summary: List messages (cursor pagination)
+      description: Use before_id for older messages, limit/per_page for page size.
+      operationId: apiV1ChatsMessagesIndex
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: before_id
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer; default: 50 }
+        - name: per_page
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array; items: { $ref: '#/components/schemas/Message' } }
+        '401':
+        '403':
+        '404':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/chats/{chat}/send:
+    post:
+      summary: Send message
+      description: Optional client_message_id (UUID) for idempotency.
+      operationId: apiV1ChatsSend
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: { type: string }
+                attachments: { type: array; items: { type: string }; description: Paths from POST /uploads }
+                client_message_id: { type: string; format: uuid }
+      responses:
+        '200':
+          description: Idempotent return of existing message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Message' }
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Message' }
+        '401':
+        '403':
+        '404':
+        '422':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/uploads:
+    post:
+      summary: Upload file
+      description: Returns path to use in POST /chats/{id}/send attachments.
+      operationId: apiV1UploadsStore
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      path: { type: string }
+                      original_name: { type: string }
+                      mime_type: { type: string }
+                      size: { type: integer }
+        '401':
+        '422':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/devices/register-token:
+    post:
+      summary: Register FCM device token
+      operationId: apiV1DevicesRegister
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token: { type: string }
+                platform: { type: string; enum: [ios, android, desktop, web] }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      token: { type: string }
+                      platform: { type: string }
+        '401':
+        '422':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/devices/{token}:
+    delete:
+      summary: Remove device token
+      operationId: apiV1DevicesDestroy
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /api/v1/canned-responses:
+    get:
+      summary: List canned responses
+      description: Optional filters source_id, q (search in code/title/text).
+      operationId: apiV1CannedResponsesIndex
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: source_id
+          in: query
+          schema: { type: integer }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        source_id: { type: integer; nullable: true }
+                        code: { type: string }
+                        title: { type: string }
+                        text: { type: string }
+                        is_active: { type: boolean }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  # ---------- Webhooks & legacy ----------
   /webhook/vk/{sourceId}:
     post:
       summary: VK webhook
