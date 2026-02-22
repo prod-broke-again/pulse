@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events;
 
+use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -22,11 +23,12 @@ final class NewChatMessage implements ShouldBroadcast
         public string $text,
     ) {}
 
-    /** @return array<int, PrivateChannel> */
+    /** @return array<int, Channel|PrivateChannel> */
     public function broadcastOn(): array
     {
         return [
             new PrivateChannel('chat.' . $this->chatId),
+            new Channel('widget-chat.' . $this->chatId),
         ];
     }
 

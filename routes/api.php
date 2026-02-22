@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/chats', [ChatController::class, 'index'])->name('api.v1.chats.index');
         Route::post('/chats/{chat}/assign-me', [ChatController::class, 'assignMe'])->name('api.v1.chats.assign-me');
         Route::post('/chats/{chat}/close', [ChatController::class, 'close'])->name('api.v1.chats.close');
+        Route::post('/chats/{chat}/typing', [ChatController::class, 'typing'])->name('api.v1.chats.typing');
 
         // Chat Messages
         Route::get('/chats/{chat}/messages', [ChatMessageController::class, 'index'])->name('api.v1.chats.messages.index');

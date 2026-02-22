@@ -1,31 +1,46 @@
 <x-filament-panels::page>
     <div class="fi-section overflow-hidden rounded-xl">
         {{-- ВЕРХНЯЯ ПАНЕЛЬ: Фильтры и Очереди --}}
-        <div class="mb-4 flex items-center justify-between gap-4">
-            <div class="flex bg-gray-100 dark:bg-white/5 p-1 rounded-lg">
-                <button
-                    wire:click="$set('activeTab', 'my')"
-                    type="button"
-                    class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'my' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
-                >
-                    Мои ({{ $myChatsCount }})
-                </button>
-                <button
-                    wire:click="$set('activeTab', 'unassigned')"
-                    type="button"
-                    class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'unassigned' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
-                >
-                    Нераспределённые ({{ $unassignedChatsCount }})
-                </button>
-                @if($isAdmin)
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex bg-gray-100 dark:bg-white/5 p-1 rounded-lg">
                     <button
-                        wire:click="$set('activeTab', 'all')"
+                        wire:click="$set('activeTab', 'my')"
                         type="button"
-                        class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'all' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
+                        class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'my' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
                     >
-                        Все ({{ $allChatsCount }})
+                        Мои ({{ $myChatsCount }})
                     </button>
-                @endif
+                    <button
+                        wire:click="$set('activeTab', 'unassigned')"
+                        type="button"
+                        class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'unassigned' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
+                    >
+                        Нераспределённые ({{ $unassignedChatsCount }})
+                    </button>
+                    @if($isAdmin)
+                        <button
+                            wire:click="$set('activeTab', 'all')"
+                            type="button"
+                            class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors {{ $activeTab === 'all' ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300' }}"
+                        >
+                            Все ({{ $allChatsCount }})
+                        </button>
+                    @endif
+                </div>
+                <select
+                    wire:model.live="chatStatusFilter"
+                    class="rounded-lg border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-white text-sm"
+                >
+                    <option value="open">Открытые</option>
+                    <option value="closed">Закрытые</option>
+                </select>
+                <input
+                    type="text"
+                    wire:model.live.debounce.300ms="chatSearch"
+                    placeholder="Поиск..."
+                    class="rounded-lg border-gray-300 dark:border-white/10 dark:bg-white/5 dark:text-white text-sm w-40"
+                />
             </div>
 
             <div class="flex flex-col items-end gap-1">
@@ -160,15 +175,44 @@
                         class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 scroll-smooth"
                         id="chat-messages-container"
                     >
+                        @if(count($messages) > 0)
+                            <div class="flex justify-center pb-2">
+                                <button
+                                    type="button"
+                                    wire:click="loadOlderMessages"
+                                    wire:loading.attr="disabled"
+                                    class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 disabled:opacity-50"
+                                >
+                                    <span wire:loading.remove wire:target="loadOlderMessages">Загрузить предыдущие</span>
+                                    <span wire:loading wire:target="loadOlderMessages">Загрузка…</span>
+                                </button>
+                            </div>
+                        @endif
                         @foreach($messages as $msg)
                             @php $isMod = $msg['senderType'] === 'moderator'; @endphp
                             <div class="flex {{ $isMod ? 'justify-end' : 'justify-start' }}">
                                 <div class="flex flex-col {{ $isMod ? 'items-end' : 'items-start' }} max-w-[75%]">
                                     <div class="px-4 py-2 rounded-2xl text-sm shadow-sm {{ $isMod ? 'bg-primary-600 text-white rounded-br-none' : 'bg-white dark:bg-gray-800 dark:text-white border border-gray-200 dark:border-white/5 rounded-bl-none' }}">
-                                        {!! nl2br(e($msg['text'])) !!}
+                                        @if($msg['text'] !== '')
+                                            {!! nl2br(e($msg['text'])) !!}
+                                        @endif
                                         @if(isset($msg['payload']['image_url']))
                                             <div class="mt-2">
                                                 <img src="{{ $msg['payload']['image_url'] }}" alt="" class="rounded-lg max-h-60 cursor-pointer" />
+                                            </div>
+                                        @endif
+                                        @if(!empty($msg['payload']['attachments']))
+                                            <div class="mt-2 flex flex-col gap-1">
+                                                @foreach($msg['payload']['attachments'] as $att)
+                                                    @php $url = $att['url'] ?? null; $name = $att['name'] ?? 'файл'; $mime = $att['mime_type'] ?? ''; @endphp
+                                                    @if($url)
+                                                        @if(str_starts_with($mime, 'image/'))
+                                                            <img src="{{ $url }}" alt="{{ $name }}" class="rounded-lg max-h-60 cursor-pointer" />
+                                                        @else
+                                                            <a href="{{ $url }}" target="_blank" rel="noopener" class="underline truncate max-w-[200px]">{{ $name }}</a>
+                                                        @endif
+                                                    @endif
+                                                @endforeach
                                             </div>
                                         @endif
                                     </div>
@@ -180,8 +224,29 @@
                         @endforeach
                     </div>
 
+                    {{-- Индикатор "печатает" --}}
+                    <div
+                        class="px-4 py-1 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/5 min-h-[28px]"
+                        x-data="{ typing: null, currentUserName: @js(auth()->user()?->name ?? '') }"
+                        x-on:chat-typing.window="typing = $event.detail; if (typing && typing.sender_name === currentUserName) typing = null; if (typing) setTimeout(() => typing = null, 3000)"
+                    >
+                        <span x-show="typing" x-cloak x-transition>
+                            <span x-text="typing ? typing.sender_name + ' печатает...' : ''"></span>
+                        </span>
+                    </div>
                     {{-- Поле ввода --}}
                     <div class="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-white/10">
+                        <input type="file" wire:model="newAttachmentFile" class="hidden" id="chat-attachment-input" multiple />
+                        @if(count($pendingAttachmentNames ?? []) > 0)
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                @foreach($pendingAttachmentNames as $i => $name)
+                                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-white/10 text-xs">
+                                        <span class="truncate max-w-[120px]">{{ $name }}</span>
+                                        <button type="button" wire:click="removeAttachment({{ $i }})" class="text-gray-500 hover:text-red-500" aria-label="Удалить">×</button>
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
                         <form wire:submit="sendMessage" class="flex items-end gap-3">
                             <div class="flex-1">
                                 <textarea
@@ -190,10 +255,45 @@
                                     rows="1"
                                     class="block w-full rounded-xl border-none bg-gray-100 px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 dark:bg-white/5 dark:text-white"
                                     @keydown.enter.prevent="$wire.sendMessage()"
+                                    x-data
+                                    x-on:input.debounce.500ms="$wire.broadcastTyping()"
                                 ></textarea>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <x-filament::icon-button icon="heroicon-o-paper-clip" color="gray" size="lg" />
+                            <div class="flex items-center gap-2" x-data="{ cannedOpen: false }">
+                                @if(count($cannedResponses ?? []) > 0)
+                                    <div class="relative">
+                                        <x-filament::icon-button
+                                            type="button"
+                                            icon="heroicon-o-document-text"
+                                            color="gray"
+                                            size="lg"
+                                            x-on:click="cannedOpen = !cannedOpen"
+                                            title="Шаблоны ответов"
+                                        />
+                                        <div
+                                            x-show="cannedOpen"
+                                            x-cloak
+                                            x-transition
+                                            class="absolute bottom-full right-0 mb-1 w-64 max-h-56 overflow-y-auto rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-lg z-10"
+                                            x-on:click.outside="cannedOpen = false"
+                                        >
+                                            @foreach($cannedResponses as $cr)
+                                                <button
+                                                    type="button"
+                                                    wire:click="insertCannedResponse({{ $cr->id }})"
+                                                    x-on:click="cannedOpen = false"
+                                                    class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-white/5 border-b border-gray-100 dark:border-white/5 last:border-0"
+                                                >
+                                                    <span class="font-medium">{{ $cr->title }}</span>
+                                                    <span class="block text-xs text-gray-500 dark:text-gray-400 truncate">{{ Str::limit($cr->text, 50) }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+                                <label for="chat-attachment-input" class="cursor-pointer">
+                                    <x-filament::icon-button type="button" icon="heroicon-o-paper-clip" color="gray" size="lg" />
+                                </label>
                                 <x-filament::icon-button
                                     type="submit"
                                     icon="heroicon-s-paper-airplane"
@@ -248,7 +348,7 @@
         }
 
         if (state.currentChatId && state.currentChatId !== selectedChatId) {
-            window.Echo.leave(`private-chat.${state.currentChatId}`);
+            window.Echo.leave(`chat.${state.currentChatId}`);
             state.chatChannel = null;
             state.currentChatId = null;
         }
@@ -267,6 +367,9 @@
                 })
                 .listen('.App\\Events\\ChatAssigned', (event) => {
                     window.Livewire.dispatch('chat-realtime-refresh', { chatId: event.chatId });
+                })
+                .listen('typing', (event) => {
+                    window.dispatchEvent(new CustomEvent('chat-typing', { detail: { sender_name: event.sender_name, sender_type: event.sender_type } }));
                 });
         }
     })();

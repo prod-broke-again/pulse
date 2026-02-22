@@ -29,7 +29,7 @@ final class ChatMessageController extends Controller
         $beforeId = isset($validated['before_id']) ? (int) $validated['before_id'] : null;
         $limit = (int) ($validated['limit'] ?? $validated['per_page'] ?? 50);
 
-        $query = MessageModel::where('chat_id', $chat->id);
+        $query = MessageModel::where('chat_id', $chat->id)->with('media');
 
         if ($beforeId !== null) {
             $query->where('id', '<', $beforeId);

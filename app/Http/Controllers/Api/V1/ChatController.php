@@ -8,6 +8,7 @@ use App\Application\Communication\Action\AssignChatToModerator;
 use App\Application\Communication\Query\ListChatsQuery;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
+use App\Events\UserTyping as UserTypingEvent;
 use App\Http\Requests\Api\V1\ListChatsRequest;
 use App\Http\Resources\Api\V1\ChatResource;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
@@ -70,6 +71,24 @@ final class ChatController extends Controller
 
         return response()->json([
             'data' => new ChatResource($chat),
+        ]);
+    }
+
+    public function typing(ChatModel $chat): JsonResponse
+    {
+        Gate::authorize('view', $chat);
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        broadcast(new UserTypingEvent(
+            chatId: $chat->id,
+            senderType: 'moderator',
+            senderName: $user->name,
+        ));
+
+        return response()->json([
+            'data' => ['message' => 'OK'],
         ]);
     }
 }

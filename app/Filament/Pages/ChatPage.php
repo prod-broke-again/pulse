@@ -12,11 +12,19 @@ use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Events\UserTyping as UserTypingEvent;
+use App\Models\CannedResponse;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
+use Livewire\WithFileUploads;
 
 final class ChatPage extends Page
 {
+    use WithFileUploads;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Коммуникации';
@@ -33,10 +41,22 @@ final class ChatPage extends Page
 
     public string $activeTab = 'my';
 
+    public string $chatSearch = '';
+
+    public string $chatStatusFilter = 'open';
+
     /** @var array<int, array{id: int, chatId: int, senderType: string, text: string, isRead: bool, created_at: ?string, payload: array}> */
     public array $messages = [];
 
     public string $newMessageText = '';
+
+    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
+    public $newAttachmentFile = null;
+
+    /** @var array<int, string> path => display name */
+    public array $pendingAttachmentPaths = [];
+
+    public array $pendingAttachmentNames = [];
 
     public bool $loadingOlder = false;
 
@@ -124,6 +144,7 @@ final class ChatPage extends Page
 
         $query = $this->baseChatsQuery();
         $this->applyModeratorVisibilityScope($query, $user);
+        $this->applySearchFilter($query);
 
         match ($this->activeTab) {
             'my' => $query->where('assigned_to', $userId),
@@ -137,9 +158,34 @@ final class ChatPage extends Page
 
     private function baseChatsQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return ChatModel::query()
-            ->with(['source', 'department', 'assignee', 'latestMessage'])
-            ->whereIn('status', ['new', 'active']);
+        $query = ChatModel::query()
+            ->with(['source', 'department', 'assignee', 'latestMessage']);
+
+        if ($this->chatStatusFilter === 'closed') {
+            $query->where('status', 'closed');
+        } else {
+            $query->whereIn('status', ['new', 'active']);
+        }
+
+        return $query;
+    }
+
+    private function applySearchFilter(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $search = trim($this->chatSearch);
+        if ($search === '') {
+            return;
+        }
+
+        $term = '%'.$search.'%';
+        $jsonLikeRaw = DB::connection()->getDriverName() === 'pgsql'
+            ? 'user_metadata::text like ?'
+            : 'user_metadata like ?';
+        $query->where(function (\Illuminate\Database\Eloquent\Builder $q) use ($term, $jsonLikeRaw): void {
+            $q->where('external_user_id', 'like', $term)
+                ->orWhereRaw($jsonLikeRaw, [$term])
+                ->orWhereHas('messages', fn (\Illuminate\Database\Eloquent\Builder $mq) => $mq->where('text', 'like', $term)->limit(1));
+        });
     }
 
     private function applyModeratorVisibilityScope(\Illuminate\Database\Eloquent\Builder $query, ?\App\Models\User $user): void
@@ -345,10 +391,104 @@ final class ChatPage extends Page
         $this->loadingOlder = false;
     }
 
+    public function updatedNewAttachmentFile(): void
+    {
+        if ($this->newAttachmentFile === null) {
+            return;
+        }
+
+        $this->validate([
+            'newAttachmentFile' => ['file', 'max:20480'], // 20MB
+        ]);
+
+        if (count($this->pendingAttachmentPaths) >= 10) {
+            $this->newAttachmentFile = null;
+
+            return;
+        }
+
+        $user = auth()->user();
+        $userId = $user?->id;
+        if ($userId === null) {
+            $this->newAttachmentFile = null;
+
+            return;
+        }
+
+        $file = $this->newAttachmentFile;
+        $extension = $file->getClientOriginalExtension() ?: 'bin';
+        $filename = Str::uuid()->toString().'.'.$extension;
+        $path = $file->storeAs('uploads/pending/'.$userId, $filename, 'local');
+        if ($path !== false) {
+            $this->pendingAttachmentPaths[] = $path;
+            $this->pendingAttachmentNames[] = $file->getClientOriginalName();
+        }
+        $this->newAttachmentFile = null;
+    }
+
+    public function removeAttachment(int $index): void
+    {
+        if (isset($this->pendingAttachmentPaths[$index])) {
+            array_splice($this->pendingAttachmentPaths, $index, 1);
+            array_splice($this->pendingAttachmentNames, $index, 1);
+        }
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Collection<int, CannedResponse> */
+    public function getCannedResponsesProperty(): \Illuminate\Database\Eloquent\Collection
+    {
+        $selected = $this->getSelectedChatProperty();
+        if ($selected === null) {
+            return new \Illuminate\Database\Eloquent\Collection([]);
+        }
+
+        $sourceId = $selected->source_id;
+
+        return CannedResponse::query()
+            ->where('is_active', true)
+            ->where(function ($q) use ($sourceId): void {
+                $q->where('source_id', $sourceId)->orWhereNull('source_id');
+            })
+            ->orderBy('code')
+            ->get();
+    }
+
+    public function insertCannedResponse(int $id): void
+    {
+        $response = CannedResponse::find($id);
+        if ($response !== null) {
+            $this->newMessageText = $response->text;
+        }
+    }
+
+    public function broadcastTyping(): void
+    {
+        if ($this->selectedChatId === null) {
+            return;
+        }
+
+        $selected = $this->getAccessibleSelectedChatModel();
+        if ($selected === null) {
+            return;
+        }
+
+        $user = auth()->user();
+        if ($user === null) {
+            return;
+        }
+
+        broadcast(new UserTypingEvent(
+            chatId: $this->selectedChatId,
+            senderType: 'moderator',
+            senderName: $user->name,
+        ));
+    }
+
     public function sendMessage(): void
     {
         $text = trim($this->newMessageText);
-        if ($text === '' || $this->selectedChatId === null) {
+        $hasAttachments = $this->pendingAttachmentPaths !== [];
+        if (($text === '' && ! $hasAttachments) || $this->selectedChatId === null) {
             return;
         }
 
@@ -367,7 +507,7 @@ final class ChatPage extends Page
 
         try {
             $messenger = $this->resolveMessenger->run($chat->sourceId);
-            $this->sendMessage->run(
+            $persisted = $this->sendMessage->run(
                 chatId: $this->selectedChatId,
                 text: $text,
                 senderType: SenderType::Moderator,
@@ -375,6 +515,32 @@ final class ChatPage extends Page
                 messenger: $messenger,
                 payload: [],
             );
+
+            $attachmentPaths = $this->pendingAttachmentPaths;
+            $this->pendingAttachmentPaths = [];
+            $this->pendingAttachmentNames = [];
+
+            if ($attachmentPaths !== []) {
+                $messageModel = MessageModel::find($persisted->id);
+                if ($messageModel !== null) {
+                    foreach ($attachmentPaths as $path) {
+                        if (Storage::disk('local')->exists($path)) {
+                            $fullPath = Storage::disk('local')->path($path);
+                            $messageModel->addMedia($fullPath)->toMediaCollection('attachments');
+                        }
+                    }
+                    $mediaItems = $messageModel->getMedia('attachments')->map(fn ($media) => [
+                        'id' => $media->id,
+                        'name' => $media->file_name,
+                        'mime_type' => $media->mime_type,
+                        'size' => $media->size,
+                        'url' => $media->getUrl(),
+                    ])->values()->all();
+                    $messageModel->update([
+                        'payload' => array_merge($messageModel->payload ?? [], ['attachments' => $mediaItems]),
+                    ]);
+                }
+            }
         } catch (\Throwable) {
             $this->newMessageText = $text;
 
@@ -428,6 +594,8 @@ final class ChatPage extends Page
             'isAdmin' => $this->getIsAdminProperty(),
             'moderatorDepartmentNames' => $this->getModeratorDepartmentNamesProperty(),
             'moderatorSourceNames' => $this->getModeratorSourceNamesProperty(),
+            'pendingAttachmentNames' => $this->pendingAttachmentNames,
+            'cannedResponses' => $this->getCannedResponsesProperty(),
         ];
     }
 }

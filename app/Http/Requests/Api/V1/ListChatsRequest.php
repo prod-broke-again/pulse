@@ -22,6 +22,7 @@ final class ListChatsRequest extends FormRequest
             'department_id' => ['sometimes', 'nullable', 'integer'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string', 'in:open,closed'],
+            'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }

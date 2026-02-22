@@ -236,6 +236,35 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
 
+  /api/v1/chats/{chat}/typing:
+    post:
+      summary: Broadcast typing indicator
+      description: Notify other subscribers of chat channel that current moderator is typing.
+      operationId: apiV1ChatsTyping
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: chat
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+        '401':
+        '403':
+        '404':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
   /api/v1/chats/{chat}/messages:
     get:
       summary: List messages (cursor pagination)

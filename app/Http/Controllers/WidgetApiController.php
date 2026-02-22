@@ -8,14 +8,71 @@ use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
+use App\Models\WidgetConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Validation\ValidationException;
 
 final class WidgetApiController extends Controller
 {
+    public function config(): JsonResponse
+    {
+        $driver = config('broadcasting.default');
+        $reverb = config('broadcasting.connections.reverb');
+        if ($driver !== 'reverb' || empty($reverb['key'])) {
+            return response()->json([
+                'reverb' => null,
+                'message' => 'WebSockets not configured',
+            ]);
+        }
+
+        $host = $reverb['options']['host'] ?? 'localhost';
+        $port = (int) ($reverb['options']['port'] ?? 8080);
+        $scheme = $reverb['options']['scheme'] ?? 'http';
+        if (in_array($host, ['localhost', '127.0.0.1'], true)) {
+            $scheme = 'http';
+            $host = '127.0.0.1';
+        }
+
+        return response()->json([
+            'reverb' => [
+                'key' => $reverb['key'],
+                'cluster' => 'reverb',
+                'host' => $host,
+                'port' => $port,
+                'scheme' => $scheme,
+                'wsPath' => '/app',
+            ],
+        ]);
+    }
+
+    public function configUi(Request $request): JsonResponse
+    {
+        $request->validate([
+            'source' => ['required', 'string', 'max:255'],
+        ]);
+        $sourceIdentifier = (string) $request->query('source');
+
+        $data = Cache::remember(
+            WidgetConfig::cacheKey($sourceIdentifier),
+            WidgetConfig::CACHE_TTL_SECONDS,
+            function () use ($sourceIdentifier): array {
+                $config = WidgetConfig::query()
+                    ->where('source_identifier', $sourceIdentifier)
+                    ->first();
+
+                return $config !== null
+                    ? $config->toUiArray()
+                    : WidgetConfig::defaults();
+            }
+        );
+
+        return response()->json($data);
+    }
+
     public function session(Request $request): JsonResponse
     {
         $data = $request->validate([

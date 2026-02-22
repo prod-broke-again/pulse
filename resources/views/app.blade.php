@@ -44,5 +44,14 @@
     </head>
     <body class="font-sans antialiased">
         @inertia
+
+        {{-- Pulse chat widget (data-source must match sources.identifier for type=web) --}}
+        <script
+            src="{{ asset('widget/pulse-widget.js') }}"
+            data-source="web_site"
+            data-api="{{ rtrim(config('app.url'), '/') }}"
+            data-title="Поддержка"
+            data-position="right"
+        ></script>
     </body>
 </html>
