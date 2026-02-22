@@ -20,6 +20,7 @@
         "laravel/socialite": "^5.0",
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
+        "minishlink/web-push": "^10.0",
         "socialiteproviders/telegram": "^4.0",
         "socialiteproviders/vkontakte": "^4.0",
         "spatie/laravel-medialibrary": "^11.20",

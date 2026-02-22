@@ -1,0 +1,55 @@
+{
+    "common": {
+        "send": "Отправить",
+        "cancel": "Отмена",
+        "save": "Сохранить",
+        "close": "Закрыть",
+        "loading": "Загрузка...",
+        "error": "Ошибка",
+        "retry": "Повторить"
+    },
+    "nav": {
+        "dashboard": "Дашборд",
+        "chat": "Чат",
+        "settings": "Настройки"
+    },
+    "chat": {
+        "title": "Чат",
+        "tabs": {
+            "my": "Мои",
+            "unassigned": "Нераспределённые",
+            "all": "Все"
+        },
+        "status": {
+            "open": "Открытые",
+            "closed": "Закрытые"
+        },
+        "search": "Поиск",
+        "assignToMe": "Взять в работу",
+        "closeChat": "Закрыть чат",
+        "newMessage": "Новое сообщение",
+        "typeMessage": "Введите сообщение...",
+        "typing": "{name} печатает...",
+        "loadOlder": "Загрузить предыдущие",
+        "noChats": "Нет чатов",
+        "selectChat": "Выберите чат",
+        "noMessages": "Пока нет сообщений",
+        "cannedResponses": "Шаблоны ответов",
+        "attachments": "Вложения",
+        "enableNotifications": "Включить уведомления",
+        "notificationsEnabled": "Уведомления включены"
+    },
+    "errors": {
+        "network": "Ошибка сети",
+        "sendMessage": "Не удалось отправить сообщение",
+        "loadChats": "Не удалось загрузить чаты",
+        "loadMessages": "Не удалось загрузить сообщения",
+        "noAccess": "Нет доступа к этому чату",
+        "unauthorized": "Войдите снова"
+    },
+    "connection": {
+        "connected": "Подключено",
+        "disconnected": "Нет соединения",
+        "reconnecting": "Переподключение..."
+    }
+}

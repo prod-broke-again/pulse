@@ -35,6 +35,28 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $reverb = null;
+        if ($request->user() && config('broadcasting.default') === 'reverb') {
+            $conn = config('broadcasting.connections.reverb');
+            if (! empty($conn['key'])) {
+                $host = $conn['options']['host'] ?? 'localhost';
+                $port = (int) ($conn['options']['port'] ?? 8080);
+                $scheme = $conn['options']['scheme'] ?? 'http';
+                $reverb = [
+                    'key' => $conn['key'],
+                    'wsHost' => $host,
+                    'wsPort' => $port,
+                    'wssPort' => $port,
+                    'forceTLS' => $scheme === 'https',
+                    'authEndpoint' => url('/broadcasting/auth'),
+                ];
+            }
+        }
+
+        $vapidPublicKey = $request->user()
+            ? (config('services.web_push.vapid_public_key') ?? null)
+            : null;
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -42,6 +64,8 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'reverb' => $reverb,
+            'vapidPublicKey' => $vapidPublicKey,
         ];
     }
 }

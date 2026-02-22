@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -30,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureFilamentEcho();
         $this->registerSocialiteProviders();
         $this->registerFilamentSocialLoginHook();
 
@@ -37,6 +39,30 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\ChatModel::class,
             \App\Policies\ChatPolicy::class,
         );
+    }
+
+    private function configureFilamentEcho(): void
+    {
+        if (config('broadcasting.default') !== 'reverb') {
+            return;
+        }
+        $host = config('broadcasting.connections.reverb.options.host');
+        $port = (int) config('broadcasting.connections.reverb.options.port');
+        $scheme = config('broadcasting.connections.reverb.options.scheme');
+        $key = config('broadcasting.connections.reverb.key');
+        Config::set('filament.broadcasting.echo', [
+            'broadcaster' => 'pusher',
+            'key' => $key,
+            'cluster' => 'reverb',
+            'wsHost' => $host,
+            'wsPort' => $port,
+            'wssPort' => $port,
+            'wsPath' => '', // Pusher builds path as wsPath + "/app/" + key; empty => /app/app-key
+            'authEndpoint' => '/broadcasting/auth',
+            'disableStats' => true,
+            'encrypted' => $scheme === 'https',
+            'forceTLS' => $scheme === 'https',
+        ]);
     }
 
     private function registerFilamentSocialLoginHook(): void

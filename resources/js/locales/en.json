@@ -1,0 +1,55 @@
+{
+    "common": {
+        "send": "Send",
+        "cancel": "Cancel",
+        "save": "Save",
+        "close": "Close",
+        "loading": "Loading...",
+        "error": "Error",
+        "retry": "Retry"
+    },
+    "nav": {
+        "dashboard": "Dashboard",
+        "chat": "Chat",
+        "settings": "Settings"
+    },
+    "chat": {
+        "title": "Chat",
+        "tabs": {
+            "my": "Mine",
+            "unassigned": "Unassigned",
+            "all": "All"
+        },
+        "status": {
+            "open": "Open",
+            "closed": "Closed"
+        },
+        "search": "Search",
+        "assignToMe": "Assign to me",
+        "closeChat": "Close chat",
+        "newMessage": "New message",
+        "typeMessage": "Type a message...",
+        "typing": "{name} is typing...",
+        "loadOlder": "Load older messages",
+        "noChats": "No chats",
+        "selectChat": "Select a chat",
+        "noMessages": "No messages yet",
+        "cannedResponses": "Canned responses",
+        "attachments": "Attachments",
+        "enableNotifications": "Enable notifications",
+        "notificationsEnabled": "Notifications enabled"
+    },
+    "errors": {
+        "network": "Network error",
+        "sendMessage": "Failed to send message",
+        "loadChats": "Failed to load chats",
+        "loadMessages": "Failed to load messages",
+        "noAccess": "No access to this chat",
+        "unauthorized": "Please log in again"
+    },
+    "connection": {
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "reconnecting": "Reconnecting..."
+    }
+}

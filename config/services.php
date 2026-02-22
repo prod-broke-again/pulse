@@ -52,4 +52,10 @@ return [
         'server_key' => env('FCM_SERVER_KEY'),
     ],
 
+    'web_push' => [
+        'vapid_public_key' => env('VAPID_PUBLIC_KEY'),
+        'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:admin@localhost'),
+    ],
+
 ];

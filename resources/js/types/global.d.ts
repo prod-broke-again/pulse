@@ -19,6 +19,15 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            reverb?: {
+                key: string;
+                wsHost: string;
+                wsPort: number;
+                wssPort: number;
+                forceTLS: boolean;
+                authEndpoint: string;
+            } | null;
+            vapidPublicKey?: string | null;
             [key: string]: unknown;
         };
     }

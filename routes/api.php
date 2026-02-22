@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CannedResponseController;
 use App\Http\Controllers\Api\V1\ChatController;
 use App\Http\Controllers\Api\V1\ChatMessageController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use App\Http\Controllers\Api\V1\UploadController;
 use Illuminate\Support\Facades\Route;
 
@@ -38,5 +39,8 @@ Route::prefix('v1')->group(function (): void {
         // Device Tokens (FCM)
         Route::post('/devices/register-token', [DeviceController::class, 'register'])->name('api.v1.devices.register');
         Route::delete('/devices/{token}', [DeviceController::class, 'destroy'])->name('api.v1.devices.destroy');
+
+        // Web Push subscriptions
+        Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('api.v1.push-subscriptions.store');
     });
 });

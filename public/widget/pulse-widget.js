@@ -173,16 +173,46 @@
     let lastSentMessageId = 0;
     let pollTimer = null;
     let echoChannel = null;
+    let unreadCount = 0;
+    let originalDocumentTitle = document.title;
 
     function setOpen(open) {
         if (open) {
             panel.classList.add('pw-open');
             fab.style.display = 'none';
             input.focus();
+            clearNotification();
         } else {
             panel.classList.remove('pw-open');
             setTimeout(() => { fab.style.display = 'flex'; }, 300);
         }
+    }
+
+    function playNotificationSound() {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g);
+            g.connect(ctx.destination);
+            osc.frequency.value = 800;
+            osc.type = 'sine';
+            g.gain.setValueAtTime(0.2, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.12);
+        } catch (e) {}
+    }
+
+    function updateTitle() {
+        document.title = unreadCount > 0 ? '(' + unreadCount + ') ' + originalDocumentTitle : originalDocumentTitle;
+    }
+
+    function clearNotification() {
+        unreadCount = 0;
+        document.title = document.title.replace(/^\(\d+\)\s*/, '') || originalDocumentTitle;
     }
 
     function setStatus(text) { status.textContent = text; }
@@ -269,7 +299,7 @@
                     wssHost: r.host,
                     wsPort: r.port,
                     wssPort: r.port,
-                    wsPath: r.wsPath || '/app',
+                    wsPath: ('wsPath' in r ? r.wsPath : '/app'),
                     forceTLS: useTls,
                     disableStats: true,
                     enabledTransports: useTls ? ['ws', 'wss'] : ['ws'],
@@ -278,6 +308,13 @@
                 function onNewMessage(e) {
                     if (e.chatId !== parseInt(chatId, 10) || e.messageId === lastSentMessageId) return;
                     renderMessage({ id: e.messageId, text: e.text || '', sender_type: 'moderator', created_at: new Date().toISOString() });
+                    var chatClosed = !panel.classList.contains('pw-open');
+                    var tabHidden = document.hidden;
+                    if (chatClosed || tabHidden) {
+                        unreadCount++;
+                        updateTitle();
+                        if (chatClosed || tabHidden) playNotificationSound();
+                    }
                 }
                 echoChannel.listen('.App.Events.NewChatMessage', onNewMessage);
                 echoChannel.listen('.App\\Events\\NewChatMessage', onNewMessage);
@@ -326,4 +363,13 @@
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
     });
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) clearNotification();
+    });
+    window.addEventListener('focus', function () { if (!document.hidden) clearNotification(); });
+
+    if (chatId) {
+        ensureSession().catch(function () {}).finally(function () { connectReverb(); });
+    }
 })();

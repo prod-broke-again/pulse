@@ -44,7 +44,7 @@ final class WidgetApiController extends Controller
                 'host' => $host,
                 'port' => $port,
                 'scheme' => $scheme,
-                'wsPath' => '/app',
+                'wsPath' => '', // Pusher JS builds path as wsPath + "/app/" + key; empty avoids /app/app/app-key
             ],
         ]);
     }
