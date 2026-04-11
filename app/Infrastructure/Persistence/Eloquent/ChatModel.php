@@ -6,6 +6,7 @@ namespace App\Infrastructure\Persistence\Eloquent;
 
 use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $status
  * @property int|null $assigned_to
  * @property string|null $topic
+ * @property-read int|null $unread_count
  */
 class ChatModel extends Model
 {
@@ -67,6 +69,50 @@ class ChatModel extends Model
         return $this->hasOne(MessageModel::class, 'chat_id')->latestOfMany();
     }
 
+    public function userReadStates(): HasMany
+    {
+        return $this->hasMany(ChatUserReadStateModel::class, 'chat_id');
+    }
+
+    /** @param  Builder<ChatModel>  $query */
+    public function scopeWithUnreadCountForUser(Builder $query, User $user): void
+    {
+        $query->withCount([
+            'messages as unread_count' => function (Builder $q) use ($user): void {
+                $q->where('sender_type', 'client')
+                    ->whereRaw(
+                        'messages.id > COALESCE((
+                            SELECT curs.last_read_message_id
+                            FROM chat_user_read_states AS curs
+                            WHERE curs.chat_id = messages.chat_id
+                              AND curs.user_id = ?
+                            LIMIT 1
+                        ), 0)',
+                        [$user->id]
+                    );
+            },
+        ]);
+    }
+
+    public function loadUnreadCountForUser(User $user): void
+    {
+        $this->loadCount([
+            'messages as unread_count' => function (Builder $q) use ($user): void {
+                $q->where('sender_type', 'client')
+                    ->whereRaw(
+                        'messages.id > COALESCE((
+                            SELECT curs.last_read_message_id
+                            FROM chat_user_read_states AS curs
+                            WHERE curs.chat_id = messages.chat_id
+                              AND curs.user_id = ?
+                            LIMIT 1
+                        ), 0)',
+                        [$user->id]
+                    );
+            },
+        ]);
+    }
+
     /** Chat has been without moderator response for more than 5 minutes. */
     public function isUrgent(): bool
     {
@@ -76,6 +122,7 @@ class ChatModel extends Model
         if ($last === null || $last->sender_type === 'moderator' || $last->sender_type === 'system') {
             return false;
         }
+
         return $last->created_at?->lt(now()->subMinutes(5)) ?? false;
     }
 

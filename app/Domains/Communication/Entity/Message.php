@@ -19,5 +19,6 @@ final readonly class Message
         public array $payload,
         public bool $isRead,
         public ?\DateTimeInterface $createdAt = null,
+        public ?int $replyToId = null,
     ) {}
 }

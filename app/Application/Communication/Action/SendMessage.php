@@ -10,10 +10,10 @@ use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Domains\Communication\ValueObject\SenderType;
-use App\Events\ChatAssigned as ChatAssignedEvent;
-use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
+use App\Events\ChatAssigned as ChatAssignedEvent;
+use App\Events\NewChatMessage as NewChatMessageEvent;
 use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class SendMessage
@@ -29,9 +29,10 @@ final readonly class SendMessage
         int $chatId,
         string $text,
         SenderType $senderType,
-        ?int $senderId = null,
+        ?int $senderId,
         MessengerProviderInterface $messenger,
         array $payload = [],
+        ?int $replyToMessageId = null,
     ): Message {
         $chat = $this->chatRepository->findById($chatId);
         if ($chat === null) {
@@ -62,6 +63,7 @@ final readonly class SendMessage
             text: $text,
             payload: $payload,
             isRead: false,
+            replyToId: $replyToMessageId,
         );
 
         $persisted = $this->messageRepository->persist($message);

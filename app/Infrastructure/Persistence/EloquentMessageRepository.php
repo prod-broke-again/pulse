@@ -6,7 +6,6 @@ namespace App\Infrastructure\Persistence;
 
 use App\Domains\Communication\Entity\Message;
 use App\Domains\Communication\Repository\MessageRepositoryInterface;
-use App\Domains\Communication\ValueObject\SenderType;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 
 final class EloquentMessageRepository implements MessageRepositoryInterface
@@ -54,9 +53,10 @@ final class EloquentMessageRepository implements MessageRepositoryInterface
     {
         $model = $message->id > 0
             ? MessageModel::findOrFail($message->id)
-            : new MessageModel();
+            : new MessageModel;
 
         $model->chat_id = $message->chatId;
+        $model->reply_to_id = $message->replyToId;
         $model->external_message_id = $message->externalMessageId;
         $model->sender_id = $message->senderId;
         $model->sender_type = $message->senderType->value;
@@ -80,6 +80,7 @@ final class EloquentMessageRepository implements MessageRepositoryInterface
             payload: $model->payload ?? [],
             isRead: $model->is_read,
             createdAt: $model->created_at ? \Carbon\Carbon::parse($model->created_at) : null,
+            replyToId: $model->reply_to_id,
         );
     }
 }

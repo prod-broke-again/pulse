@@ -17,6 +17,7 @@ final class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'avatar_url' => $this->avatar_url,
             'roles' => $this->getRoleNames()->values(),
             'source_ids' => $this->sources()->pluck('id')->values(),
             'department_ids' => $this->departments()->pluck('departments.id')->values(),

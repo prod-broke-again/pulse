@@ -6,6 +6,7 @@ namespace App\Http\Resources\Api\V1;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /** @mixin \App\Infrastructure\Persistence\Eloquent\MessageModel */
 final class MessageResource extends JsonResource
@@ -34,6 +35,11 @@ final class MessageResource extends JsonResource
             'payload' => $this->payload ?? [],
             'attachments' => $attachments,
             'is_read' => $this->is_read,
+            'reply_to' => $this->whenLoaded('replyTo', fn () => $this->replyTo ? [
+                'id' => $this->replyTo->id,
+                'text' => Str::limit((string) $this->replyTo->text, 280),
+                'sender_type' => $this->replyTo->sender_type,
+            ] : null),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

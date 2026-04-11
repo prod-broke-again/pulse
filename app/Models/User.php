@@ -30,6 +30,10 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'id_user_uuid',
+        'id_email',
+        'avatar_url',
+        'id_profile_synced_at',
     ];
 
     /**
@@ -55,6 +59,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'id_profile_synced_at' => 'datetime',
         ];
     }
 

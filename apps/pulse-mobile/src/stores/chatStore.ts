@@ -1,0 +1,353 @@
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import * as aiApi from '../api/aiRepository'
+import * as chatApi from '../api/chatRepository'
+import * as msgApi from '../api/messageRepository'
+import * as uploadApi from '../api/uploadRepository'
+import { subscribeChatChannel } from '../lib/realtime'
+import { mapApiChatToPreview } from '../mappers/chatMapper'
+import { mapApiMessageToChatMessage, mapRealtimePayloadToChatMessage } from '../mappers/messageMapper'
+import { useAuthStore } from './authStore'
+import { useInboxStore } from './inboxStore'
+import { useUiStore } from './uiStore'
+import type { AiPanelContent, ChannelSource, ChatMessage, ChatThreadMeta } from '../types/chat'
+
+export const useChatStore = defineStore('chat', () => {
+  const activeChatId = ref<string | null>(null)
+  const messages = ref<ChatMessage[]>([])
+  const composerText = ref('')
+  const isTyping = ref(false)
+  const aiProcessing = ref(false)
+  const aiContent = ref<AiPanelContent | null>(null)
+  const overlayVisible = ref(false)
+  const panelOpen = ref(false)
+  const loadingOlder = ref(false)
+  const hasMoreOlder = ref(true)
+  const oldestMessageId = ref<number | null>(null)
+  const threadMeta = ref<ChatThreadMeta | null>(null)
+
+  let aiTimers: number[] = []
+  let unsubscribeRealtime: (() => void) | null = null
+  let typingClearTimer: number | null = null
+  let readNearBottomTimer: number | null = null
+
+  const channelSource = computed((): ChannelSource | null => threadMeta.value?.channel ?? null)
+
+  function clearAiTimers() {
+    aiTimers.forEach((t) => window.clearTimeout(t))
+    aiTimers = []
+  }
+
+  function maxMessageIdFromList(): number {
+    let max = 0
+    for (const m of messages.value) {
+      const n = Number(m.id)
+      if (Number.isFinite(n) && n > max) max = n
+    }
+    return max
+  }
+
+  async function markAsRead(chatIdNum: number): Promise<void> {
+    const lastId = maxMessageIdFromList()
+    if (lastId <= 0) return
+    try {
+      await chatApi.markChatRead(chatIdNum, lastId)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function fetchThread(chatId: string): Promise<void> {
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+
+    activeChatId.value = chatId
+    loadingOlder.value = true
+    hasMoreOlder.value = true
+
+    try {
+      const [chat, rows, aiSummary] = await Promise.all([
+        chatApi.fetchChat(id),
+        msgApi.fetchMessages(id, { limit: 50 }),
+        aiApi.fetchAiSummary(id).catch(() => null),
+      ])
+
+      const preview = mapApiChatToPreview(chat)
+      threadMeta.value = {
+        id: chatId,
+        userName: preview.name,
+        status: preview.status,
+        channel: preview.channel,
+        channelLabel: chat.channel_label ?? 'Web',
+        departmentLabel: preview.department,
+        aiSummaryBar:
+          aiSummary?.summary?.trim() ||
+          aiSummary?.intent_tag?.trim() ||
+          'Нет данных AI для этого чата.',
+      }
+
+      messages.value = rows.map(mapApiMessageToChatMessage)
+      oldestMessageId.value = rows.length > 0 ? rows[0]!.id : null
+      if (rows.length < 50) hasMoreOlder.value = false
+
+      aiContent.value = {
+        summary: aiSummary?.summary ?? threadMeta.value.aiSummaryBar,
+        intentTag: aiSummary?.intent_tag ?? 'Общее обращение',
+        replies: [],
+        actionTitle: 'Продолжить диалог',
+        actionDesc: '',
+        actionButtonLabel: 'Ок',
+      }
+
+      try {
+        const sug = await aiApi.fetchAiSuggestions(id)
+        if (aiContent.value && sug.replies?.length) {
+          aiContent.value = {
+            ...aiContent.value,
+            replies: sug.replies.map((r) => ({ id: r.id, text: r.text })),
+          }
+        }
+      } catch {
+        /* optional */
+      }
+
+      await markAsRead(id)
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
+  async function loadOlderMessages(): Promise<void> {
+    const chatId = activeChatId.value
+    const before = oldestMessageId.value
+    if (!chatId || before == null || loadingOlder.value || !hasMoreOlder.value) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+
+    loadingOlder.value = true
+    try {
+      const older = await msgApi.fetchMessages(id, { beforeId: before, limit: 50 })
+      if (older.length === 0) {
+        hasMoreOlder.value = false
+        return
+      }
+      const mapped = older.map(mapApiMessageToChatMessage)
+      const existing = new Set(messages.value.map((m) => m.id))
+      const merged = [...mapped.filter((m) => !existing.has(m.id)), ...messages.value]
+      messages.value = merged
+      oldestMessageId.value = older[0]!.id
+      if (older.length < 50) hasMoreOlder.value = false
+    } finally {
+      loadingOlder.value = false
+    }
+  }
+
+  function setComposerText(value: string) {
+    composerText.value = value
+  }
+
+  const canSend = computed(() => composerText.value.trim().length > 0)
+
+  function pad2(n: number) {
+    return n.toString().padStart(2, '0')
+  }
+
+  async function sendMessage() {
+    const text = composerText.value.trim()
+    const chatId = activeChatId.value
+    if (!text || !chatId) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+
+    const clientMessageId = crypto.randomUUID?.() ?? `cm-${Date.now()}`
+    const now = new Date()
+    const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
+    const tempId = `temp-${clientMessageId}`
+    messages.value = [
+      ...messages.value,
+      { id: tempId, kind: 'outgoing', text, time, clientMessageId: clientMessageId },
+    ]
+    composerText.value = ''
+
+    try {
+      const data = await msgApi.sendMessage(id, { text, client_message_id: clientMessageId })
+      const mapped = mapApiMessageToChatMessage(data)
+      messages.value = messages.value.map((m) =>
+        m.clientMessageId === clientMessageId ? mapped : m,
+      )
+      useUiStore().pushToast('Сообщение отправлено', 'success')
+      await markAsRead(id)
+    } catch {
+      messages.value = messages.value.filter((m) => m.id !== tempId && m.clientMessageId !== clientMessageId)
+      useUiStore().pushToast('Не удалось отправить', 'error')
+    }
+  }
+
+  async function sendWithAttachments(files: File[]) {
+    const chatId = activeChatId.value
+    if (!chatId || files.length === 0) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+
+    const paths: string[] = []
+    for (const f of files) {
+      const up = await uploadApi.uploadFile(f, f.name)
+      paths.push(up.path)
+    }
+    const clientMessageId = crypto.randomUUID?.() ?? `cm-${Date.now()}`
+    try {
+      await msgApi.sendMessage(id, {
+        text: ' ',
+        attachments: paths,
+        client_message_id: clientMessageId,
+      })
+      await fetchThread(chatId)
+      useUiStore().pushToast('Файл отправлен', 'success')
+    } catch {
+      useUiStore().pushToast('Не удалось отправить файл', 'error')
+    }
+  }
+
+  function insertQuickReply(text: string) {
+    composerText.value = text
+  }
+
+  function openAiPanel() {
+    clearAiTimers()
+    overlayVisible.value = true
+    aiProcessing.value = true
+    const t1 = window.setTimeout(() => {
+      panelOpen.value = true
+    }, 10)
+    const t2 = window.setTimeout(() => {
+      aiProcessing.value = false
+    }, 1200)
+    aiTimers.push(t1, t2)
+  }
+
+  function closeAiPanel() {
+    panelOpen.value = false
+    const t = window.setTimeout(() => {
+      overlayVisible.value = false
+      aiProcessing.value = false
+    }, 350)
+    aiTimers.push(t)
+  }
+
+  function useAiReply(text: string) {
+    composerText.value = text
+    closeAiPanel()
+  }
+
+  function setTyping(value: boolean) {
+    isTyping.value = value
+  }
+
+  function subscribeThread(chatId: string): void {
+    unsubscribeRealtime?.()
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+
+    const auth = useAuthStore()
+    unsubscribeRealtime = subscribeChatChannel(id, {
+      onNewMessage: (payload) => {
+        if (payload.chatId !== id) return
+        if (
+          payload.sender_type === 'moderator' &&
+          payload.sender_id != null &&
+          auth.user?.id === payload.sender_id
+        ) {
+          return
+        }
+        const mapped = mapRealtimePayloadToChatMessage(payload)
+        if (messages.value.some((m) => m.id === mapped.id)) return
+        messages.value = [...messages.value, mapped]
+      },
+      onMessageRead: (payload) => {
+        if (payload.chatId !== id || payload.messageIds.length === 0) return
+        const readIds = new Set(payload.messageIds.map((n) => String(n)))
+        messages.value = messages.value.map((m) =>
+          readIds.has(m.id) && m.kind === 'incoming' ? { ...m, isRead: true } : m,
+        )
+        useInboxStore().scheduleInboxRefreshFromRealtime()
+      },
+      onTyping: (payload) => {
+        if (payload.sender_type === 'moderator') {
+          setTyping(false)
+          return
+        }
+        setTyping(true)
+        if (typingClearTimer != null) window.clearTimeout(typingClearTimer)
+        typingClearTimer = window.setTimeout(() => {
+          typingClearTimer = null
+          setTyping(false)
+        }, 4000)
+      },
+    })
+  }
+
+  function leaveThread(): void {
+    unsubscribeRealtime?.()
+    unsubscribeRealtime = null
+    if (typingClearTimer != null) {
+      window.clearTimeout(typingClearTimer)
+      typingClearTimer = null
+    }
+    if (readNearBottomTimer != null) {
+      window.clearTimeout(readNearBottomTimer)
+      readNearBottomTimer = null
+    }
+  }
+
+  function onThreadScrolledNearBottom(): void {
+    const chatId = activeChatId.value
+    if (!chatId) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+    if (readNearBottomTimer != null) window.clearTimeout(readNearBottomTimer)
+    readNearBottomTimer = window.setTimeout(() => {
+      readNearBottomTimer = null
+      void markAsRead(id)
+    }, 400)
+  }
+
+  function clearThread() {
+    leaveThread()
+    messages.value = []
+    threadMeta.value = null
+    oldestMessageId.value = null
+    hasMoreOlder.value = true
+  }
+
+  return {
+    activeChatId,
+    messages,
+    composerText,
+    isTyping,
+    aiProcessing,
+    aiContent,
+    overlayVisible,
+    panelOpen,
+    loadingOlder,
+    hasMoreOlder,
+    threadMeta,
+    channelSource,
+    fetchThread,
+    loadOlderMessages,
+    setComposerText,
+    canSend,
+    sendMessage,
+    sendWithAttachments,
+    insertQuickReply,
+    openAiPanel,
+    closeAiPanel,
+    useAiReply,
+    setTyping,
+    subscribeThread,
+    leaveThread,
+    onThreadScrolledNearBottom,
+    clearAiTimers,
+    clearThread,
+    markAsRead,
+  }
+})

@@ -62,6 +62,21 @@ final class UploadApiTest extends TestCase
             ->assertJsonPath('data.original_name', 'document.pdf');
     }
 
+    public function test_upload_accepts_audio_aac(): void
+    {
+        Storage::fake('local');
+
+        $file = UploadedFile::fake()->create('voice.aac', 100, 'audio/aac');
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson('/api/v1/uploads', [
+                'file' => $file,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.original_name', 'voice.aac');
+    }
+
     public function test_upload_requires_file(): void
     {
         $response = $this->actingAs($this->moderator, 'sanctum')

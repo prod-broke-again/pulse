@@ -21,7 +21,9 @@ final class ListChatsRequest extends FormRequest
             'source_id' => ['sometimes', 'nullable', 'integer'],
             'department_id' => ['sometimes', 'nullable', 'integer'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'status' => ['sometimes', 'string', 'in:open,closed'],
+            'status' => ['sometimes', 'string', 'in:open,closed,all'],
+            'channels' => ['sometimes', 'array'],
+            'channels.*' => ['string', 'in:tg,vk,web'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];

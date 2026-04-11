@@ -143,15 +143,15 @@ return [
     |
     */
 
-    'features' => [
-        Features::registration(),
-        Features::resetPasswords(),
+    'features' => array_values(array_filter([
+        env('PULSE_SSO_ONLY', false) ? null : Features::registration(),
+        env('PULSE_SSO_ONLY', false) ? null : Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,
             // 'window' => 0
         ]),
-    ],
+    ])),
 
 ];

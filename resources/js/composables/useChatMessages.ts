@@ -60,11 +60,12 @@ export function useChatMessages(options: UseChatMessagesOptions) {
                 if (!beforeId) {
                     messages.value = list;
                     oldestMessageId.value = list.length ? (list[0]?.id as number) ?? null : null;
-                    const unreadClientIds = list
-                        .filter((m) => m.sender_type === 'client' && !m.is_read)
-                        .map((m) => Number(m.id));
-                    if (unreadClientIds.length > 0 && chatId.value === chatIdParam) {
-                        api.post(`/chats/${chatIdParam}/messages/read`, { message_ids: unreadClientIds }).catch(() => {});
+                    const numericIds = list
+                        .map((m) => Number(m.id))
+                        .filter((n) => Number.isFinite(n) && n > 0);
+                    const lastId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+                    if (lastId > 0 && chatId.value === chatIdParam) {
+                        api.post(`/chats/${chatIdParam}/read`, { last_message_id: lastId }).catch(() => {});
                     }
                 } else {
                     messages.value = [...list, ...messages.value];
@@ -81,10 +82,11 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     }
 
     function markClientMessagesAsRead() {
-        const unreadClientIds = messages.value
-            .filter((m) => m.sender_type === 'client' && !m.is_read && typeof m.id === 'number')
-            .map((m) => m.id as number);
-        if (unreadClientIds.length > 0) markAsRead(unreadClientIds);
+        const numericIds = messages.value
+            .map((m) => Number(m.id))
+            .filter((n) => Number.isFinite(n) && n > 0);
+        const lastId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+        if (lastId > 0) markAsRead(lastId);
     }
 
     function loadOlderMessages() {
@@ -141,12 +143,10 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             });
     }
 
-    function markAsRead(messageIds?: number[], upToMessageId?: number) {
+    function markAsRead(lastMessageId: number) {
         const cid = chatId.value;
-        if (!cid) return;
-        const body = messageIds?.length ? { message_ids: messageIds } : upToMessageId != null ? { up_to_message_id: upToMessageId } : undefined;
-        if (!body) return;
-        api.post(`/chats/${cid}/messages/read`, body).catch(() => {});
+        if (!cid || !Number.isFinite(lastMessageId) || lastMessageId <= 0) return;
+        api.post(`/chats/${cid}/read`, { last_message_id: lastMessageId }).catch(() => {});
     }
 
     function applyNewMessage(payload: NewChatMessagePayload) {

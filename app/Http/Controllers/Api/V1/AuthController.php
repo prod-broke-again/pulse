@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Resources\Api\V1\UserResource;
 use App\Models\User;
+use App\Services\Auth\PulseStaffAccess;
+use App\Services\Auth\TokenIssueService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
@@ -14,8 +17,17 @@ use Illuminate\Validation\ValidationException;
 
 final class AuthController extends Controller
 {
+    public function __construct(
+        private readonly PulseStaffAccess $pulseStaffAccess,
+        private readonly TokenIssueService $tokenIssueService,
+    ) {}
+
     public function login(LoginRequest $request): JsonResponse
     {
+        if (config('pulse.sso_only')) {
+            throw new AuthorizationException(__('Password login is disabled. Use ACHPP ID SSO.'));
+        }
+
         $user = User::where('email', $request->validated('email'))->first();
 
         if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
@@ -24,14 +36,13 @@ final class AuthController extends Controller
             ]);
         }
 
-        if (! $user->hasAnyRole(['admin', 'moderator'])) {
-            throw ValidationException::withMessages([
-                'email' => [__('Access denied. Only administrators and moderators can log in.')],
-            ]);
-        }
+        $this->pulseStaffAccess->ensureStaff($user);
 
-        $deviceName = $request->validated('device_name') ?? ($request->userAgent() ?: 'unknown');
-        $token = $user->createToken($deviceName)->plainTextToken;
+        $token = $this->tokenIssueService->issueSanctumToken(
+            $user,
+            $request->validated('device_name'),
+            $request,
+        );
 
         return response()->json([
             'data' => [

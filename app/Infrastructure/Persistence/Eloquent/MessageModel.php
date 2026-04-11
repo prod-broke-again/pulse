@@ -20,14 +20,17 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $text
  * @property array|null $payload
  * @property bool $is_read
+ * @property int|null $reply_to_id
  */
 class MessageModel extends Model implements HasMedia
 {
     use InteractsWithMedia;
+
     protected $table = 'messages';
 
     protected $fillable = [
         'chat_id',
+        'reply_to_id',
         'external_message_id',
         'sender_id',
         'sender_type',
@@ -48,6 +51,11 @@ class MessageModel extends Model implements HasMedia
     public function chat(): BelongsTo
     {
         return $this->belongsTo(ChatModel::class, 'chat_id');
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reply_to_id');
     }
 
     public function sender(): BelongsTo

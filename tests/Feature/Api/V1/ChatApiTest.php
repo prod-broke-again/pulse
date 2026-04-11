@@ -58,7 +58,7 @@ final class ChatApiTest extends TestCase
         return ChatModel::create(array_merge([
             'source_id' => $this->source->id,
             'department_id' => $this->department->id,
-            'external_user_id' => 'ext_user_' . uniqid(),
+            'external_user_id' => 'ext_user_'.uniqid(),
             'user_metadata' => ['name' => 'Test Client'],
             'status' => 'new',
             'assigned_to' => null,
@@ -217,5 +217,96 @@ final class ChatApiTest extends TestCase
             ->postJson('/api/v1/chats/99999/close');
 
         $response->assertNotFound();
+    }
+
+    public function test_list_chats_includes_mobile_fields_and_unread_count(): void
+    {
+        $chat = $this->createChat(['status' => 'new']);
+        MessageModel::create([
+            'chat_id' => $chat->id,
+            'sender_id' => null,
+            'sender_type' => 'client',
+            'text' => 'Hello',
+            'payload' => null,
+            'is_read' => false,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/chats?tab=all');
+
+        $response->assertOk();
+        $row = collect($response->json('data'))->firstWhere('id', $chat->id);
+        $this->assertNotNull($row);
+        $this->assertArrayHasKey('unread_count', $row);
+        $this->assertArrayHasKey('category_code', $row);
+        $this->assertArrayHasKey('last_message_preview', $row);
+        $this->assertSame(1, $row['unread_count']);
+    }
+
+    public function test_tab_counts_returns_my_unassigned_all(): void
+    {
+        $this->createChat(['status' => 'new', 'assigned_to' => $this->moderator->id]);
+        $this->createChat(['status' => 'new', 'assigned_to' => null]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/chats/tab-counts?status=open');
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => ['my', 'unassigned', 'all'],
+            ]);
+        $data = $response->json('data');
+        $this->assertGreaterThanOrEqual(1, $data['all']);
+    }
+
+    public function test_show_chat_returns_chat_resource(): void
+    {
+        $chat = $this->createChat(['status' => 'new']);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson("/api/v1/chats/{$chat->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $chat->id)
+            ->assertJsonStructure([
+                'data' => ['id', 'unread_count', 'category_code', 'channel'],
+            ]);
+    }
+
+    public function test_read_chat_updates_cursor_and_marks_client_messages(): void
+    {
+        $chat = $this->createChat(['status' => 'new']);
+        $m1 = MessageModel::create([
+            'chat_id' => $chat->id,
+            'sender_id' => null,
+            'sender_type' => 'client',
+            'text' => 'A',
+            'payload' => null,
+            'is_read' => false,
+        ]);
+        $m2 = MessageModel::create([
+            'chat_id' => $chat->id,
+            'sender_id' => null,
+            'sender_type' => 'client',
+            'text' => 'B',
+            'payload' => null,
+            'is_read' => false,
+        ]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson("/api/v1/chats/{$chat->id}/read", [
+                'last_message_id' => $m2->id,
+            ]);
+
+        $response->assertOk()->assertJsonPath('data.ok', true);
+
+        $this->assertDatabaseHas('chat_user_read_states', [
+            'user_id' => $this->moderator->id,
+            'chat_id' => $chat->id,
+            'last_read_message_id' => $m2->id,
+        ]);
+
+        $this->assertTrue($m1->fresh()->is_read);
+        $this->assertTrue($m2->fresh()->is_read);
     }
 }

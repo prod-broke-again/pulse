@@ -30,6 +30,15 @@ class AppServiceProvider extends ServiceProvider
                 default => $app->make(\App\Services\TimewebAiService::class),
             };
         });
+
+        $this->app->bind(\App\Contracts\Ai\AiProviderInterface::class, function ($app) {
+            $provider = config('services.ai.default', 'timeweb');
+
+            return match ($provider) {
+                'gptunnel' => $app->make(\App\Services\GPTunnelService::class),
+                default => $app->make(\App\Services\TimewebAiService::class),
+            };
+        });
     }
 
     /**

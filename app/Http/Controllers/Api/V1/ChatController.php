@@ -20,16 +20,44 @@ use Illuminate\Support\Facades\Gate;
 
 final class ChatController extends Controller
 {
+    public function show(ChatModel $chat): JsonResponse
+    {
+        Gate::authorize('view', $chat);
+
+        /** @var User $user */
+        $user = auth()->user();
+        $chat->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->loadUnreadCountForUser($user);
+
+        return response()->json([
+            'data' => new ChatResource($chat),
+        ]);
+    }
+
     public function index(ListChatsRequest $request, ListChatsQuery $listChats): AnonymousResourceCollection
     {
         /** @var User $user */
         $user = auth()->user();
+        /** @var array<string, mixed> $filters */
         $filters = $request->validated();
         $perPage = (int) ($filters['per_page'] ?? 20);
 
         $paginator = $listChats->run($user, $filters, $perPage);
 
         return ChatResource::collection($paginator);
+    }
+
+    public function tabCounts(ListChatsRequest $request, ListChatsQuery $listChats): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+        /** @var array<string, mixed> $filters */
+        $filters = $request->validated();
+        unset($filters['tab'], $filters['page'], $filters['per_page']);
+
+        return response()->json([
+            'data' => $listChats->tabCounts($user, $filters),
+        ]);
     }
 
     public function assignMe(ChatModel $chat, AssignChatToModerator $assignChat): JsonResponse
@@ -42,6 +70,7 @@ final class ChatController extends Controller
         $assignChat->run($chat->id, $user->id);
 
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->loadUnreadCountForUser($user);
 
         return response()->json([
             'data' => new ChatResource($chat),
@@ -68,7 +97,10 @@ final class ChatController extends Controller
             topic: $domainChat->topic,
         ));
 
+        /** @var User $user */
+        $user = auth()->user();
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->loadUnreadCountForUser($user);
 
         return response()->json([
             'data' => new ChatResource($chat),

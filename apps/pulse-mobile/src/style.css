@@ -1,0 +1,208 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --color-brand: #55175e;
+  --color-brand-bg: #e6e0ec;
+  --color-brand-bg-dark: #1a0f1f;
+  --color-brand-50: #e6e0ec;
+  --color-brand-100: #b3a2c7;
+  --color-brand-200: #9a5fa8;
+  --color-brand-300: #8b6b9a;
+  --color-brand-400: #9a5fa8;
+  --color-brand-500: #5a3d6a;
+  --color-brand-600: #5a3d6a;
+  --color-brand-700: #55175e;
+  --color-brand-800: #4a3d62;
+  --color-brand-900: #3d2f4f;
+  --color-brand-950: #2d1f3a;
+  --color-light: #f8fafc;
+  --color-dark: #1a1a1a;
+  --color-accent: #e9fcff;
+  --color-gray-line: #e5e7eb;
+  --color-brand-hover: #4a3d62;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --keyboard-height: 0px;
+
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-800: #27272a;
+  --zinc-850: #202023;
+  --zinc-900: #18181b;
+  --zinc-950: #09090b;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--color-light);
+    color: var(--color-dark);
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html.dark body {
+    background: var(--zinc-900);
+    color: var(--zinc-100);
+  }
+}
+
+@layer components {
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.3);
+    }
+  }
+
+  @keyframes typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+    }
+    30% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .pulse-dot-animate {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .typing-dot {
+    animation: typing-bounce 1.4s infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--zinc-100) 25%,
+      var(--zinc-200) 50%,
+      var(--zinc-100) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  html.dark .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--zinc-800) 25%,
+      var(--zinc-700) 50%,
+      var(--zinc-800) 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  .toast-animate-in {
+    animation: toast-in 0.3s ease;
+  }
+
+  .ai-panel-slide {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .ai-overlay-fade {
+    transition: opacity 0.3s ease;
+  }
+
+  /* Settings toggle (from app (9).html) */
+  .si-toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: var(--zinc-300);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+    border: none;
+    padding: 0;
+  }
+
+  .si-toggle.on {
+    background: var(--color-brand);
+  }
+
+  .si-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  .si-toggle.on::after {
+    transform: translateX(20px);
+  }
+}

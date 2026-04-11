@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <!-- PROTECTED: meta type -->
+    <meta name="type" value="app" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse — Mobile UX Concept for АЧПП</title>
+    <meta property="og:title" content="Pulse — Omnichannel Moderation Center">
+    <meta property="og:description" content="Interactive 3D concept showcase for the Pulse mobile moderation app built for АЧПП portal.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta property="og:type" content="website">
+    <style>
+        :root {
+            --color-brand: #55175e;
+            --color-brand-bg: #e6e0ec;
+            --color-brand-bg-dark: #1a0f1f;
+            --color-brand-50: #e6e0ec;
+            --color-brand-100: #b3a2c7;
+            --color-brand-200: #9a5fa8;
+            --color-brand-300: #8b6b9a;
+            --color-brand-400: #9a5fa8;
+            --color-brand-500: #5a3d6a;
+            --color-brand-600: #5a3d6a;
+            --color-brand-700: #55175e;
+            --color-brand-800: #4a3d62;
+            --color-brand-900: #3d2f4f;
+            --color-brand-950: #2d1f3a;
+            --color-light: #f8fafc;
+            --color-dark: #1a1a1a;
+            --color-accent: #e9fcff;
+            --color-gray-line: #e5e7eb;
+            --zinc-800: #27272a;
+            --zinc-850: #202023;
+            --zinc-900: #18181b;
+            --zinc-950: #09090b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+            background: #0e0e11;
+            color: #e4e4e7;
+        }
+        #canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+        }
+        .overlay {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .overlay * {
+            pointer-events: auto;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(85,23,94,0.25);
+            border: 1px solid rgba(154,95,168,0.3);
+            border-radius: 100px;
+            padding: 6px 16px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #b3a2c7;
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.03em;
+        }
+        .hero h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 700;
+            line-height: 1.1;
+            color: #fafafa;
+            margin-bottom: 1rem;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, #9a5fa8, #55175e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.15rem;
+            line-height: 1.6;
+            color: #a1a1aa;
+            max-width: 560px;
+            margin-bottom: 2.5rem;
+        }
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--color-brand);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.25s, transform 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .hero-cta:hover {
+            background: var(--color-brand-800);
+            transform: translateY(-1px);
+        }
+        .scroll-hint {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            color: #71717a;
+            font-size: 0.75rem;
+            animation: bobble 2s ease-in-out infinite;
+        }
+        @keyframes bobble {
+            0%,100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(6px); }
+        }
+
+        /* Sections */
+        .section {
+            min-height: 100vh;
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-brand-200);
+            margin-bottom: 1rem;
+        }
+        .section h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.8rem, 4vw, 2.8rem);
+            font-weight: 700;
+            color: #fafafa;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }
+        .section .desc {
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: #a1a1aa;
+            max-width: 640px;
+            margin-bottom: 3rem;
+        }
+
+        /* IA Card */
+        .ia-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
+        }
+        .ia-card {
+            background: rgba(39,39,42,0.6);
+            border: 1px solid rgba(63,63,70,0.5);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: border-color 0.3s, transform 0.2s;
+        }
+        .ia-card:hover {
+            border-color: rgba(154,95,168,0.5);
+            transform: translateY(-2px);
+        }
+        .ia-card-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .ia-card-icon.purple { background: rgba(85,23,94,0.3); color: #9a5fa8; }
+        .ia-card-icon.teal { background: rgba(20,184,166,0.15); color: #2dd4bf; }
+        .ia-card-icon.amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .ia-card-icon.rose { background: rgba(244,63,94,0.15); color: #fb7185; }
+        .ia-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e4e4e7;
+            margin-bottom: 0.5rem;
+        }
+        .ia-card p {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            color: #a1a1aa;
+        }
+
+        /* Phone mockup */
+        .phone-showcase {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 3rem;
+        }
+        .phone-frame {
+            width: 300px;
+            background: var(--zinc-900);
+            border-radius: 32px;
+            border: 2px solid rgba(63,63,70,0.6);
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+            transition: transform 0.3s;
+        }
+        .phone-frame:hover {
+            transform: translateY(-4px);
+        }
+        .phone-notch {
+            height: 28px;
+            background: #09090b;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 4px;
+        }
+        .phone-notch-pill {
+            width: 80px;
+            height: 6px;
+            background: #27272a;
+            border-radius: 3px;
+        }
+        .phone-screen {
+            padding: 0;
+            min-height: 520px;
+            background: #18181b;
+        }
+        .phone-label {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #71717a;
+        }
+
+        /* Inbox screen mock */
+        .mock-header {
+            background: rgba(39,39,42,0.8);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(63,63,70,0.4);
+        }
+        .mock-header-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #fafafa;
+        }
+        .mock-header-icon {
+            color: #71717a;
+            font-size: 0.9rem;
+        }
+        .mock-tabs {
+            display: flex;
+            gap: 0;
+            background: rgba(39,39,42,0.5);
+            padding: 4px;
+            margin: 10px 12px;
+            border-radius: 10px;
+        }
+        .mock-tab {
+            flex: 1;
+            text-align: center;
+            padding: 6px 0;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: #71717a;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .mock-tab.active {
+            background: var(--color-brand);
+            color: #fff;
+        }
+        .mock-search {
+            margin: 0 12px 8px;
+            background: rgba(39,39,42,0.6);
+            border: 1px solid rgba(63,63,70,0.4);
+            border-radius: 10px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #52525b;
+            font-size: 0.75rem;
+        }
+        .mock-chat-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(63,63,70,0.25);
+            transition: background 0.15s;
+        }
+        .mock-chat-item:hover {
+            background: rgba(39,39,42,0.4);
+        }
+        .mock-avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 600; color: #fff;
+        }
+        .mock-chat-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .mock-chat-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+        .mock-chat-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #e4e4e7;
+        }
+        .mock-chat-time {
+            font-size: 0.65rem;
+            color: #52525b;
+        }
+        .mock-chat-preview {
+            font-size: 0.72rem;
+            color: #71717a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .mock-chat-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .mock-badge {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .mock-badge.tg { background: rgba(56,189,248,0.15); color: #38bdf8; }
+        .mock-badge.vk { background: rgba(96,165,250,0.15); color: #60a5fa; }
+        .mock-badge.web { background: rgba(52,211,153,0.15); color: #34d399; }
+        .mock-badge.unread {
+            background: var(--color-brand);
+            color: #fff;
+            border-radius: 50%;
+            width: 18px; height: 18px;
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0;
+            font-size: 0.6rem;
+        }
+        .mock-badge.urgent {
+            background: rgba(239,68,68,0.2);
+            color: #f87171;
+        }
+
+        /* Chat screen mock */
+        .mock-chat-header {
+            background: rgba(39,39,42,0.8);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(63,63,70,0.4);
+        }
+        .mock-back {
+            color: var(--color-brand-200);
+            font-size: 0.85rem;
+        }
+        .mock-chat-header-info {
+            flex: 1;
+        }
+        .mock-chat-header-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #fafafa;
+        }
+        .mock-chat-header-status {
+            font-size: 0.65rem;
+            color: #52525b;
+        }
+        .mock-chat-actions {
+            display: flex;
+            gap: 12px;
+        }
+        .mock-chat-actions i {
+            color: #71717a;
+            font-size: 0.8rem;
+        }
+        .mock-messages {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 320px;
+        }
+        .mock-msg {
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 14px;
+            font-size: 0.72rem;
+            line-height: 1.5;
+        }
+        .mock-msg.incoming {
+            background: rgba(39,39,42,0.7);
+            color: #d4d4d8;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .mock-msg.outgoing {
+            background: var(--color-brand);
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .mock-msg.system {
+            align-self: center;
+            background: transparent;
+            color: #52525b;
+            font-size: 0.65rem;
+            text-align: center;
+        }
+        .mock-msg-time {
+            font-size: 0.58rem;
+            color: rgba(255,255,255,0.5);
+            text-align: right;
+            margin-top: 2px;
+        }
+        .mock-msg.incoming .mock-msg-time {
+            color: #52525b;
+        }
+        .mock-ai-hint {
+            margin: 4px 12px;
+            padding: 8px 12px;
+            background: rgba(85,23,94,0.15);
+            border: 1px solid rgba(154,95,168,0.25);
+            border-radius: 10px;
+            font-size: 0.68rem;
+            color: #b3a2c7;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .mock-ai-hint i {
+            color: #9a5fa8;
+            margin-top: 1px;
+        }
+        .mock-composer {
+            background: rgba(39,39,42,0.8);
+            border-top: 1px solid rgba(63,63,70,0.4);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mock-composer-input {
+            flex: 1;
+            background: rgba(24,24,27,0.8);
+            border: 1px solid rgba(63,63,70,0.4);
+            border-radius: 20px;
+            padding: 8px 14px;
+            font-size: 0.72rem;
+            color: #a1a1aa;
+        }
+        .mock-composer-btn {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: var(--color-brand);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff;
+            font-size: 0.75rem;
+        }
+        .mock-quick-chips {
+            display: flex;
+            gap: 6px;
+            padding: 6px 12px;
+            overflow-x: auto;
+            background: rgba(39,39,42,0.5);
+        }
+        .mock-chip {
+            white-space: nowrap;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.62rem;
+            font-weight: 500;
+            background: rgba(85,23,94,0.2);
+            color: #b3a2c7;
+            border: 1px solid rgba(154,95,168,0.2);
+        }
+
+        /* AI screen mock */
+        .mock-ai-panel {
+            padding: 16px;
+        }
+        .mock-ai-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fafafa;
+            margin-bottom: 4px;
+        }
+        .mock-ai-sub {
+            font-size: 0.72rem;
+            color: #71717a;
+            margin-bottom: 16px;
+        }
+        .mock-ai-card {
+            background: rgba(39,39,42,0.6);
+            border: 1px solid rgba(63,63,70,0.4);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            transition: border-color 0.2s;
+        }
+        .mock-ai-card:hover {
+            border-color: rgba(154,95,168,0.4);
+        }
+        .mock-ai-card-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .mock-ai-card-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem;
+        }
+        .mock-ai-card-icon.sum { background: rgba(56,189,248,0.15); color: #38bdf8; }
+        .mock-ai-card-icon.reply { background: rgba(52,211,153,0.15); color: #34d399; }
+        .mock-ai-card-icon.plan { background: rgba(251,191,36,0.15); color: #fbbf24; }
+        .mock-ai-card-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #e4e4e7;
+        }
+        .mock-ai-card p {
+            font-size: 0.68rem;
+            line-height: 1.5;
+            color: #a1a1aa;
+        }
+        .mock-ai-result {
+            background: rgba(85,23,94,0.12);
+            border: 1px solid rgba(154,95,168,0.2);
+            border-radius: 10px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 0.68rem;
+            line-height: 1.5;
+            color: #d4d4d8;
+        }
+        .mock-ai-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .mock-ai-btn {
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mock-ai-btn.primary {
+            background: var(--color-brand);
+            color: #fff;
+        }
+        .mock-ai-btn.secondary {
+            background: rgba(39,39,42,0.8);
+            color: #a1a1aa;
+            border: 1px solid rgba(63,63,70,0.5);
+        }
+
+        /* Bottom nav mock */
+        .mock-bottom-nav {
+            display: flex;
+            background: rgba(24,24,27,0.95);
+            border-top: 1px solid rgba(63,63,70,0.3);
+            padding: 6px 0 10px;
+        }
+        .mock-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            font-size: 0.6rem;
+            color: #52525b;
+            transition: color 0.2s;
+        }
+        .mock-nav-item.active {
+            color: var(--color-brand-200);
+        }
+        .mock-nav-item i {
+            font-size: 1rem;
+        }
+        .mock-nav-item .nav-badge {
+            position: relative;
+        }
+        .mock-nav-item .nav-badge::after {
+            content: '';
+            position: absolute;
+            top: -2px; right: -6px;
+            width: 7px; height: 7px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        /* Flow diagram */
+        .flow-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        .flow-step {
+            background: rgba(39,39,42,0.6);
+            border: 1px solid rgba(63,63,70,0.5);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            text-align: center;
+            min-width: 140px;
+            transition: border-color 0.3s;
+        }
+        .flow-step:hover {
+            border-color: rgba(154,95,168,0.5);
+        }
+        .flow-step i {
+            font-size: 1.2rem;
+            color: var(--color-brand-200);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        .flow-step .step-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #e4e4e7;
+            margin-bottom: 0.25rem;
+        }
+        .flow-step .step-desc {
+            font-size: 0.72rem;
+            color: #71717a;
+        }
+        .flow-arrow {
+            color: #3f3f46;
+            font-size: 1.2rem;
+        }
+
+        /* Tokens table */
+        .tokens-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .token-card {
+            background: rgba(39,39,42,0.5);
+            border: 1px solid rgba(63,63,70,0.4);
+            border-radius: 14px;
+            padding: 1.25rem;
+        }
+        .token-card h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #e4e4e7;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .token-card h4 i {
+            color: var(--color-brand-200);
+        }
+        .token-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 0;
+        }
+        .token-swatch {
+            width: 24px; height: 24px;
+            border-radius: 6px;
+            border: 1px solid rgba(63,63,70,0.4);
+            flex-shrink: 0;
+        }
+        .token-label {
+            font-size: 0.78rem;
+            color: #a1a1aa;
+            flex: 1;
+        }
+        .token-value {
+            font-size: 0.72rem;
+            font-family: 'Space Grotesk', monospace;
+            color: #71717a;
+        }
+
+        /* Component mapping */
+        .comp-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .comp-card {
+            background: rgba(39,39,42,0.5);
+            border: 1px solid rgba(63,63,70,0.4);
+            border-radius: 14px;
+            padding: 1.25rem;
+        }
+        .comp-card h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #fafafa;
+            margin-bottom: 0.5rem;
+        }
+        .comp-card .comp-tag {
+            display: inline-block;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: 'Space Grotesk', monospace;
+            margin-bottom: 0.5rem;
+        }
+        .comp-card .comp-tag.flutter {
+            background: rgba(56,189,248,0.12);
+            color: #38bdf8;
+        }
+        .comp-card .comp-tag.vue {
+            background: rgba(52,211,153,0.12);
+            color: #34d399;
+        }
+        .comp-card p {
+            font-size: 0.78rem;
+            line-height: 1.6;
+            color: #a1a1aa;
+        }
+        .comp-card code {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 0.72rem;
+            background: rgba(24,24,27,0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #d4d4d8;
+        }
+
+        /* Nav */
+        .top-nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: rgba(14,14,17,0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(63,63,70,0.2);
+        }
+        .top-nav-brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #fafafa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .top-nav-brand i {
+            color: var(--color-brand-200);
+        }
+        .top-nav-links {
+            display: flex;
+            gap: 24px;
+        }
+        .top-nav-links a {
+            color: #71717a;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .top-nav-links a:hover {
+            color: #e4e4e7;
+        }
+        @media (max-width: 768px) {
+            .top-nav-links { display: none; }
+            .phone-showcase { gap: 1.5rem; }
+            .phone-frame { width: 280px; }
+            .flow-arrow { display: none; }
+            .flow-container { flex-direction: column; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="top-nav-brand">
+            <i class="fa-solid fa-wave-pulse"></i>
+            Pulse
+        </div>
+        <div class="top-nav-links">
+            <a href="#architecture">Архитектура</a>
+            <a href="#screens">Экраны</a>
+            <a href="#flows">User Flows</a>
+            <a href="#components">Компоненты</a>
+            <a href="#tokens">Токены</a>
+        </div>
+    </nav>
+
+    <div class="overlay">
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-badge">
+                <i class="fa-solid fa-shield-check"></i>
+                АЧПП — Портал модерации
+            </div>
+            <h1>
+                <span>Pulse</span><br>
+                Mobile UX Concept
+            </h1>
+            <p>
+                Омниканальный центр обработки обращений для модераторов Ассоциации частнопрактикующих психологов. 
+                Telegram, VK, Web — в одном интерфейсе с AI-ассистентом.
+            </p>
+            <button class="hero-cta" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">
+                <i class="fa-solid fa-arrow-down"></i>
+                Исследовать концепт
+            </button>
+            <div class="scroll-hint">
+                <i class="fa-solid fa-chevron-down"></i>
+                Скролл
+            </div>
+        </section>
+
+        <!-- 1. Information Architecture -->
+        <section class="section" id="architecture">
+            <div class="section-label">
+                <i class="fa-solid fa-sitemap"></i>
+                01 — Информационная архитектура
+            </div>
+            <h2>Навигация и структура</h2>
+            <p class="desc">
+                Bottom Navigation с 4 вкладками — оптимальный паттерн для one-hand use. 
+                Каждая вкладка соответствует ключевому сценарию модератора.
+            </p>
+            <div class="ia-grid">
+                <div class="ia-card">
+                    <div class="ia-card-icon purple">
+                        <i class="fa-solid fa-inbox"></i>
+                    </div>
+                    <h3>Inbox</h3>
+                    <p>Главный экран. Сегменты: Мои / Нераспределённые / Все. Поиск, фильтры статуса, карточки чатов с превью и метаданными.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon teal">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <h3>Active</h3>
+                    <p>Только активные диалоги текущего модератора. Быстрый доступ к незакрытым обращениям без лишнего шума.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon amber">
+                        <i class="fa-solid fa-sparkles"></i>
+                    </div>
+                    <h3>AI Assistant</h3>
+                    <p>Суммаризация, предложение ответов, план решения. Human-in-the-loop: AI предлагает, модератор решает.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon rose">
+                        <i class="fa-solid fa-gear"></i>
+                    </div>
+                    <h3>Settings</h3>
+                    <p>Профиль, уведомления, тема (light/dark), звук, управление шаблонами быстрых ответов.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. User Flows -->
+        <section class="section" id="flows">
+            <div class="section-label">
+                <i class="fa-solid fa-route"></i>
+                02 — User Flows
+            </div>
+            <h2>Путь модератора</h2>
+            <p class="desc">
+                Минимум тапов от пуш-уведомления до закрытия обращения. 
+                Каждый шаг оптимизирован для скорости и снижения когнитивной нагрузки.
+            </p>
+
+            <h3 style="color:#e4e4e7;font-size:1rem;margin-bottom:1rem;">Основной flow: Входящее → Ответ → Закрытие</h3>
+            <div class="flow-container">
+                <div class="flow-step">
+                    <i class="fa-solid fa-bell"></i>
+                    <div class="step-title">Push</div>
+                    <div class="step-desc">Уведомление о новом обращении</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-inbox"></i>
+                    <div class="step-title">Inbox</div>
+                    <div class="step-desc">Deep link в конкретный чат</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-sparkles"></i>
+                    <div class="step-title">AI Triage</div>
+                    <div class="step-desc">Суммари + предложение ответа</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <div class="step-title">Ответ</div>
+                    <div class="step-desc">Шаблон или AI-ответ → отправка</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <div class="step-title">Закрытие</div>
+                    <div class="step-desc">Статус → closed, архив</div>
+                </div>
+            </div>
+
+            <h3 style="color:#e4e4e7;font-size:1rem;margin:2rem 0 1rem;">Эскалация</h3>
+            <div class="flow-container">
+                <div class="flow-step">
+                    <i class="fa-solid fa-message-exclamation"></i>
+                    <div class="step-title">Сложный кейс</div>
+                    <div class="step-desc">Модератор не может решить</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <div class="step-title">Назначить</div>
+                    <div class="step-desc">Передача другому модератору</div>
+                </div>
+                <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                <div class="flow-step">
+                    <i class="fa-solid fa-building"></i>
+                    <div class="step-title">Department</div>
+                    <div class="step-desc">Маршрутизация в отдел</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Screen-by-Screen UI -->
+        <section class="section" id="screens">
+            <div class="section-label">
+                <i class="fa-solid fa-mobile-screen"></i>
+                03 — Экраны интерфейса
+            </div>
+            <h2>Screen-by-Screen UI Spec</h2>
+            <p class="desc">
+                Три ключевых экрана: список чатов, диалог и AI-ассистент. 
+                Dark theme на базе zinc с брендовыми акцентами.
+            </p>
+
+            <div class="phone-showcase">
+                <!-- Inbox Screen -->
+                <div>
+                    <div class="phone-frame">
+                        <div class="phone-notch"><div class="phone-notch-pill"></div></div>
+                        <div class="phone-screen">
+                            <div class="mock-header">
+                                <div class="mock-header-title">Inbox</div>
+                                <div class="mock-header-icon"><i class="fa-solid fa-filter"></i></div>
+                            </div>
+                            <div class="mock-tabs">
+                                <div class="mock-tab active">Мои</div>
+                                <div class="mock-tab">Нераспред.</div>
+                                <div class="mock-tab">Все</div>
+                            </div>
+                            <div class="mock-search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                Поиск по имени или теме...
+                            </div>
+                            
+                            <div class="mock-chat-item">
+                                <div class="mock-avatar" style="background:#38bdf8;">АК</div>
+                                <div class="mock-chat-body">
+                                    <div class="mock-chat-top">
+                                        <span class="mock-chat-name">Анна Козлова</span>
+                                        <span class="mock-chat-time">2 мин</span>
+                                    </div>
+                                    <div class="mock-chat-preview">Здравствуйте, у меня вопрос по оплате сессии...</div>
+                                    <div class="mock-chat-meta">
+                                        <span class="mock-badge tg">TG</span>
+                                        <span class="mock-badge urgent">Срочно</span>
+                                        <span class="mock-badge unread">3</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mock-chat-item">
+                                <div class="mock-avatar" style="background:#a78bfa;">ДМ</div>
+                                <div class="mock-chat-body">
+                                    <div class="mock-chat-top">
+                                        <span class="mock-chat-name">Дмитрий Морозов</span>
+                                        <span class="mock-chat-time">15 мин</span>
+                                    </div>
+                                    <div class="mock-chat-preview">Не могу найти специалиста в своём городе</div>
+                                    <div class="mock-chat-meta">
+                                        <span class="mock-badge vk">VK</span>
+                                        <span class="mock-badge unread">1</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mock-chat-item">
+                                <div class="mock-avatar" style="background:#34d399;">ЕС</div>
+                                <div class="mock-chat-body">
+                                    <div class="mock-chat-top">
+                                        <span class="mock-chat-name">Елена Смирнова</span>
+                                        <span class="mock-chat-time">1 ч</span>
+                                    </div>
+                                    <div class="mock-chat-preview">Спасибо за помощь, всё решилось!</div>
+                                    <div class="mock-chat-meta">
+                                        <span class="mock-badge web">Web</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mock-chat-item">
+                                <div class="mock-avatar" style="background:#fb923c;">ИП</div>
+                                <div class="mock-chat-body">
+                                    <div class="mock-chat-top">
+                                        <span class="mock-chat-name">Ирина Петрова</span>
+                                        <span class="mock-chat-time">3 ч</span>
+                                    </div>
+                                    <div class="mock-chat-preview">Хочу подать жалобу на специалиста...</div>
+                                    <div class="mock-chat-meta">
+                                        <span class="mock-badge tg">TG</span>
+                                        <span class="mock-badge urgent">Срочно</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mock-bottom-nav">
+                                <div class="mock-nav-item active">
+                                    <i class="fa-solid fa-inbox nav-badge"></i>
+                                    Inbox
+                                </div>
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-comments"></i>
+                                    Active
+                                </div>
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-sparkles"></i>
+                                    AI
+                                </div>
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-gear"></i>
+                                    Settings
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="phone-label">Inbox — Список чатов</div>
+                </div>
+
+                <!-- Chat Screen -->
+                <div>
+                    <div class="phone-frame">
+                        <div class="phone-notch"><div class="phone-notch-pill"></div></div>
+                        <div class="phone-screen">
+                            <div class="mock-chat-header">
+                                <div class="mock-back"><i class="fa-solid fa-chevron-left"></i></div>
+                                <div class="mock-avatar" style="background:#38bdf8;width:30px;height:30px;font-size:0.65rem;">АК</div>
+                                <div class="mock-chat-header-info">
+                                    <div class="mock-chat-header-name">Анна Козлова</div>
+                                    <div class="mock-chat-header-status">Telegram · Открыт</div>
+                                </div>
+                                <div class="mock-chat-actions">
+                                    <i class="fa-solid fa-user-plus"></i>
+                                    <i class="fa-solid fa-circle-xmark"></i>
+                                </div>
+                            </div>
+
+                            <div class="mock-messages">
+                                <div class="mock-msg system">Чат создан · Telegram · Сегодня, 14:23</div>
+                                <div class="mock-msg incoming">
+                                    Здравствуйте! У меня вопрос по оплате сессии. Я оплатила через сайт, но подтверждение не пришло.
+                                    <div class="mock-msg-time">14:23</div>
+                                </div>
+                                <div class="mock-msg incoming">
+                                    Номер заказа: #4521. Можете проверить?
+                                    <div class="mock-msg-time">14:24</div>
+                                </div>
+                                <div class="mock-msg outgoing">
+                                    Анна, добрый день! Спасибо за обращение. Сейчас проверю информацию по вашему заказу.
+                                    <div class="mock-msg-time">14:26</div>
+                                </div>
+                                <div class="mock-msg incoming">
+                                    Спасибо! Буду ждать.
+                                    <div class="mock-msg-time">14:27</div>
+                                </div>
+                            </div>
+
+                            <div class="mock-ai-hint">
+                                <i class="fa-solid fa-sparkles"></i>
+                                <div>
+                                    <strong style="color:#d4d4d8;">AI:</strong> Обращение по оплате. Рекомендую проверить статус платежа в системе и отправить подтверждение повторно.
+                                </div>
+                            </div>
+
+                            <div class="mock-quick-chips">
+                                <div class="mock-chip">Проверяю</div>
+                                <div class="mock-chip">Решено</div>
+                                <div class="mock-chip">Перенаправляю</div>
+                                <div class="mock-chip">Уточните</div>
+                            </div>
+
+                            <div class="mock-composer">
+                                <i class="fa-solid fa-paperclip" style="color:#52525b;"></i>
+                                <div class="mock-composer-input">Написать ответ...</div>
+                                <div class="mock-composer-btn">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="phone-label">Chat — Диалог</div>
+                </div>
+
+                <!-- AI Screen -->
+                <div>
+                    <div class="phone-frame">
+                        <div class="phone-notch"><div class="phone-notch-pill"></div></div>
+                        <div class="phone-screen">
+                            <div class="mock-header">
+                                <div class="mock-header-title">
+                                    <i class="fa-solid fa-sparkles" style="color:#9a5fa8;margin-right:6px;"></i>
+                                    AI Assistant
+                                </div>
+                                <div class="mock-header-icon"><i class="fa-solid fa-xmark"></i></div>
+                            </div>
+
+                            <div class="mock-ai-panel">
+                                <div class="mock-ai-title">Анна Козлова — #4521</div>
+                                <div class="mock-ai-sub">Контекст: оплата сессии, подтверждение не получено</div>
+
+                                <div class="mock-ai-card">
+                                    <div class="mock-ai-card-head">
+                                        <div class="mock-ai-card-icon sum"><i class="fa-solid fa-list-check"></i></div>
+                                        <div class="mock-ai-card-label">Суммаризация</div>
+                                    </div>
+                                    <p>Клиент оплатил сессию через сайт, подтверждение не пришло. Просит проверить заказ #4521.</p>
+                                </div>
+
+                                <div class="mock-ai-card">
+                                    <div class="mock-ai-card-head">
+                                        <div class="mock-ai-card-icon reply"><i class="fa-solid fa-reply"></i></div>
+                                        <div class="mock-ai-card-label">Предложенный ответ</div>
+                                    </div>
+                                    <div class="mock-ai-result">
+                                        «Анна, я проверила ваш заказ #4521 — оплата прошла успешно. Отправляю подтверждение повторно на вашу почту. Если не получите в течение 10 минут, напишите, пожалуйста.»
+                                    </div>
+                                    <div class="mock-ai-actions">
+                                        <button class="mock-ai-btn primary">Вставить</button>
+                                        <button class="mock-ai-btn secondary">Редактировать</button>
+                                    </div>
+                                </div>
+
+                                <div class="mock-ai-card">
+                                    <div class="mock-ai-card-head">
+                                        <div class="mock-ai-card-icon plan"><i class="fa-solid fa-lightbulb"></i></div>
+                                        <div class="mock-ai-card-label">План решения</div>
+                                    </div>
+                                    <p>1. Проверить статус платежа в CRM<br>2. Повторно отправить подтверждение<br>3. Если ошибка — эскалировать в финансовый отдел</p>
+                                </div>
+                            </div>
+
+                            <div class="mock-bottom-nav">
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-inbox"></i>
+                                    Inbox
+                                </div>
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-comments"></i>
+                                    Active
+                                </div>
+                                <div class="mock-nav-item active">
+                                    <i class="fa-solid fa-sparkles"></i>
+                                    AI
+                                </div>
+                                <div class="mock-nav-item">
+                                    <i class="fa-solid fa-gear"></i>
+                                    Settings
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="phone-label">AI Assistant — Помощник</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Component Mapping -->
+        <section class="section" id="components">
+            <div class="section-label">
+                <i class="fa-solid fa-cubes"></i>
+                04 — Компонентная система
+            </div>
+            <h2>Flutter + Vue Component Mapping</h2>
+            <p class="desc">
+                Двойная спецификация: Flutter-нативные виджеты и Vue + DaisyUI компоненты 
+                для Capacitor-сборки. Единая дизайн-система, два стека.
+            </p>
+
+            <div class="comp-grid">
+                <div class="comp-card">
+                    <span class="comp-tag flutter">Flutter</span>
+                    <h4>AppShell</h4>
+                    <p><code>Scaffold</code> + <code>BottomNavigationBar</code> с 4 вкладками. <code>SafeArea</code> для отступов. <code>IndexedStack</code> для сохранения состояния вкладок.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag vue">Vue + DaisyUI</span>
+                    <h4>AppShell</h4>
+                    <p><code>&lt;btm-tabs&gt;</code> DaisyUI navbar внизу. <code>safe-area-inset-*</code> через CSS env(). <code>&lt;keep-alive&gt;</code> + <code>&lt;router-view&gt;</code>.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag flutter">Flutter</span>
+                    <h4>InboxList</h4>
+                    <p><code>CustomScrollView</code> + <code>SliverAppBar</code> (pinned search). <code>SliverList</code> с <code>ChatCard</code> виджетами. <code>RefreshIndicator</code> для pull-to-refresh.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag vue">Vue + DaisyUI</span>
+                    <h4>InboxList</h4>
+                    <p><code>&lt;InboxList&gt;</code> с <code>v-for</code> по чатам. DaisyUI <code>input</code> для поиска, <code>tabs</code> для сегментов. Pull-to-refresh через Capacitor plugin.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag flutter">Flutter</span>
+                    <h4>ChatThread</h4>
+                    <p><code>ListView.builder</code> reverse для сообщений. <code>MessageBubble</code> виджет. Sticky <code>ComposerBar</code> через <code>bottomSheet</code> в Scaffold.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag vue">Vue + DaisyUI</span>
+                    <h4>ChatThread</h4>
+                    <p><code>&lt;MessageBubble&gt;</code> компонент. Scroll container с <code>overflow-y: auto</code>. Fixed <code>&lt;ComposerBar&gt;</code> с учётом keyboard overlap.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag flutter">Flutter</span>
+                    <h4>AI Assistant</h4>
+                    <p><code>showModalBottomSheet</code> с <code>DraggableScrollableSheet</code>. Карточки AI-ответов как <code>Card</code> виджеты. <code>Shimmer</code> для loading.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag vue">Vue + DaisyUI</span>
+                    <h4>AiAssistPanel</h4>
+                    <p>DaisyUI <code>drawer</code> или <code>modal</code> bottom-sheet. <code>&lt;AiCard&gt;</code> компоненты. Skeleton loader через Tailwind <code>animate-pulse</code>.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag flutter">Flutter</span>
+                    <h4>ComposerBar</h4>
+                    <p><code>TextField</code> + <code>Row</code> с иконками. <code>Wrap</code> для quick chips. <code>AnimatedContainer</code> для плавного расширения.</p>
+                </div>
+                <div class="comp-card">
+                    <span class="comp-tag vue">Vue + DaisyUI</span>
+                    <h4>ComposerBar</h4>
+                    <p>DaisyUI <code>textarea</code> + <code>button</code>. Chips как <code>badge</code> с <code>@click</code>. <code>env(safe-area-inset-bottom)</code> для padding.</p>
+                </div>
+            </div>
+
+            <h3 style="color:#e4e4e7;font-size:1.1rem;margin:3rem 0 1rem;">Состояния UI</h3>
+            <div class="ia-grid">
+                <div class="ia-card">
+                    <div class="ia-card-icon purple"><i class="fa-solid fa-spinner"></i></div>
+                    <h3>Loading</h3>
+                    <p>Skeleton-карточки в списке. Shimmer-эффект в чате. Пульсирующий индикатор AI-обработки.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon teal"><i class="fa-solid fa-inbox"></i></div>
+                    <h3>Empty State</h3>
+                    <p>Иллюстрация + текст «Нет обращений». Разные для каждого сегмента. CTA для обновления.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon amber"><i class="fa-solid fa-wifi-slash"></i></div>
+                    <h3>No Network</h3>
+                    <p>Баннер вверху экрана. Кэшированные данные доступны. Retry-кнопка. Toast при восстановлении.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon rose"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <h3>Error</h3>
+                    <p>Inline-ошибка с retry. Не блокирует весь экран. Логирование для отладки. Понятный текст.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Design Tokens -->
+        <section class="section" id="tokens">
+            <div class="section-label">
+                <i class="fa-solid fa-palette"></i>
+                05 — Design Tokens
+            </div>
+            <h2>Палитра и токены</h2>
+            <p class="desc">
+                Бренд-палитра АЧПП адаптирована для мобильного интерфейса. 
+                Dark theme на базе zinc — мягкий, не агрессивно-чёрный.
+            </p>
+
+            <div class="tokens-grid">
+                <div class="token-card">
+                    <h4><i class="fa-solid fa-droplet"></i> Brand Colors</h4>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#55175e;"></div>
+                        <span class="token-label">Brand Primary</span>
+                        <span class="token-value">#55175e</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#9a5fa8;"></div>
+                        <span class="token-label">Brand 200</span>
+                        <span class="token-value">#9a5fa8</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#b3a2c7;"></div>
+                        <span class="token-label">Brand 100</span>
+                        <span class="token-value">#b3a2c7</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#e6e0ec;"></div>
+                        <span class="token-label">Brand 50</span>
+                        <span class="token-value">#e6e0ec</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#5a3d6a;"></div>
+                        <span class="token-label">Brand 500</span>
+                        <span class="token-value">#5a3d6a</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#4a3d62;"></div>
+                        <span class="token-label">Brand Hover</span>
+                        <span class="token-value">#4a3d62</span>
+                    </div>
+                </div>
+
+                <div class="token-card">
+                    <h4><i class="fa-solid fa-moon"></i> Dark Surfaces (Zinc)</h4>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#09090b;"></div>
+                        <span class="token-label">zinc-950</span>
+                        <span class="token-value">#09090b</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#18181b;"></div>
+                        <span class="token-label">zinc-900</span>
+                        <span class="token-value">#18181b</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#27272a;"></div>
+                        <span class="token-label">zinc-800</span>
+                        <span class="token-value">#27272a</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#3f3f46;"></div>
+                        <span class="token-label">zinc-700</span>
+                        <span class="token-value">#3f3f46</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#52525b;"></div>
+                        <span class="token-label">zinc-600</span>
+                        <span class="token-value">#52525b</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#71717a;"></div>
+                        <span class="token-label">zinc-500</span>
+                        <span class="token-value">#71717a</span>
+                    </div>
+                </div>
+
+                <div class="token-card">
+                    <h4><i class="fa-solid fa-sun"></i> Light Surfaces</h4>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#f8fafc;"></div>
+                        <span class="token-label">Light BG</span>
+                        <span class="token-value">#f8fafc</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#e5e7eb;"></div>
+                        <span class="token-label">Gray Line</span>
+                        <span class="token-value">#e5e7eb</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#e9fcff;"></div>
+                        <span class="token-label">Accent</span>
+                        <span class="token-value">#e9fcff</span>
+                    </div>
+                    <div class="token-row">
+                        <div class="token-swatch" style="background:#e6e0ec;"></div>
+                        <span class="token-label">Brand BG</span>
+                        <span class="token-value">#e6e0ec</span>
+                    </div>
+                </div>
+
+                <div class="token-card">
+                    <h4><i class="fa-solid fa-text-size"></i> Typography</h4>
+                    <div class="token-row">
+                        <span class="token-label">Font Family (Body)</span>
+                        <span class="token-value">Inter</span>
+                    </div>
+                    <div class="token-row">
+                        <span class="token-label">Font Family (Headings)</span>
+                        <span class="token-value">Space Grotesk</span>
+                    </div>
+                    <div class="token-row">
+                        <span class="token-label">Body Size</span>
+                        <span class="token-value">14-16px</span>
+                    </div>
+                    <div class="token-row">
+                        <span class="token-label">Line Height</span>
+                        <span class="token-value">1.5-1.6</span>
+                    </div>
+                    <div class="token-row">
+                        <span class="token-label">Border Radius (cards)</span>
+                        <span class="token-value">12-16px</span>
+                    </div>
+                    <div class="token-row">
+                        <span class="token-label">Border Radius (buttons)</span>
+                        <span class="token-value">10-12px</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color:#e4e4e7;font-size:1.1rem;margin:3rem 0 1rem;">Tailwind Config Mapping</h3>
+            <div class="comp-grid" style="grid-template-columns:1fr;">
+                <div class="comp-card" style="max-width:100%;">
+                    <span class="comp-tag vue">tailwind.config.js</span>
+                    <h4>Brand Color Extension</h4>
+                    <pre style="font-family:'Space Grotesk',monospace;font-size:0.75rem;color:#a1a1aa;line-height:1.7;white-space:pre-wrap;margin-top:0.5rem;">colors: {
+  brand: {
+    DEFAULT: '#55175e',
+    50: '#e6e0ec',
+    100: '#b3a2c7',
+    200: '#9a5fa8',
+    300: '#8b6b9a',
+    400: '#9a5fa8',
+    500: '#5a3d6a',
+    600: '#5a3d6a',
+    700: '#55175e',
+    800: '#4a3d62',
+    900: '#3d2f4f',
+    950: '#2d1f3a',
+  }
+}
+
+// DaisyUI theme:
+daisyui: {
+  themes: [{
+    pulse: {
+      'primary': '#55175e',
+      'primary-content': '#ffffff',
+      'secondary': '#9a5fa8',
+      'accent': '#e9fcff',
+      'neutral': '#27272a',
+      'base-100': '#18181b',
+      'base-200': '#09090b',
+      'base-300': '#27272a',
+    }
+  }]
+}</pre>
+                </div>
+            </div>
+
+            <h3 style="color:#e4e4e7;font-size:1.1rem;margin:3rem 0 1rem;">UX Rationale</h3>
+            <div class="ia-grid">
+                <div class="ia-card">
+                    <div class="ia-card-icon purple"><i class="fa-solid fa-bolt"></i></div>
+                    <h3>Скорость модерации</h3>
+                    <p>3 тапа от пуша до ответа. Quick chips, AI-подсказки и шаблоны сокращают время ответа на 40-60%.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon teal"><i class="fa-solid fa-brain"></i></div>
+                    <h3>Снижение когнитивной нагрузки</h3>
+                    <p>Чёткая визуальная иерархия, цветовое кодирование каналов, AI triage для мгновенного понимания сути обращения.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon amber"><i class="fa-solid fa-hand"></i></div>
+                    <h3>One-hand use</h3>
+                    <p>Bottom navigation, composer внизу, swipe-действия. Все ключевые зоны в нижней трети экрана.</p>
+                </div>
+                <div class="ia-card">
+                    <div class="ia-card-icon rose"><i class="fa-solid fa-heart"></i></div>
+                    <h3>Эмпатичный тон</h3>
+                    <p>Спокойная палитра, мягкие скругления, отсутствие агрессивных красных. Профессионализм и поддержка в каждом пикселе.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer style="text-align:center;padding:4rem 2rem;color:#52525b;font-size:0.8rem;">
+            <div style="margin-bottom:0.5rem;">
+                <i class="fa-solid fa-wave-pulse" style="color:#9a5fa8;margin-right:6px;"></i>
+                <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;color:#71717a;">Pulse</span>
+                <span style="color:#3f3f46;margin:0 8px;">|</span>
+                АЧПП — Ассоциация частнопрактикующих психологов
+            </div>
+            Mobile UX/UI Concept — 2025
+        </footer>
+    </div>
+
+    <script>
+        // Three.js ambient background
+        const canvas = document.getElementById('canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x0e0e11, 1);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 5;
+
+        // Floating particles
+        const particleCount = 200;
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+        const sizes = new Float32Array(particleCount);
+        const velocities = [];
+
+        const brandColors = [
+            new THREE.Color(0x55175e),
+            new THREE.Color(0x9a5fa8),
+            new THREE.Color(0xb3a2c7),
+            new THREE.Color(0x5a3d6a),
+            new THREE.Color(0x3d2f4f),
+        ];
+
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 2;
+
+            const col = brandColors[Math.floor(Math.random() * brandColors.length)];
+            colors[i * 3] = col.r;
+            colors[i * 3 + 1] = col.g;
+            colors[i * 3 + 2] = col.b;
+
+            sizes[i] = Math.random() * 3 + 1;
+
+            velocities.push({
+                x: (Math.random() - 0.5) * 0.003,
+                y: (Math.random() - 0.5) * 0.003,
+                z: (Math.random() - 0.5) * 0.001,
+            });
+        }
+
+        const particleGeometry = new THREE.BufferGeometry();
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        particleGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        const particleMaterial = new THREE.PointsMaterial({
+            size: 0.04,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending,
+            sizeAttenuation: true,
+        });
+
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particles);
+
+        // Soft gradient sphere
+        const sphereGeo = new THREE.SphereGeometry(2, 64, 64);
+        const sphereMat = new THREE.MeshBasicMaterial({
+            color: 0x55175e,
+            transparent: true,
+            opacity: 0.04,
+            wireframe: false,
+        });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        sphere.position.set(0, 0, -3);
+        scene.add(sphere);
+
+        // Wireframe rings
+        for (let r = 0; r < 3; r++) {
+            const ringGeo = new THREE.TorusGeometry(1.5 + r * 0.8, 0.005, 16, 100);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: brandColors[r % brandColors.length],
+                transparent: true,
+                opacity: 0.08,
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI * 0.4 + r * 0.2;
+            ring.rotation.y = r * 0.5;
+            ring.position.z = -2;
+            ring.userData = { speed: 0.0003 + r * 0.0002, axis: r % 2 === 0 ? 'x' : 'y' };
+            scene.add(ring);
+        }
+
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+            mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+        });
+
+        let scrollY = 0;
+        window.addEventListener('scroll', () => {
+            scrollY = window.scrollY;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const posArr = particleGeometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                posArr[i * 3] += velocities[i].x;
+                posArr[i * 3 + 1] += velocities[i].y;
+                posArr[i * 3 + 2] += velocities[i].z;
+
+                if (Math.abs(posArr[i * 3]) > 10) velocities[i].x *= -1;
+                if (Math.abs(posArr[i * 3 + 1]) > 10) velocities[i].y *= -1;
+                if (Math.abs(posArr[i * 3 + 2]) > 5) velocities[i].z *= -1;
+            }
+            particleGeometry.attributes.position.needsUpdate = true;
+
+            particles.rotation.y += 0.0002;
+            particles.rotation.x += 0.0001;
+
+            // Camera follows mouse gently
+            camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.02;
+            camera.position.y += (-mouseY * 0.3 - camera.position.y) * 0.02;
+            camera.lookAt(0, 0, -2);
+
+            // Rotate rings
+            scene.children.forEach(child => {
+                if (child.userData && child.userData.speed) {
+                    if (child.userData.axis === 'x') {
+                        child.rotation.x += child.userData.speed;
+                    } else {
+                        child.rotation.y += child.userData.speed;
+                    }
+                }
+            });
+
+            // Sphere pulse
+            const t = Date.now() * 0.001;
+            sphere.scale.setScalar(1 + Math.sin(t * 0.5) * 0.05);
+            sphere.material.opacity = 0.03 + Math.sin(t * 0.3) * 0.015;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Smooth scroll for nav links
+        document.querySelectorAll('.top-nav-links a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Intersection observer for fade-in
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.ia-card, .flow-step, .phone-frame, .token-card, .comp-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

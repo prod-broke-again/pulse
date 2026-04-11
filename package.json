@@ -1,11 +1,17 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
     "private": true,
+    "workspaces": [
+        "apps/*"
+    ],
     "type": "module",
     "scripts": {
         "build": "vite build",
         "build:ssr": "vite build && vite build --ssr",
         "dev": "vite",
+        "mobile:dev": "npm run dev -w pulse-mobile",
+        "mobile:build": "npm run build -w pulse-mobile",
+        "mobile:preview": "npm run preview -w pulse-mobile",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix",

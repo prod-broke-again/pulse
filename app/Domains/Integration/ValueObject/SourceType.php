@@ -9,4 +9,13 @@ enum SourceType: string
     case Web = 'web';
     case Vk = 'vk';
     case Tg = 'tg';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Web => 'Web',
+            self::Vk => 'VK',
+            self::Tg => 'Telegram',
+        };
+    }
 }

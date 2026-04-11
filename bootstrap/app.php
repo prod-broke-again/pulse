@@ -12,11 +12,19 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        channels: __DIR__.'/../routes/channels.php',
+        channels: null,
         apiPrefix: 'api',
         health: '/up',
     )
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        ['middleware' => ['auth:sanctum']],
+    )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'pulse.id.webhook' => \App\Http\Middleware\VerifyPulseIdWebhookSignature::class,
+        ]);
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
         $middleware->validateCsrfTokens(except: ['webhook/*', 'api/widget/*', 'api/*']);
 
@@ -30,7 +38,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(function (\Illuminate\Http\Request $request): bool {
-            return $request->is('api/*') || $request->expectsJson();
+            return $request->is('api/*')
+                || $request->is('broadcasting/*')
+                || $request->expectsJson();
         });
 
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, \Illuminate\Http\Request $request) {
@@ -45,14 +55,25 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
+                $message = $e->getMessage();
+
                 return response()->json([
-                    'message' => 'Unauthenticated.',
-                    'code' => 'UNAUTHENTICATED',
+                    'message' => $message !== '' ? $message : 'Unauthenticated.',
+                    'code' => $message !== '' ? 'AUTHENTICATION_FAILED' : 'UNAUTHENTICATED',
                 ], 401);
             }
         });
 
         $exceptions->render(function (\Illuminate\Auth\Access\AuthorizationException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage() ?: 'Forbidden.',
+                    'code' => 'FORBIDDEN',
+                ], 403);
+            }
+        });
+
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e, \Illuminate\Http\Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return response()->json([
                     'message' => $e->getMessage() ?: 'Forbidden.',

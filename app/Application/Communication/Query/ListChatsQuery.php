@@ -18,30 +18,76 @@ final readonly class ListChatsQuery
      *     department_id?: int|null,
      *     search?: string|null,
      *     status?: string|null,
+     *     channels?: list<string>|null,
      * } $filters
      */
     public function run(User $user, array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
-        $query = ChatModel::query()
-            ->with(['source', 'department', 'assignee', 'latestMessage']);
-
-        $this->applyStatusFilter($query, $filters);
-        $this->applyVisibilityScope($query, $user);
-        $this->applyTabFilter($query, $user, $filters['tab'] ?? 'my');
-        $this->applySourceFilter($query, $filters);
-        $this->applyDepartmentFilter($query, $filters);
-        $this->applySearchFilter($query, $filters);
+        $query = $this->baseQuery($user, $filters);
 
         return $query->orderByDesc('updated_at')->paginate($perPage);
     }
 
+    /**
+     * @param array{
+     *     source_id?: int|null,
+     *     department_id?: int|null,
+     *     search?: string|null,
+     *     status?: string|null,
+     *     channels?: list<string>|null,
+     * } $filters
+     * @return array{my: int, unassigned: int, all: int}
+     */
+    public function tabCounts(User $user, array $filters): array
+    {
+        return [
+            'my' => $this->countForTab($user, $filters, 'my'),
+            'unassigned' => $this->countForTab($user, $filters, 'unassigned'),
+            'all' => $this->countForTab($user, $filters, 'all'),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function countForTab(User $user, array $filters, string $tab): int
+    {
+        return $this->baseQuery($user, array_merge($filters, ['tab' => $tab]))->count();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function baseQuery(User $user, array $filters): Builder
+    {
+        $tab = $filters['tab'] ?? 'my';
+
+        $query = ChatModel::query()
+            ->with(['source', 'department', 'assignee', 'latestMessage'])
+            ->withUnreadCountForUser($user);
+
+        $this->applyStatusFilter($query, $filters);
+        $this->applyVisibilityScope($query, $user);
+        $this->applyTabFilter($query, $user, $tab);
+        $this->applySourceFilter($query, $filters);
+        $this->applyDepartmentFilter($query, $filters);
+        $this->applyChannelFilter($query, $filters);
+        $this->applySearchFilter($query, $filters);
+
+        return $query;
+    }
+
+    /**
+     * @param  array{status?: string|null}  $filters
+     */
     private function applyStatusFilter(Builder $query, array $filters): void
     {
         $status = $filters['status'] ?? null;
+        if ($status === 'all') {
+            return;
+        }
         if ($status === 'closed') {
             $query->where('status', 'closed');
-        } elseif ($status === 'open') {
-            $query->whereIn('status', ['new', 'active']);
         } else {
             $query->whereIn('status', ['new', 'active']);
         }
@@ -78,6 +124,9 @@ final readonly class ListChatsQuery
         };
     }
 
+    /**
+     * @param  array{source_id?: int|null}  $filters
+     */
     private function applySourceFilter(Builder $query, array $filters): void
     {
         if (! empty($filters['source_id'])) {
@@ -85,6 +134,9 @@ final readonly class ListChatsQuery
         }
     }
 
+    /**
+     * @param  array{department_id?: int|null}  $filters
+     */
     private function applyDepartmentFilter(Builder $query, array $filters): void
     {
         if (! empty($filters['department_id'])) {
@@ -92,6 +144,27 @@ final readonly class ListChatsQuery
         }
     }
 
+    /**
+     * @param  array{channels?: list<string>|null}  $filters
+     */
+    private function applyChannelFilter(Builder $query, array $filters): void
+    {
+        $channels = $filters['channels'] ?? null;
+        if ($channels === null || $channels === []) {
+            return;
+        }
+
+        $allowed = array_values(array_intersect($channels, ['tg', 'vk', 'web']));
+        if ($allowed === []) {
+            return;
+        }
+
+        $query->whereHas('source', fn (Builder $q) => $q->whereIn('type', $allowed));
+    }
+
+    /**
+     * @param  array{search?: string|null}  $filters
+     */
     private function applySearchFilter(Builder $query, array $filters): void
     {
         $search = $filters['search'] ?? null;

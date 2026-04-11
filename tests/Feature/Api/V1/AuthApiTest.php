@@ -105,8 +105,8 @@ final class AuthApiTest extends TestCase
             'password' => 'secret123',
         ]);
 
-        $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['email']);
+        $response->assertForbidden()
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
     }
 
     public function test_login_validation_requires_email_and_password(): void
