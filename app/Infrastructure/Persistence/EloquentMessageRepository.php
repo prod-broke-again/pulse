@@ -62,6 +62,7 @@ final class EloquentMessageRepository implements MessageRepositoryInterface
         $model->sender_type = $message->senderType->value;
         $model->text = $message->text;
         $model->payload = $message->payload;
+        $model->reply_markup = $message->replyMarkup;
         $model->is_read = $message->isRead;
         $model->save();
 
@@ -78,6 +79,7 @@ final class EloquentMessageRepository implements MessageRepositoryInterface
             senderType: $model->getSenderTypeEnum(),
             text: $model->text,
             payload: $model->payload ?? [],
+            replyMarkup: $model->reply_markup,
             isRead: $model->is_read,
             createdAt: $model->created_at ? \Carbon\Carbon::parse($model->created_at) : null,
             replyToId: $model->reply_to_id,

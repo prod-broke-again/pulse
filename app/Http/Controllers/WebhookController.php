@@ -26,9 +26,11 @@ final class WebhookController extends Controller
 
         try {
             ProcessIncomingMessageJob::dispatch($sourceId, $payload);
+
             return response()->json(['ok' => true]);
         } catch (\Throwable $e) {
             Log::error('Webhook VK dispatch failed', ['source_id' => $sourceId, 'error' => $e->getMessage()]);
+
             return response()->json(['ok' => false, 'error' => 'Server error'], 500);
         }
     }
@@ -46,9 +48,33 @@ final class WebhookController extends Controller
 
         try {
             ProcessIncomingMessageJob::dispatch($sourceId, $payload);
+
             return response()->json(['ok' => true]);
         } catch (\Throwable $e) {
             Log::error('Webhook Telegram dispatch failed', ['source_id' => $sourceId, 'error' => $e->getMessage()]);
+
+            return response()->json(['ok' => false, 'error' => 'Server error'], 500);
+        }
+    }
+
+    public function max(Request $request, int $sourceId): JsonResponse
+    {
+        $payload = $request->all();
+        $source = SourceModel::find($sourceId);
+        if ($source === null || $source->type !== 'max') {
+            return response()->json(['ok' => false, 'error' => 'Source not found'], 404);
+        }
+        if (! $this->validateMaxSecret($source, $request)) {
+            return response()->json(['ok' => false, 'error' => 'Invalid signature'], 403);
+        }
+
+        try {
+            ProcessIncomingMessageJob::dispatch($sourceId, $payload);
+
+            return response()->json(['ok' => true]);
+        } catch (\Throwable $e) {
+            Log::error('Webhook MAX dispatch failed', ['source_id' => $sourceId, 'error' => $e->getMessage()]);
+
             return response()->json(['ok' => false, 'error' => 'Server error'], 500);
         }
     }
@@ -70,6 +96,17 @@ final class WebhookController extends Controller
         }
 
         $headerSecret = (string) $request->header('X-Telegram-Bot-Api-Secret-Token', '');
+
+        return hash_equals((string) $source->secret_key, $headerSecret);
+    }
+
+    private function validateMaxSecret(SourceModel $source, Request $request): bool
+    {
+        if (! $source->secret_key) {
+            return true;
+        }
+
+        $headerSecret = (string) $request->header('X-Max-Bot-Secret', '');
 
         return hash_equals((string) $source->secret_key, $headerSecret);
     }

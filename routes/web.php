@@ -27,6 +27,7 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 
 Route::post('/webhook/vk/{sourceId}', [\App\Http\Controllers\WebhookController::class, 'vk'])->name('webhook.vk');
 Route::post('/webhook/telegram/{sourceId}', [\App\Http\Controllers\WebhookController::class, 'telegram'])->name('webhook.telegram');
+Route::post('/webhook/max/{sourceId}', [\App\Http\Controllers\WebhookController::class, 'max'])->name('webhook.max');
 
 Route::prefix('/api/widget')->group(function (): void {
     Route::get('/config', [WidgetApiController::class, 'config'])->name('api.widget.config');

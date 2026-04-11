@@ -20,14 +20,26 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
 
     public function sendMessage(string $externalUserId, string $text, array $options = []): void
     {
-        $key = 'telegram_send:' . $externalUserId;
+        $key = 'telegram_send:'.$externalUserId;
 
         while (RateLimiter::tooManyAttempts($key, self::SEND_RATE_PER_CHAT)) {
             sleep(self::SEND_RATE_DECAY_SECONDS);
         }
 
         RateLimiter::hit($key, self::SEND_RATE_DECAY_SECONDS);
-        $this->client->sendMessage($externalUserId, $text, $options);
+
+        /**
+         * Pulse stores moderator inline URL buttons as:
+         * `[{ "text": "...", "url": "https://..." }, ...]`
+         * {@see TelegramApiClient} maps this to phptg/bot-api {@see \Phptg\BotApi\Type\InlineKeyboardMarkup}.
+         *
+         * @see https://core.telegram.org/bots/api#inlinekeyboardmarkup
+         */
+        $params = $options;
+        // Internal correlation id for Pulse; not part of Telegram Bot API sendMessage.
+        unset($params['message_id']);
+
+        $this->client->sendMessage($externalUserId, $text, $params);
     }
 
     /** @param array<string, mixed> $payload */

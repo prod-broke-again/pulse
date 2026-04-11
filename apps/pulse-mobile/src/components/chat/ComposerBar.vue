@@ -1,12 +1,25 @@
 <script setup lang="ts">
-import { Paperclip, Send, Sparkles } from 'lucide-vue-next'
+import { Paperclip, Send, Sparkles, X, Zap } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import { ref } from 'vue'
 import { useChatStore } from '../../stores/chatStore'
+import type { ReplyMarkupButton } from '../../types/chat'
 
 const chat = useChatStore()
-const { composerText, canSend } = storeToRefs(chat)
+const { composerText, canSend, pendingReplyMarkup } = storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
+const actionsDetails = ref<HTMLDetailsElement | null>(null)
+
+const actionPresets: ReplyMarkupButton[] = [
+  { text: 'Поиск психолога', url: 'https://kukushechka.ru/psychologists' },
+  { text: 'Личный кабинет', url: 'https://appp-psy.ru' },
+  { text: 'Сброс пароля', url: 'https://id.appp-psy.ru/forgot-password' },
+]
+
+function pickPreset(btn: ReplyMarkupButton) {
+  chat.addReplyMarkupPreset(btn)
+  actionsDetails.value?.removeAttribute('open')
+}
 
 function onPickFiles(e: Event) {
   const input = e.target as HTMLInputElement
@@ -59,8 +72,30 @@ function onSend() {
         {{ q.label }}
       </button>
     </div>
+    <div class="px-3 pt-2.5">
+      <div
+        v-if="pendingReplyMarkup.length > 0"
+        class="mb-2 flex flex-wrap gap-2"
+      >
+        <span
+          v-for="(chip, i) in pendingReplyMarkup"
+          :key="`${chip.url}-${i}`"
+          class="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--zinc-600)]/50 bg-[var(--zinc-800)] px-2.5 py-1 text-xs font-medium text-[var(--zinc-200)] dark:bg-[var(--zinc-800)]"
+        >
+          <span class="truncate">{{ chip.text }}</span>
+          <button
+            type="button"
+            class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--zinc-400)] transition-colors hover:bg-[var(--zinc-700)] hover:text-white"
+            :aria-label="`Удалить: ${chip.text}`"
+            @click="chat.removeReplyMarkupPreset(i)"
+          >
+            <X class="size-3.5" />
+          </button>
+        </span>
+      </div>
+    </div>
     <div
-      class="flex items-end gap-2 px-3 pb-[calc(10px+var(--safe-bottom))] pt-2.5"
+      class="flex items-end gap-2 px-3 pb-[calc(10px+var(--safe-bottom))] pt-0"
     >
       <input
         ref="fileInput"
@@ -70,6 +105,30 @@ function onSend() {
         multiple
         @change="onPickFiles"
       />
+      <details
+        ref="actionsDetails"
+        class="group relative shrink-0"
+      >
+        <summary
+          class="flex size-10 cursor-pointer list-none items-center justify-center rounded-xl border-none bg-[var(--zinc-100)] text-[var(--zinc-500)] marker:hidden dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-400)] [&::-webkit-details-marker]:hidden"
+          aria-label="Действия"
+        >
+          <Zap class="size-4" aria-hidden="true" />
+        </summary>
+        <div
+          class="absolute bottom-[calc(100%+6px)] left-0 z-20 min-w-[220px] overflow-hidden rounded-xl border border-[var(--zinc-700)] bg-[var(--zinc-850)] py-1 shadow-lg dark:bg-[var(--zinc-850)]"
+        >
+          <button
+            v-for="(preset, idx) in actionPresets"
+            :key="idx"
+            type="button"
+            class="flex w-full cursor-pointer px-3 py-2.5 text-left text-sm text-[var(--zinc-100)] transition-colors hover:bg-[var(--zinc-800)]"
+            @click="pickPreset(preset)"
+          >
+            {{ preset.text }}
+          </button>
+        </div>
+      </details>
       <button
         type="button"
         class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-[var(--zinc-100)] text-base text-[var(--zinc-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-400)]"

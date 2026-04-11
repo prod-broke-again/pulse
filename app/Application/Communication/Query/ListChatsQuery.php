@@ -154,7 +154,7 @@ final readonly class ListChatsQuery
             return;
         }
 
-        $allowed = array_values(array_intersect($channels, ['tg', 'vk', 'web']));
+        $allowed = array_values(array_intersect($channels, ['tg', 'vk', 'web', 'max']));
         if ($allowed === []) {
             return;
         }

@@ -54,6 +54,7 @@ class SourceModelResource extends Resource
                     'web' => 'Веб-виджет',
                     'vk' => 'Сообщество ВКонтакте',
                     'tg' => 'Telegram-бот',
+                    'max' => 'Мессенджер MAX',
                 ])
                 ->required(),
             TextInput::make('identifier')
@@ -65,7 +66,7 @@ class SourceModelResource extends Resource
                 ->label('Секретный ключ')
                 ->password()
                 ->maxLength(255)
-                ->helperText('VK: payload.secret, Telegram: X-Telegram-Bot-Api-Secret-Token'),
+                ->helperText('VK: payload.secret, Telegram: X-Telegram-Bot-Api-Secret-Token, MAX: X-Max-Bot-Secret'),
             KeyValue::make('settings')
                 ->label('Настройки подключения')
                 ->keyLabel('Ключ')
@@ -80,9 +81,10 @@ class SourceModelResource extends Resource
 
                     $base = rtrim((string) config('app.url'), '/');
                     $webhook = match ($record->type) {
-                        'vk' => $base . '/webhook/vk/' . $record->id,
-                        'tg' => $base . '/webhook/telegram/' . $record->id,
-                        default => $base . '/api/widget/session',
+                        'vk' => $base.'/webhook/vk/'.$record->id,
+                        'tg' => $base.'/webhook/telegram/'.$record->id,
+                        'max' => $base.'/webhook/max/'.$record->id,
+                        default => $base.'/api/widget/session',
                     };
 
                     return "Webhook / endpoint:\n{$webhook}\n\nДля встраивания виджета: {$base}/widget/pulse-widget.js";
@@ -114,12 +116,14 @@ class SourceModelResource extends Resource
                         'vk' => 'info',
                         'tg' => 'success',
                         'web' => 'warning',
+                        'max' => 'primary',
                         default => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'vk' => 'ВКонтакте',
                         'tg' => 'Telegram',
                         'web' => 'Веб',
+                        'max' => 'MAX',
                         default => $state,
                     }),
                 TextColumn::make('identifier')

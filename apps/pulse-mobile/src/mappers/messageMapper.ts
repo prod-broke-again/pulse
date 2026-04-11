@@ -1,11 +1,29 @@
 import type { NewChatMessagePayload } from '../lib/realtime'
 import type { ApiMessageRow } from '../api/types'
-import type { ChatMessage, MessageAttachment, MessageKind } from '../types/chat'
+import type { ChatMessage, MessageAttachment, MessageKind, ReplyMarkupButton } from '../types/chat'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} Б`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} КБ`
   return `${(n / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+function normalizeReplyMarkup(raw: unknown): ReplyMarkupButton[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const out: ReplyMarkupButton[] = []
+  for (const row of raw) {
+    if (
+      row !== null &&
+      typeof row === 'object' &&
+      'text' in row &&
+      'url' in row &&
+      typeof (row as { text: unknown }).text === 'string' &&
+      typeof (row as { url: unknown }).url === 'string'
+    ) {
+      out.push({ text: (row as { text: string }).text, url: (row as { url: string }).url })
+    }
+  }
+  return out.length > 0 ? out : undefined
 }
 
 function formatTime(iso: string | undefined): string | undefined {
@@ -51,12 +69,15 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
   const text = row.text ?? ''
   const showAttachmentOnly = atts.length > 0 && !text.trim()
 
+  const replyMarkup = normalizeReplyMarkup(row.reply_markup)
+
   return {
     id: String(row.id),
     kind,
     text: showAttachmentOnly ? '' : text,
     time,
     attachment,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     ...(kind === 'incoming' && row.is_read === true ? { isRead: true } : {}),
   }
 }

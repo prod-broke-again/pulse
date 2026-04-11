@@ -21,10 +21,13 @@
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
         "minishlink/web-push": "^10.0",
+        "phptg/bot-api": "^0.18.1",
         "socialiteproviders/telegram": "^4.0",
         "socialiteproviders/vkontakte": "^4.0",
         "spatie/laravel-medialibrary": "^11.20",
-        "spatie/laravel-permission": "^7.1"
+        "spatie/laravel-permission": "^7.1",
+        "targethunter/max-php-sdk": "^1.2",
+        "vkcom/vk-php-sdk": "^5.131"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

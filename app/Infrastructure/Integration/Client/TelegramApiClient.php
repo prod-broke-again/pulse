@@ -4,29 +4,64 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Integration\Client;
 
-use Illuminate\Support\Facades\Http;
+use Phptg\BotApi\FailResult;
+use Phptg\BotApi\TelegramBotApi;
+use Phptg\BotApi\Transport\NativeTransport;
+use Phptg\BotApi\Transport\TransportInterface;
+use Phptg\BotApi\Type\InlineKeyboardButton;
+use Phptg\BotApi\Type\InlineKeyboardMarkup;
 
+/**
+ * Thin wrapper around {@see TelegramBotApi} (Composer: phptg/bot-api).
+ */
 final class TelegramApiClient
 {
-    public function __construct(
-        private string $botToken,
-    ) {}
+    private TelegramBotApi $api;
 
-    private function baseUrl(): string
-    {
-        return "https://api.telegram.org/bot{$this->botToken}";
+    public function __construct(
+        private readonly string $botToken,
+        ?TransportInterface $transport = null,
+    ) {
+        $this->api = new TelegramBotApi(
+            $this->botToken,
+            transport: $transport ?? new NativeTransport,
+        );
     }
 
+    /**
+     * @param  array<string, mixed>  $params  Optional extras; supports `reply_markup` as list of `{text, url}` for inline URL buttons.
+     * @return array<string, mixed>
+     */
     public function sendMessage(string $chatId, string $text, array $params = []): array
     {
-        $response = Http::post($this->baseUrl() . '/sendMessage', [
-            'chat_id' => $chatId,
-            'text' => $text,
-            ...$params,
-        ]);
+        $replyMarkup = null;
+        if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
+            /** @var list<array{text: string, url: string}> $rows */
+            $rows = $params['reply_markup'];
+            $replyMarkup = new InlineKeyboardMarkup(
+                array_map(
+                    static fn (array $btn): array => [
+                        new InlineKeyboardButton($btn['text'], url: $btn['url']),
+                    ],
+                    $rows,
+                ),
+            );
+            unset($params['reply_markup']);
+        }
 
-        $response->throw();
+        $result = $this->api->sendMessage(
+            $chatId,
+            $text,
+            replyMarkup: $replyMarkup,
+        );
 
-        return $response->json();
+        if ($result instanceof FailResult) {
+            throw new \RuntimeException(
+                $result->description ?? 'Telegram Bot API error',
+                (int) ($result->errorCode ?? 0),
+            );
+        }
+
+        return ['ok' => true];
     }
 }

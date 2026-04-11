@@ -82,6 +82,18 @@ final class ChatMessageController extends Controller
 
         $replyToMessageId = isset($validated['reply_to_message_id']) ? (int) $validated['reply_to_message_id'] : null;
 
+        /** @var list<array{text: string, url: string}>|null */
+        $replyMarkup = null;
+        if (isset($validated['reply_markup']) && is_array($validated['reply_markup']) && $validated['reply_markup'] !== []) {
+            $replyMarkup = array_values(array_map(
+                static fn (array $row): array => [
+                    'text' => (string) $row['text'],
+                    'url' => (string) $row['url'],
+                ],
+                $validated['reply_markup'],
+            ));
+        }
+
         $domainMessage = $sendMessage->run(
             chatId: $chat->id,
             text: $text,
@@ -90,6 +102,7 @@ final class ChatMessageController extends Controller
             messenger: $messenger,
             payload: [],
             replyToMessageId: $replyToMessageId,
+            replyMarkup: $replyMarkup,
         );
 
         $messageModel = MessageModel::find($domainMessage->id);

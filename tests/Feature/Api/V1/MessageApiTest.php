@@ -228,4 +228,31 @@ final class MessageApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('data.text', 'Admin message');
     }
+
+    public function test_send_message_persists_reply_markup(): void
+    {
+        $replyMarkup = [
+            ['text' => 'Поиск психолога', 'url' => 'https://kukushechka.ru/psychologists'],
+            ['text' => 'Личный кабинет', 'url' => 'https://appp-psy.ru'],
+        ];
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson("/api/v1/chats/{$this->chat->id}/send", [
+                'text' => 'Сообщение с кнопками',
+                'reply_markup' => $replyMarkup,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.reply_markup', $replyMarkup);
+
+        $id = (int) $response->json('data.id');
+        $this->assertDatabaseHas('messages', [
+            'id' => $id,
+            'text' => 'Сообщение с кнопками',
+        ]);
+
+        $row = MessageModel::find($id);
+        $this->assertNotNull($row);
+        $this->assertSame($replyMarkup, $row->reply_markup);
+    }
 }

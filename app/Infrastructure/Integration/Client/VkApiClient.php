@@ -4,29 +4,36 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Integration\Client;
 
-use Illuminate\Support\Facades\Http;
+use VK\Client\VKApiClient as VKSDK;
 
+/**
+ * Wraps {@see VKSDK} (vkcom/vk-php-sdk) for messages.send and related calls.
+ */
 final class VkApiClient
 {
-    private const API_BASE = 'https://api.vk.com/method';
+    private readonly VKSDK $vk;
 
     public function __construct(
-        private string $accessToken,
-        private string $version = '5.199',
-    ) {}
+        private readonly string $accessToken,
+        ?VKSDK $vk = null,
+    ) {
+        $this->vk = $vk ?? new VKSDK('5.199');
+    }
 
+    /**
+     * @param  array<string, mixed>  $params  Merged into messages.send (e.g. keyboard).
+     * @return array<string, mixed>
+     */
     public function sendMessage(string $userId, string $text, array $params = []): array
     {
-        $response = Http::post(self::API_BASE . '/messages.send', [
-            'access_token' => $this->accessToken,
-            'v' => $this->version,
-            'user_id' => $userId,
+        $merged = array_merge([
+            'user_id' => (int) $userId,
             'message' => $text,
-            ...$params,
-        ]);
+            'random_id' => random_int(1, 2_100_000_000),
+        ], $params);
 
-        $response->throw();
+        $response = $this->vk->messages()->send($this->accessToken, $merged);
 
-        return $response->json();
+        return is_array($response) ? $response : ['response' => $response];
     }
 }

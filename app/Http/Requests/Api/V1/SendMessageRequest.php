@@ -35,6 +35,9 @@ final class SendMessageRequest extends FormRequest
                     }
                 }),
             ],
+            'reply_markup' => ['sometimes', 'nullable', 'array'],
+            'reply_markup.*.text' => ['required', 'string', 'max:40'],
+            'reply_markup.*.url' => ['required', 'url'],
         ];
     }
 }

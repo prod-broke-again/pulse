@@ -10,7 +10,13 @@ import { mapApiMessageToChatMessage, mapRealtimePayloadToChatMessage } from '../
 import { useAuthStore } from './authStore'
 import { useInboxStore } from './inboxStore'
 import { useUiStore } from './uiStore'
-import type { AiPanelContent, ChannelSource, ChatMessage, ChatThreadMeta } from '../types/chat'
+import type {
+  AiPanelContent,
+  ChannelSource,
+  ChatMessage,
+  ChatThreadMeta,
+  ReplyMarkupButton,
+} from '../types/chat'
 
 export const useChatStore = defineStore('chat', () => {
   const activeChatId = ref<string | null>(null)
@@ -25,6 +31,7 @@ export const useChatStore = defineStore('chat', () => {
   const hasMoreOlder = ref(true)
   const oldestMessageId = ref<number | null>(null)
   const threadMeta = ref<ChatThreadMeta | null>(null)
+  const pendingReplyMarkup = ref<ReplyMarkupButton[]>([])
 
   let aiTimers: number[] = []
   let unsubscribeRealtime: (() => void) | null = null
@@ -64,6 +71,7 @@ export const useChatStore = defineStore('chat', () => {
     activeChatId.value = chatId
     loadingOlder.value = true
     hasMoreOlder.value = true
+    pendingReplyMarkup.value = []
 
     try {
       const [chat, rows, aiSummary] = await Promise.all([
@@ -152,6 +160,14 @@ export const useChatStore = defineStore('chat', () => {
     return n.toString().padStart(2, '0')
   }
 
+  function addReplyMarkupPreset(btn: ReplyMarkupButton) {
+    pendingReplyMarkup.value = [...pendingReplyMarkup.value, { ...btn }]
+  }
+
+  function removeReplyMarkupPreset(index: number) {
+    pendingReplyMarkup.value = pendingReplyMarkup.value.filter((_, i) => i !== index)
+  }
+
   async function sendMessage() {
     const text = composerText.value.trim()
     const chatId = activeChatId.value
@@ -159,22 +175,38 @@ export const useChatStore = defineStore('chat', () => {
     const id = Number(chatId)
     if (!Number.isFinite(id)) return
 
+    const markupSnapshot = [...pendingReplyMarkup.value]
     const clientMessageId = crypto.randomUUID?.() ?? `cm-${Date.now()}`
     const now = new Date()
     const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
     const tempId = `temp-${clientMessageId}`
     messages.value = [
       ...messages.value,
-      { id: tempId, kind: 'outgoing', text, time, clientMessageId: clientMessageId },
+      {
+        id: tempId,
+        kind: 'outgoing',
+        text,
+        time,
+        clientMessageId,
+        ...(markupSnapshot.length > 0 ? { reply_markup: markupSnapshot } : {}),
+      },
     ]
     composerText.value = ''
 
     try {
-      const data = await msgApi.sendMessage(id, { text, client_message_id: clientMessageId })
+      const payload: Parameters<typeof msgApi.sendMessage>[1] = {
+        text,
+        client_message_id: clientMessageId,
+      }
+      if (markupSnapshot.length > 0) {
+        payload.reply_markup = markupSnapshot
+      }
+      const data = await msgApi.sendMessage(id, payload)
       const mapped = mapApiMessageToChatMessage(data)
       messages.value = messages.value.map((m) =>
         m.clientMessageId === clientMessageId ? mapped : m,
       )
+      pendingReplyMarkup.value = []
       useUiStore().pushToast('Сообщение отправлено', 'success')
       await markAsRead(id)
     } catch {
@@ -317,6 +349,7 @@ export const useChatStore = defineStore('chat', () => {
     threadMeta.value = null
     oldestMessageId.value = null
     hasMoreOlder.value = true
+    pendingReplyMarkup.value = []
   }
 
   return {
@@ -331,12 +364,15 @@ export const useChatStore = defineStore('chat', () => {
     loadingOlder,
     hasMoreOlder,
     threadMeta,
+    pendingReplyMarkup,
     channelSource,
     fetchThread,
     loadOlderMessages,
     setComposerText,
     canSend,
     sendMessage,
+    addReplyMarkupPreset,
+    removeReplyMarkupPreset,
     sendWithAttachments,
     insertQuickReply,
     openAiPanel,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Bot, Check, FileText } from 'lucide-vue-next'
 import type { ChatMessage } from '../../types/chat'
+import ReplyMarkupInline from './ReplyMarkupInline.vue'
 
 defineProps<{
   message: ChatMessage
@@ -34,6 +35,10 @@ defineProps<{
             message.attachment.sizeLabel
           }}</span>
         </div>
+        <ReplyMarkupInline
+          v-if="message.reply_markup && message.reply_markup.length > 0"
+          :buttons="message.reply_markup"
+        />
         <span
           v-if="message.isRead"
           class="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--zinc-400)]"
@@ -48,6 +53,10 @@ defineProps<{
         >
           {{ message.text }}
         </div>
+        <ReplyMarkupInline
+          v-if="message.reply_markup && message.reply_markup.length > 0"
+          :buttons="message.reply_markup"
+        />
         <span
           v-if="message.time || message.isRead"
           class="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--zinc-400)]"
@@ -67,6 +76,10 @@ defineProps<{
       >
         {{ message.text }}
       </div>
+      <ReplyMarkupInline
+        v-if="message.reply_markup && message.reply_markup.length > 0"
+        :buttons="message.reply_markup"
+      />
       <span
         v-if="message.time"
         class="mt-0.5 self-end px-1 text-right text-[10px] text-[var(--zinc-400)]"

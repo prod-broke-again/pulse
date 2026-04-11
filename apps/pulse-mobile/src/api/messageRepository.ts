@@ -1,4 +1,5 @@
 import { http } from '../lib/http'
+import type { SendMessagePayload } from '../types/chat'
 import type { ApiMessageRow } from './types'
 
 export async function fetchMessages(
@@ -13,12 +14,7 @@ export async function fetchMessages(
 
 export async function sendMessage(
   chatId: number,
-  body: {
-    text?: string
-    attachments?: string[]
-    client_message_id?: string
-    reply_to_message_id?: number
-  },
+  body: SendMessagePayload,
 ): Promise<ApiMessageRow> {
   const res = await http.post<{ data: ApiMessageRow & { client_message_id?: string } }>(
     `/chats/${chatId}/send`,

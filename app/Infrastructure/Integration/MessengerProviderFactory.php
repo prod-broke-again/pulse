@@ -10,9 +10,12 @@ use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\ValueObject\SourceType;
 use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Integration\Client\VkApiClient;
+use App\Infrastructure\Integration\Messenger\MaxMessengerProvider;
 use App\Infrastructure\Integration\Messenger\TelegramMessengerProvider;
 use App\Infrastructure\Integration\Messenger\VkMessengerProvider;
 use App\Infrastructure\Integration\Messenger\WebMessengerProvider;
+use TH\MAX\Client\MAXClient;
+use TH\MAX\Client\Request\MAXRequest;
 
 final class MessengerProviderFactory implements MessengerProviderFactoryInterface
 {
@@ -25,7 +28,10 @@ final class MessengerProviderFactory implements MessengerProviderFactoryInterfac
             SourceType::Tg => new TelegramMessengerProvider(
                 new TelegramApiClient((string) ($source->settings['bot_token'] ?? '')),
             ),
-            SourceType::Web => new WebMessengerProvider(),
+            SourceType::Max => new MaxMessengerProvider(
+                new MAXClient(new MAXRequest((string) ($source->settings['access_token'] ?? ''))),
+            ),
+            SourceType::Web => new WebMessengerProvider,
         };
     }
 }

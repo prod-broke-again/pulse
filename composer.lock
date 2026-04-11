@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "89b1d4fac7795eb47131f0bf0214528e",
+    "content-hash": "28c9e223be1055307453cd2751672bcb",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -5475,6 +5475,82 @@
             "time": "2026-01-25T14:56:51+00:00"
         },
         {
+            "name": "phptg/bot-api",
+            "version": "0.18.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/phptg/bot-api.git",
+                "reference": "3f60f48a0a881e1cc4a4f1b636624224136e1e27"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/phptg/bot-api/zipball/3f60f48a0a881e1cc4a4f1b636624224136e1e27",
+                "reference": "3f60f48a0a881e1cc4a4f1b636624224136e1e27",
+                "shasum": ""
+            },
+            "require": {
+                "php-64bit": "8.2 - 8.5"
+            },
+            "require-dev": {
+                "bamarni/composer-bin-plugin": "^1.9.1",
+                "ext-curl": "*",
+                "php-http/curl-client": "^2.4.0",
+                "phpunit/phpunit": "^11.5.51",
+                "psr/log": "^3.0.2",
+                "yiisoft/files": "^2.1",
+                "yiisoft/test-support": "^3.2.0"
+            },
+            "suggest": {
+                "ext-curl": "To use `CurlTransport`.",
+                "psr/log": "To log requests to Telegram Bot API and response handling errors."
+            },
+            "type": "library",
+            "extra": {
+                "bamarni-bin": {
+                    "bin-links": true,
+                    "forward-command": true,
+                    "target-directory": "tools"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Phptg\\BotApi\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Sergei Predvoditelev",
+                    "homepage": "https://predvoditelev.ru"
+                }
+            ],
+            "description": "PHP library for working with Telegram API",
+            "keywords": [
+                "api",
+                "bot",
+                "telegram"
+            ],
+            "support": {
+                "chat": "https://t.me/predvoditelev_chat",
+                "issues": "https://github.com/phptg/bot-api/issues?state=open",
+                "source": "https://github.com/phptg/bot-api"
+            },
+            "funding": [
+                {
+                    "url": "https://boosty.to/vjik",
+                    "type": "boosty"
+                },
+                {
+                    "url": "https://pay.cloudtips.ru/p/192ce69b",
+                    "type": "cloudtips"
+                }
+            ],
+            "time": "2026-04-05T05:33:29+00:00"
+        },
+        {
             "name": "pragmarx/google2fa",
             "version": "v9.0.0",
             "source": {
@@ -10569,6 +10645,55 @@
             "time": "2026-01-01T22:13:48+00:00"
         },
         {
+            "name": "targethunter/max-php-sdk",
+            "version": "v1.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/targethunter/max-php-sdk.git",
+                "reference": "bfbd6b449f4599100e24bfe6f5ea0e215f11d242"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/targethunter/max-php-sdk/zipball/bfbd6b449f4599100e24bfe6f5ea0e215f11d242",
+                "reference": "bfbd6b449f4599100e24bfe6f5ea0e215f11d242",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "guzzlehttp/guzzle": "^7.5",
+                "php": "^7.4|^8"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.6|^10.0|^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "TH\\MAX\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Ilya",
+                    "email": "sokolov@targethunter.ru"
+                },
+                {
+                    "name": "Georgy",
+                    "email": "georgy@targethunter.ru"
+                }
+            ],
+            "description": "PHP SDK для API мессенджера MAX",
+            "support": {
+                "issues": "https://github.com/targethunter/max-php-sdk/issues",
+                "source": "https://github.com/targethunter/max-php-sdk/tree/v1.2.0"
+            },
+            "time": "2026-03-24T12:25:27+00:00"
+        },
+        {
             "name": "tijsverkoyen/css-to-inline-styles",
             "version": "v2.4.0",
             "source": {
@@ -10691,6 +10816,46 @@
                 }
             ],
             "time": "2026-01-10T16:40:02+00:00"
+        },
+        {
+            "name": "vkcom/vk-php-sdk",
+            "version": "5.131.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/VKCOM/vk-php-sdk.git",
+                "reference": "0b01a07b167549d08a3d910201cec9e8a202a0ee"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/VKCOM/vk-php-sdk/zipball/0b01a07b167549d08a3d910201cec9e8a202a0ee",
+                "reference": "0b01a07b167549d08a3d910201cec9e8a202a0ee",
+                "shasum": ""
+            },
+            "require": {
+                "guzzlehttp/guzzle": "^7.5",
+                "php": "^8.1"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "VK\\": "src/VK"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "VK PHP SDK",
+            "homepage": "https://github.com/VKCOM/vk-php-sdk",
+            "keywords": [
+                "sdk",
+                "vk"
+            ],
+            "support": {
+                "issues": "https://github.com/VKCOM/vk-php-sdk/issues",
+                "source": "https://github.com/VKCOM/vk-php-sdk/tree/5.131.0"
+            },
+            "time": "2023-07-03T10:53:32+00:00"
         },
         {
             "name": "vlucas/phpdotenv",
@@ -13323,5 +13488,5 @@
         "php": "^8.4"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }

@@ -19,6 +19,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $sender_type
  * @property string $text
  * @property array|null $payload
+ * @property array<int, array{text: string, url: string}>|null $reply_markup
  * @property bool $is_read
  * @property int|null $reply_to_id
  */
@@ -36,6 +37,7 @@ class MessageModel extends Model implements HasMedia
         'sender_type',
         'text',
         'payload',
+        'reply_markup',
         'is_read',
     ];
 
@@ -44,6 +46,7 @@ class MessageModel extends Model implements HasMedia
     {
         return [
             'payload' => 'array',
+            'reply_markup' => 'array',
             'is_read' => 'boolean',
         ];
     }

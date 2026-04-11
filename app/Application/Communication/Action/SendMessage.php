@@ -33,6 +33,8 @@ final readonly class SendMessage
         MessengerProviderInterface $messenger,
         array $payload = [],
         ?int $replyToMessageId = null,
+        /** @var list<array{text: string, url: string}>|null */
+        ?array $replyMarkup = null,
     ): Message {
         $chat = $this->chatRepository->findById($chatId);
         if ($chat === null) {
@@ -62,6 +64,7 @@ final readonly class SendMessage
             senderType: $senderType,
             text: $text,
             payload: $payload,
+            replyMarkup: $replyMarkup,
             isRead: false,
             replyToId: $replyToMessageId,
         );
@@ -78,7 +81,11 @@ final readonly class SendMessage
 
         $source = $this->sourceRepository->findById($chat->sourceId);
         if ($source !== null) {
-            $messenger->sendMessage($chat->externalUserId, $text, ['message_id' => $persisted->id]);
+            $options = ['message_id' => $persisted->id];
+            if ($persisted->replyMarkup !== null && $persisted->replyMarkup !== []) {
+                $options['reply_markup'] = $persisted->replyMarkup;
+            }
+            $messenger->sendMessage($chat->externalUserId, $text, $options);
         }
 
         return $persisted;

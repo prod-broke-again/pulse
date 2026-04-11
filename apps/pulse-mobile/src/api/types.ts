@@ -37,6 +37,7 @@ export interface ApiMessageRow {
   sender_type: string
   text: string
   payload?: Record<string, unknown>
+  reply_markup?: Array<{ text: string; url: string }> | null
   attachments?: Array<{
     id?: number
     name?: string

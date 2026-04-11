@@ -29,16 +29,32 @@ export interface MessageAttachment {
 
 export type MessageKind = 'incoming' | 'outgoing' | 'system'
 
+export interface ReplyMarkupButton {
+  text: string
+  url: string
+}
+
 export interface ChatMessage {
   id: string
   kind: MessageKind
   text: string
   time?: string
   attachment?: MessageAttachment
+  /** Inline URL buttons (moderator presets), shown under bubble. */
+  reply_markup?: ReplyMarkupButton[]
   /** Client messages marked read by staff (API + MessageRead broadcast). */
   isRead?: boolean
   /** Optimistic send correlation */
   clientMessageId?: string
+}
+
+/** Body for POST /chats/{id}/send */
+export interface SendMessagePayload {
+  text?: string
+  attachments?: string[]
+  client_message_id?: string
+  reply_to_message_id?: number
+  reply_markup?: ReplyMarkupButton[]
 }
 
 export interface ChatThreadMeta {

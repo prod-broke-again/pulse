@@ -49,6 +49,7 @@ final readonly class CreateMessage
             senderType: $senderType,
             text: $text,
             payload: $payload,
+            replyMarkup: null,
             isRead: false,
         );
 

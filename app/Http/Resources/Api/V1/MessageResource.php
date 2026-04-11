@@ -33,6 +33,7 @@ final class MessageResource extends JsonResource
             'sender_type' => $this->sender_type,
             'text' => $this->text,
             'payload' => $this->payload ?? [],
+            'reply_markup' => $this->reply_markup,
             'attachments' => $attachments,
             'is_read' => $this->is_read,
             'reply_to' => $this->whenLoaded('replyTo', fn () => $this->replyTo ? [
