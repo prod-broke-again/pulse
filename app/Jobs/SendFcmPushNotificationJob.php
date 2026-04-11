@@ -14,6 +14,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 final class SendFcmPushNotificationJob implements ShouldQueue
 {
@@ -65,14 +66,18 @@ final class SendFcmPushNotificationJob implements ShouldQueue
     }
 
     /**
+     * If chat is assigned, notify only that moderator. Otherwise all mods for the source.
+     *
      * @return list<int>
      */
     private function getModeratorsForChat(ChatModel $chat): array
     {
+        if ($chat->assigned_to !== null) {
+            return [$chat->assigned_to];
+        }
+
         $sourceId = $chat->source_id;
-
         $admins = User::role('admin')->pluck('id')->all();
-
         $moderatorsBySource = User::role('moderator')
             ->whereHas('sources', fn ($q) => $q->where('source_id', $sourceId))
             ->pluck('id')
@@ -83,6 +88,17 @@ final class SendFcmPushNotificationJob implements ShouldQueue
 
     private function sendToFcm(string $serverKey, string $token, ChatModel $chat): void
     {
+        $sourceName = $chat->source?->name ?? 'Pulse';
+        $userMeta = is_array($chat->user_metadata) ? $chat->user_metadata : [];
+        $guestName = isset($userMeta['name']) && is_scalar($userMeta['name'])
+            ? (string) $userMeta['name']
+            : 'Гость';
+        if ($guestName === '') {
+            $guestName = $chat->external_user_id ?: 'Гость';
+        }
+        $title = $sourceName . ': ' . $guestName;
+        $body = Str::limit($this->text, 100);
+
         try {
             Http::withHeaders([
                 'Authorization' => 'key='.$serverKey,
@@ -90,13 +106,14 @@ final class SendFcmPushNotificationJob implements ShouldQueue
             ])->post('https://fcm.googleapis.com/fcm/send', [
                 'to' => $token,
                 'notification' => [
-                    'title' => $chat->source?->name ?? 'Pulse',
-                    'body' => mb_substr($this->text, 0, 200),
+                    'title' => $title,
+                    'body' => $body,
                 ],
                 'data' => [
-                    'chat_id' => $this->chatId,
-                    'message_id' => $this->messageId,
+                    'chat_id' => (string) $this->chatId,
+                    'message_id' => (string) $this->messageId,
                     'action' => 'new_message',
+                    'url' => '/chat?chat=' . $this->chatId,
                 ],
             ]);
         } catch (\Throwable $e) {

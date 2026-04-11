@@ -58,4 +58,17 @@ return [
         'subject' => env('VAPID_SUBJECT', 'mailto:admin@localhost'),
     ],
 
+    'ai' => [
+        'default' => env('AI_TOPIC_PROVIDER', 'timeweb'),
+
+        'timeweb' => [
+            'api_key' => env('TIMEWEB_AI_API_KEY'),
+            'base_url' => env('TIMEWEB_AI_BASE_URL'),
+        ],
+
+        'gptunnel' => [
+            'api_key' => env('GPTUNNEL_API_KEY'),
+        ],
+    ],
+
 ];

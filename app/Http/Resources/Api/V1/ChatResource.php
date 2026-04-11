@@ -21,6 +21,7 @@ final class ChatResource extends JsonResource
             'user_metadata' => $this->user_metadata,
             'status' => $this->status,
             'assigned_to' => $this->assigned_to,
+            'topic' => $this->topic,
             'source' => $this->whenLoaded('source', fn () => [
                 'id' => $this->source->id,
                 'name' => $this->source->name,

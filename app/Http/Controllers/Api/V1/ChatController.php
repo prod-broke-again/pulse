@@ -65,6 +65,7 @@ final class ChatController extends Controller
             userMetadata: $domainChat->userMetadata,
             status: ChatStatus::Closed,
             assignedTo: $domainChat->assignedTo,
+            topic: $domainChat->topic,
         ));
 
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);

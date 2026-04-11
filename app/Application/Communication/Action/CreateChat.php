@@ -28,6 +28,7 @@ final readonly class CreateChat
             userMetadata: $userMetadata,
             status: ChatStatus::New,
             assignedTo: null,
+            topic: null,
         );
 
         return $this->chatRepository->persist($chat);

@@ -11,18 +11,16 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class NewChatMessage implements ShouldBroadcastNow
+final class MessageRead implements ShouldBroadcastNow
 {
     use Dispatchable;
     use InteractsWithSockets;
     use SerializesModels;
 
+    /** @param array<int, int> $messageIds */
     public function __construct(
         public int $chatId,
-        public int $messageId,
-        public string $text,
-        public string $senderType = 'client',
-        public ?int $senderId = null,
+        public array $messageIds,
     ) {}
 
     /** @return array<int, Channel|PrivateChannel> */
@@ -39,10 +37,7 @@ final class NewChatMessage implements ShouldBroadcastNow
     {
         return [
             'chatId' => $this->chatId,
-            'messageId' => $this->messageId,
-            'text' => $this->text,
-            'sender_type' => $this->senderType,
-            'sender_id' => $this->senderId,
+            'messageIds' => $this->messageIds,
         ];
     }
 }

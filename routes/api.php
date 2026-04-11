@@ -29,6 +29,7 @@ Route::prefix('v1')->group(function (): void {
         // Chat Messages
         Route::get('/chats/{chat}/messages', [ChatMessageController::class, 'index'])->name('api.v1.chats.messages.index');
         Route::post('/chats/{chat}/send', [ChatMessageController::class, 'send'])->name('api.v1.chats.messages.send');
+        Route::post('/chats/{chat}/messages/read', [ChatMessageController::class, 'markRead'])->name('api.v1.chats.messages.read');
 
         // Uploads
         Route::post('/uploads', [UploadController::class, 'store'])->name('api.v1.uploads.store');

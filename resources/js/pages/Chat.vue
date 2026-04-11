@@ -1,17 +1,14 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { Head, usePage, router } from '@inertiajs/vue3';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useDebounceFn } from '@vueuse/core';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { api, type ApiChat, type ApiCannedResponse, type ApiMessage } from '@/lib/api';
-import {
-    getEcho,
-    leaveChat,
-    leaveModerator,
-    subscribeToChat,
-    subscribeToModerator,
-} from '@/composables/useEcho';
+import { api, type ApiChat, type ApiCannedResponse } from '@/lib/api';
+import { getEcho, leaveChat, leaveModerator, subscribeToModerator } from '@/composables/useEcho';
+import { useChatMessages } from '@/composables/useChatMessages';
+import ChatMessageItem from '@/components/chat/ChatMessageItem.vue';
 import Button from '@/components/ui/button/Button.vue';
 import { Input } from '@/components/ui/input';
 import { Search, UserPlus, XCircle, Send, Loader2, Bell } from 'lucide-vue-next';
@@ -19,6 +16,7 @@ import { useWebPush } from '@/composables/useWebPush';
 
 const page = usePage();
 const authUser = computed(() => (page.props.auth as { user?: { id: number } })?.user);
+const initialChatId = computed(() => (page.props.initialChatId as number | null) ?? null);
 const reverbConfig = computed(() => page.props.reverb);
 const { supported: pushSupported, loading: pushLoading, error: pushError, subscribe: subscribePush } = useWebPush();
 const pushSubscribed = ref(false);
@@ -39,23 +37,73 @@ const chatsError = ref<string | null>(null);
 
 const selectedChatId = ref<number | null>(null);
 const selectedChat = ref<ApiChat | null>(null);
-const messages = ref<ApiMessage[]>([]);
-const messagesLoading = ref(false);
-const messagesError = ref<string | null>(null);
-const oldestMessageId = ref<number | null>(null);
-const loadingOlder = ref(false);
-
 const newMessageText = ref('');
-const sendLoading = ref(false);
-const sendError = ref<string | null>(null);
-
 const cannedResponses = ref<ApiCannedResponse[]>([]);
-const typingName = ref<string | null>(null);
+const assigningInProgress = ref(false);
 
-function fetchChats() {
+const {
+    messages,
+    messagesLoading,
+    messagesError,
+    oldestMessageId,
+    loadingOlder,
+    sendLoading,
+    sendError,
+    typingName,
+    fetchMessages,
+    loadOlderMessages,
+    sendMessage: sendMessageAction,
+} = useChatMessages({
+    chatId: selectedChatId,
+    currentUserId: computed(() => authUser.value?.id ?? null),
+    reverbConfig,
+    getEcho,
+    t,
+    onAssigned: () => {
+        fetchChats().then(() => {
+            if (selectedChat.value) {
+                const c = chats.value.find((x) => x.id === selectedChat.value!.id);
+                if (c) selectedChat.value = c;
+            }
+        });
+    },
+    onGuestUpdated: (payload) => {
+        if (selectedChatId.value === payload.chatId && selectedChat.value) {
+            selectedChat.value = {
+                ...selectedChat.value,
+                user_metadata: { ...selectedChat.value.user_metadata, ...payload.user_metadata },
+            };
+        }
+        const idx = chats.value.findIndex((c) => c.id === payload.chatId);
+        if (idx !== -1) {
+            const next = [...chats.value];
+            next[idx] = { ...next[idx], user_metadata: { ...next[idx].user_metadata, ...payload.user_metadata } };
+            chats.value = next;
+        }
+    },
+    onTopicGenerated: (payload) => {
+        const idx = chats.value.findIndex((c) => c.id === payload.chatId);
+        if (idx !== -1) {
+            const next = [...chats.value];
+            next[idx] = { ...next[idx], topic: payload.topic };
+            chats.value = next;
+        }
+        if (selectedChatId.value === payload.chatId && selectedChat.value) {
+            selectedChat.value = { ...selectedChat.value, topic: payload.topic };
+        }
+    },
+});
+
+const debouncedFetchChats = useDebounceFn(() => fetchChats(), 300);
+const debouncedSendTyping = useDebounceFn(() => {
+    if (!selectedChatId.value) return;
+    api.post(`/chats/${selectedChatId.value}/typing`).catch(() => {});
+}, 400);
+
+function fetchChats(): Promise<void> {
     chatsLoading.value = true;
     chatsError.value = null;
-    api
+    return api
         .get<{ data: ApiChat[]; meta?: { total: number } }>('/chats', {
             tab: activeTab.value,
             status: statusFilter.value,
@@ -75,33 +123,6 @@ function fetchChats() {
         });
 }
 
-function fetchMessages(chatId: number, beforeId: number | null = null) {
-    if (!beforeId) messagesLoading.value = true;
-    else loadingOlder.value = true;
-    messagesError.value = null;
-    const params: Record<string, string | number> = { limit: 50 };
-    if (beforeId) params.before_id = beforeId;
-    api
-        .get<{ data: ApiMessage[] }>(`/chats/${chatId}/messages`, params)
-        .then((res) => {
-            const list = (res as { data: ApiMessage[] }).data ?? [];
-            if (!beforeId) {
-                messages.value = list;
-                oldestMessageId.value = list.length ? list[0]?.id ?? null : null;
-            } else {
-                messages.value = [...list, ...messages.value];
-                oldestMessageId.value = list.length ? list[0]?.id ?? null : oldestMessageId.value;
-            }
-        })
-        .catch((e) => {
-            messagesError.value = e instanceof Error ? e.message : t('errors.loadMessages');
-        })
-        .finally(() => {
-            messagesLoading.value = false;
-            loadingOlder.value = false;
-        });
-}
-
 function fetchCannedResponses(sourceId: number) {
     api
         .get<{ data: ApiCannedResponse[] }>('/canned-responses', { source_id: sourceId })
@@ -116,27 +137,25 @@ function fetchCannedResponses(sourceId: number) {
 function selectChat(chat: ApiChat) {
     selectedChatId.value = chat.id;
     selectedChat.value = chat;
-    messages.value = [];
-    oldestMessageId.value = null;
     newMessageText.value = '';
-    sendError.value = null;
-    typingName.value = null;
+    router.get('/chat', { chat: chat.id }, { preserveState: true });
     if (chat.source_id) fetchCannedResponses(chat.source_id);
     fetchMessages(chat.id);
 }
 
-function loadOlderMessages() {
-    if (!selectedChatId.value || loadingOlder.value || !oldestMessageId.value) return;
-    fetchMessages(selectedChatId.value, oldestMessageId.value);
-}
-
 function assignToMe() {
     if (!selectedChatId.value) return;
-    api.post(`/chats/${selectedChatId.value}/assign-me`).then(() => {
-        fetchChats();
-        const c = chats.value.find((x) => x.id === selectedChatId.value);
-        if (c) selectedChat.value = c;
-    }).catch(() => {});
+    assigningInProgress.value = true;
+    api
+        .post<{ data: ApiChat }>(`/chats/${selectedChatId.value}/assign-me`)
+        .then((res) => {
+            if (res.data) selectedChat.value = res.data;
+            fetchChats();
+        })
+        .catch(() => {})
+        .finally(() => {
+            assigningInProgress.value = false;
+        });
 }
 
 function closeChat() {
@@ -144,99 +163,84 @@ function closeChat() {
     api.post(`/chats/${selectedChatId.value}/close`).then(() => {
         selectedChatId.value = null;
         selectedChat.value = null;
-        messages.value = [];
+        router.get('/chat', {}, { preserveState: true });
         fetchChats();
     }).catch(() => {});
 }
 
-function sendTyping() {
-    if (!selectedChatId.value) return;
-    api.post(`/chats/${selectedChatId.value}/typing`).catch(() => {});
-}
-
 function sendMessage() {
     const text = newMessageText.value.trim();
-    if (!selectedChatId.value || (!text && !sendLoading.value)) return;
-    sendLoading.value = true;
-    sendError.value = null;
-    api
-        .post<{ data: ApiMessage }>(`/chats/${selectedChatId.value}/send`, { text, attachments: [] })
-        .then((res) => {
-            const msg = (res as { data: ApiMessage }).data;
-            if (msg) messages.value = [...messages.value, msg];
-            newMessageText.value = '';
-        })
-        .catch((e) => {
-            sendError.value = e instanceof Error ? e.message : t('errors.sendMessage');
-        })
-        .finally(() => {
-            sendLoading.value = false;
-        });
+    if (!selectedChatId.value || !text) return;
+    sendMessageAction(text, []).then(() => {
+        newMessageText.value = '';
+    });
 }
 
 function insertCannedResponse(item: ApiCannedResponse) {
     newMessageText.value = item.text;
 }
 
-watch([activeTab, statusFilter], () => fetchChats(), { immediate: false });
-watch(searchQuery, () => {
-    const q = searchQuery.value;
-    if (q.length >= 2 || q === '') fetchChats();
+const interlocutorDisplay = computed(() => {
+    const chat = selectedChat.value;
+    if (!chat) return '—';
+    const meta = chat.user_metadata as { name?: string } | undefined;
+    return meta?.name ?? chat.external_user_id ?? '—';
 });
+
+const isAssignedToMe = computed(
+    () => selectedChat.value?.assigned_to != null && selectedChat.value?.assigned_to === authUser.value?.id,
+);
 
 const echo = computed(() => getEcho(reverbConfig.value, authUser.value?.id ?? null));
 
-watch(
-    [echo, selectedChatId],
-    () => {
-        const e = echo.value;
-        const chatId = selectedChatId.value;
-        if (!e) return;
-        if (chatId) {
-            subscribeToChat(e, chatId, {
-                onNewMessage: (payload) => {
-                    if (payload.chatId !== selectedChatId.value) return;
-                    messages.value = [
-                        ...messages.value,
-                        {
-                            id: payload.messageId,
-                            chat_id: payload.chatId,
-                            sender_id: null,
-                            sender_type: 'client',
-                            text: payload.text,
-                            payload: {},
-                            attachments: [],
-                            is_read: false,
-                            created_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString(),
-                        } as ApiMessage,
-                    ];
-                },
-                onTyping: (payload) => {
-                    typingName.value = payload.sender_type === 'moderator' ? payload.sender_name ?? null : null;
-                },
-                onAssigned: () => {
-                    fetchChats();
-                    if (selectedChat.value) {
-                        const c = chats.value.find((x) => x.id === selectedChat.value!.id);
-                        if (c) selectedChat.value = c;
-                    }
-                },
-            });
-        } else {
-            leaveChat(e);
-            typingName.value = null;
-        }
-    },
-    { immediate: true },
-);
+watch([activeTab, statusFilter], () => fetchChats(), { immediate: false });
+watch(searchQuery, () => {
+    const q = searchQuery.value;
+    if (q.length >= 2 || q === '') debouncedFetchChats();
+});
+
+const messagesScrollRef = ref<HTMLElement | null>(null);
+
+watch(messages, () => {
+    nextTick(() => {
+        const el = messagesScrollRef.value;
+        if (el) el.scrollTop = el.scrollHeight;
+    });
+}, { deep: true });
+
+function handleOpenChatFromPush(chatId: number) {
+    activeTab.value = 'all';
+    router.get('/chat', { chat: chatId }, { preserveState: true });
+    fetchChats().then(() => {
+        const chat = chats.value.find((c) => c.id === chatId);
+        if (chat) selectChat(chat);
+    });
+}
 
 onMounted(() => {
-    fetchChats();
+    const id = initialChatId.value;
+    if (id) {
+        activeTab.value = 'all';
+    }
+    fetchChats().then(() => {
+        if (id) {
+            const chat = chats.value.find((c) => c.id === id);
+            if (chat) selectChat(chat);
+        }
+    });
     const e = echo.value;
     const uid = authUser.value?.id;
     if (e && uid) {
         subscribeToModerator(e, uid, { onAssigned: fetchChats });
+    }
+    if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        const handler = (event: MessageEvent) => {
+            if (event.data?.type === 'OPEN_CHAT' && event.data.chatId != null) {
+                handleOpenChatFromPush(Number(event.data.chatId));
+            }
+        };
+        navigator.serviceWorker.addEventListener('message', handler);
+        onUnmounted(() => navigator.serviceWorker.removeEventListener('message', handler));
     }
 });
 
@@ -262,7 +266,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                 <div class="border-sidebar-border/70 flex flex-wrap items-center gap-2 border-b p-2 dark:border-sidebar-border">
                     <div class="flex rounded-lg bg-muted/50 p-0.5">
                         <button
-                            v-for="tab in ['my', 'unassigned', 'all']"
+                            v-for="tab in (['my', 'unassigned', 'all'] as const)"
                             :key="tab"
                             type="button"
                             :class="[
@@ -339,7 +343,10 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                         >
                             <span class="truncate font-medium">{{ chat.source?.name ?? '—' }}</span>
                             <span class="truncate text-xs text-muted-foreground">
-                                {{ chat.latest_message?.text ?? chat.external_user_id }}
+                                {{ (chat.user_metadata as { name?: string })?.name ?? chat.external_user_id ?? '—' }}
+                            </span>
+                            <span class="truncate text-xs text-muted-foreground/80">
+                                {{ chat.topic || (chat.latest_message?.text ? (chat.latest_message.text.length > 50 ? chat.latest_message.text.slice(0, 50) + '…' : chat.latest_message.text) : '—') }}
                             </span>
                         </button>
                     </template>
@@ -356,20 +363,33 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                     </div>
                 </template>
                 <template v-else>
-                    <!-- Header -->
+                    <!-- Header: source + interlocutor -->
                     <div
                         class="border-sidebar-border/70 flex flex-wrap items-center justify-between gap-2 border-b p-3 dark:border-sidebar-border"
                     >
                         <div class="min-w-0">
                             <h2 class="truncate font-semibold">{{ selectedChat.source?.name ?? '—' }}</h2>
+                            <p class="text-xs text-muted-foreground">
+                                {{ t('chat.interlocutor') }}: {{ interlocutorDisplay }}
+                            </p>
+                            <p v-if="selectedChat.assignee" class="text-xs text-muted-foreground">
+                                {{ t('chat.inWork') }}: {{ selectedChat.assignee.name }}
+                            </p>
                             <p v-if="typingName" class="text-xs text-muted-foreground">
                                 {{ t('chat.typing', { name: typingName }) }}
                             </p>
                         </div>
                         <div class="flex flex-wrap items-center gap-1">
-                            <Button variant="outline" size="sm" class="gap-1" @click="assignToMe">
-                                <UserPlus class="size-4" />
-                                {{ t('chat.assignToMe') }}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                class="gap-1"
+                                :disabled="isAssignedToMe || assigningInProgress"
+                                @click="assignToMe"
+                            >
+                                <Loader2 v-if="assigningInProgress" class="size-4 animate-spin" />
+                                <UserPlus v-else class="size-4" />
+                                {{ isAssignedToMe ? t('chat.assignedToMeLabel') : t('chat.assignToMe') }}
                             </Button>
                             <Button variant="outline" size="sm" class="gap-1" @click="closeChat">
                                 <XCircle class="size-4" />
@@ -394,7 +414,10 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
 
                     <!-- Messages -->
                     <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-                        <div class="flex-1 overflow-y-auto p-4">
+                        <div
+                            ref="messagesScrollRef"
+                            class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4"
+                        >
                             <div v-if="loadingOlder" class="flex justify-center py-2">
                                 <Loader2 class="size-5 animate-spin text-muted-foreground" />
                             </div>
@@ -419,21 +442,11 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                             </template>
                             <template v-else>
                                 <div class="flex flex-col gap-3">
-                                    <div
+                                    <ChatMessageItem
                                         v-for="msg in messages"
-                                        :key="msg.id"
-                                        :class="[
-                                            'max-w-[75%] rounded-2xl px-4 py-2 text-sm',
-                                            msg.sender_type === 'moderator'
-                                                ? 'ml-auto rounded-br-md bg-primary text-primary-foreground'
-                                                : 'rounded-bl-md bg-muted',
-                                        ]"
-                                    >
-                                        <p class="whitespace-pre-wrap break-words">{{ msg.text }}</p>
-                                        <p class="mt-1 text-xs opacity-80">
-                                            {{ new Date(msg.created_at).toLocaleString() }}
-                                        </p>
-                                    </div>
+                                        :key="String(msg.id)"
+                                        :message="msg"
+                                    />
                                 </div>
                             </template>
                         </div>
@@ -463,7 +476,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                     type="text"
                                     :placeholder="t('chat.typeMessage')"
                                     class="min-w-0 flex-1"
-                                    @input="sendTyping"
+                                    @input="debouncedSendTyping"
                                 />
                                 <Button type="submit" :disabled="sendLoading || !newMessageText.trim()">
                                     <Loader2 v-if="sendLoading" class="size-4 animate-spin" />

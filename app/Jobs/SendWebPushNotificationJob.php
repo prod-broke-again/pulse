@@ -13,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
@@ -59,8 +60,17 @@ final class SendWebPushNotificationJob implements ShouldQueue
             return;
         }
 
-        $title = $chat->source?->name ?? config('app.name');
-        $body = mb_substr($this->text, 0, 200);
+        $sourceName = $chat->source?->name ?? config('app.name');
+        $userMeta = is_array($chat->user_metadata) ? $chat->user_metadata : [];
+        $guestName = isset($userMeta['name']) && is_scalar($userMeta['name'])
+            ? (string) $userMeta['name']
+            : 'Гость';
+        if ($guestName === '') {
+            $guestName = $chat->external_user_id ?: 'Гость';
+        }
+        $title = $sourceName . ': ' . $guestName;
+        $body = Str::limit($this->text, 100);
+        $isUnassigned = $chat->assigned_to === null;
         $payload = json_encode([
             'title' => $title,
             'body' => $body,
@@ -68,8 +78,9 @@ final class SendWebPushNotificationJob implements ShouldQueue
                 'chat_id' => $this->chatId,
                 'message_id' => $this->messageId,
                 'action' => 'new_message',
-                'url' => '/chat',
+                'url' => '/chat?chat=' . $this->chatId,
             ],
+            'tag' => $isUnassigned ? 'unassigned-chat-' . $this->chatId : 'chat-' . $this->chatId,
         ], JSON_THROW_ON_ERROR);
 
         try {
@@ -113,14 +124,18 @@ final class SendWebPushNotificationJob implements ShouldQueue
     }
 
     /**
+     * If chat is assigned, notify only that moderator. Otherwise all mods for the source.
+     *
      * @return list<int>
      */
     private function getModeratorsForChat(ChatModel $chat): array
     {
+        if ($chat->assigned_to !== null) {
+            return [$chat->assigned_to];
+        }
+
         $sourceId = $chat->source_id;
-
         $admins = User::role('admin')->pluck('id')->all();
-
         $moderatorsBySource = User::role('moderator')
             ->whereHas('sources', fn ($q) => $q->where('source_id', $sourceId))
             ->pluck('id')

@@ -17,5 +17,6 @@ final readonly class Chat
         public array $userMetadata,
         public ChatStatus $status,
         public ?int $assignedTo,
+        public ?string $topic = null,
     ) {}
 }

@@ -68,6 +68,7 @@ export type ApiChat = {
     user_metadata: Record<string, unknown>;
     status: string;
     assigned_to: number | null;
+    topic?: string | null;
     source?: { id: number; name: string; type: string };
     department?: { id: number; name: string } | null;
     assignee?: { id: number; name: string } | null;
@@ -78,7 +79,7 @@ export type ApiChat = {
 };
 
 export type ApiMessage = {
-    id: number;
+    id: number | string;
     chat_id: number;
     sender_id: number | null;
     sender_type: string;
@@ -88,6 +89,8 @@ export type ApiMessage = {
     is_read: boolean;
     created_at: string;
     updated_at: string;
+    /** Client-generated UUID for optimistic UI mapping; returned by API on send */
+    client_message_id?: string;
 };
 
 export type ApiCannedResponse = {

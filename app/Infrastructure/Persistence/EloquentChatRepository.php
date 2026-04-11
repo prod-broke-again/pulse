@@ -64,6 +64,7 @@ final class EloquentChatRepository implements ChatRepositoryInterface
         $model->user_metadata = $chat->userMetadata;
         $model->status = $chat->status->value;
         $model->assigned_to = $chat->assignedTo;
+        $model->topic = $chat->topic;
         $model->save();
 
         return $this->toEntity($model);
@@ -79,6 +80,7 @@ final class EloquentChatRepository implements ChatRepositoryInterface
             userMetadata: $model->user_metadata ?? [],
             status: $model->getStatusEnum(),
             assignedTo: $model->assigned_to,
+            topic: $model->topic,
         );
     }
 }

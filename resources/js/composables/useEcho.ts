@@ -63,10 +63,36 @@ export function getEcho(config: ReverbConfig | null | undefined, userId: number 
     return window.Echo;
 }
 
+export type NewChatMessagePayload = {
+    chatId: number;
+    messageId: number;
+    text: string;
+    sender_type: string;
+    sender_id: number | null;
+};
+
+export type MessageReadPayload = {
+    chatId: number;
+    messageIds: number[];
+};
+
+export type ChatGuestUpdatedPayload = {
+    chatId: number;
+    user_metadata: { name?: string | null; email?: string | null };
+};
+
+export type ChatTopicGeneratedPayload = {
+    chatId: number;
+    topic: string;
+};
+
 export type ChatChannelCallbacks = {
-    onNewMessage?: (payload: { chatId: number; messageId: number; text: string }) => void;
+    onNewMessage?: (payload: NewChatMessagePayload) => void;
+    onMessageRead?: (payload: MessageReadPayload) => void;
+    onGuestUpdated?: (payload: ChatGuestUpdatedPayload) => void;
     onTyping?: (payload: { sender_name?: string; sender_type?: string }) => void;
     onAssigned?: () => void;
+    onTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void;
 };
 
 export type ModeratorChannelCallbacks = {
@@ -91,8 +117,14 @@ export function subscribeToChat(
     currentChatId = chatId;
     const ch = echo.private(`chat.${chatId}`);
     currentChatChannelRef = ch;
-    ch.listen('.App\\Events\\NewChatMessage', (e: { chatId: number; messageId: number; text: string }) => {
+    ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => {
         callbacks.onNewMessage?.(e);
+    });
+    ch.listen('.App\\Events\\MessageRead', (e: MessageReadPayload) => {
+        callbacks.onMessageRead?.(e);
+    });
+    ch.listen('.App\\Events\\ChatGuestUpdated', (e: ChatGuestUpdatedPayload) => {
+        callbacks.onGuestUpdated?.(e);
     });
     ch.listen('typing', (e: { sender_name?: string; sender_type?: string }) => {
         callbacks.onTyping?.(e);
@@ -102,6 +134,9 @@ export function subscribeToChat(
     });
     ch.listen('ChatAssigned', () => {
         callbacks.onAssigned?.();
+    });
+    ch.listen('.App\\Events\\ChatTopicGenerated', (e: ChatTopicGeneratedPayload) => {
+        callbacks.onTopicGenerated?.(e);
     });
 }
 

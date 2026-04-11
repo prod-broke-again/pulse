@@ -12,7 +12,7 @@ self.addEventListener('push', function (event) {
         icon: '/favicon.ico',
         badge: '/favicon.ico',
         data: payload.data || { url: '/' },
-        tag: payload.data?.chat_id ? 'chat-' + payload.data.chat_id : undefined,
+        tag: payload.tag || (payload.data?.chat_id ? 'chat-' + payload.data.chat_id : undefined),
         renotify: true,
     };
     event.waitUntil(
@@ -22,15 +22,26 @@ self.addEventListener('push', function (event) {
 
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
-    const url = event.notification.data?.url || '/';
+    const data = event.notification.data || {};
+    const url = data.url || '/';
     const fullUrl = new URL(url, self.location.origin).href;
+    const chatId = data.chat_id;
     event.waitUntil(
         self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
+            var origin = self.location.origin;
+            var chatPath = origin + '/chat';
             for (let i = 0; i < clientList.length; i++) {
-                const client = clientList[i];
-                if (client.url === fullUrl || client.url.startsWith(fullUrl) && 'focus' in client) {
-                    return client.focus();
-                }
+                var client = clientList[i];
+                try {
+                    var u = new URL(client.url);
+                    if (u.origin === origin && (u.pathname === '/chat' || u.pathname === '/chat/')) {
+                        client.focus();
+                        if (chatId != null && 'postMessage' in client) {
+                            client.postMessage({ type: 'OPEN_CHAT', chatId: chatId });
+                        }
+                        return;
+                    }
+                } catch (_) {}
             }
             if (self.clients.openWindow) {
                 return self.clients.openWindow(fullUrl);

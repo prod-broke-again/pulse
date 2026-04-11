@@ -9,6 +9,8 @@ use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Events\NewChatMessage as NewChatMessageEvent;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Jobs\GenerateChatTopicJob;
 use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class CreateMessage
@@ -56,7 +58,19 @@ final readonly class CreateMessage
             chatId: $chatId,
             messageId: $persisted->id,
             text: $text,
+            senderType: $senderType->value,
+            senderId: $senderId,
         ));
+
+        if ($senderType === SenderType::Client) {
+            $clientMessageCount = MessageModel::where('chat_id', $chatId)
+                ->where('sender_type', 'client')
+                ->count();
+            $topicEmpty = $chat->topic === null || $chat->topic === '';
+            if ($clientMessageCount >= 1 && $clientMessageCount <= 2 && $topicEmpty) {
+                GenerateChatTopicJob::dispatch($chatId);
+            }
+        }
 
         return $persisted;
     }

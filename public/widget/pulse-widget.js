@@ -22,6 +22,9 @@
         iconSvg: defaultIconSvg
     };
 
+    let allowedOrigins = [window.location.origin];
+    let guestDataFromParent = { name: null, email: null };
+
     try {
         const res = await fetch(`${endpoint}/config-ui?source=${encodeURIComponent(sourceIdentifier)}`);
         if (res.ok) {
@@ -30,17 +33,58 @@
             if (!config.iconSvg) {
                 config.iconSvg = defaultIconSvg;
             }
+            if (Array.isArray(serverConfig.allowed_origins) && serverConfig.allowed_origins.length) {
+                allowedOrigins = serverConfig.allowed_origins;
+            }
         }
     } catch (e) {
         console.warn('[PulseWidget] Failed to load UI config, using defaults.', e);
     }
 
+    if (script.dataset.mockGuest) {
+        try {
+            const mock = JSON.parse(script.dataset.mockGuest);
+            if (mock && typeof mock.name === 'string') guestDataFromParent = { name: mock.name, email: mock.email || null };
+        } catch (err) {}
+    }
+
+    window.addEventListener('message', function (event) {
+        if (allowedOrigins.indexOf(event.origin) === -1) return;
+        var d = event.data;
+        if (!d || d.type !== 'PULSE_GUEST_DATA') return;
+        if (typeof d.name === 'string' && d.name.trim()) {
+            guestDataFromParent = { name: d.name.trim(), email: (typeof d.email === 'string' && d.email.trim()) ? d.email.trim() : null };
+        }
+    });
+
+    function getGuestData() {
+        if (guestDataFromParent.name) return guestDataFromParent;
+        try {
+            var stored = localStorage.getItem(guestDataKey);
+            if (stored) {
+                var parsed = JSON.parse(stored);
+                if (parsed && typeof parsed.name === 'string') return { name: parsed.name, email: parsed.email || null };
+            }
+        } catch (e) {}
+        var mock = typeof window.__PULSE_MOCK_GUEST__ !== 'undefined' ? window.__PULSE_MOCK_GUEST__ : null;
+        if (mock && typeof mock.name === 'string') return { name: mock.name, email: mock.email || null };
+        return { name: null, email: null };
+    }
+
+    function setGuestDataStored(name, email) {
+        try {
+            localStorage.setItem(guestDataKey, JSON.stringify({ name: name, email: email || null }));
+        } catch (e) {}
+    }
+
     const closeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
     const sendIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+    const readIconSvg = '<span class="pw-read-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span>';
 
     const storageKey = `pulse_widget_vid_${sourceIdentifier}`;
     const chatTokenKey = `pulse_widget_chat_token_${sourceIdentifier}`;
     const chatIdKey = `pulse_widget_chat_id_${sourceIdentifier}`;
+    const guestDataKey = `pulse_widget_guest_${sourceIdentifier}`;
 
     let visitorId = localStorage.getItem(storageKey);
     if (!visitorId) {
@@ -102,9 +146,19 @@
       .pw-msg--me { align-self: flex-end; background: var(--pw-primary); color: var(--pw-text); border-radius: 18px 18px 4px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
       .pw-msg--bot { align-self: flex-start; background: #ffffff; color: #1e293b; border: 1px solid #e2e8f0; border-radius: 18px 18px 18px 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
       .pw-time { display: block; margin-top: 4px; font-size: 11px; opacity: 0.6; text-align: right; user-select: none; }
+      .pw-read-icon { display: inline-block; width: 14px; height: 14px; margin-left: 4px; vertical-align: middle; opacity: 0.85; }
+      .pw-read-icon svg { width: 100%; height: 100%; }
+      .pw-onboarding { align-self: stretch; max-width: 100%; padding: 16px; margin-top: 8px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 16px; font-size: 14px; line-height: 1.5; color: #0c4a6e; }
+      .pw-onboarding p { margin: 0 0 12px 0; }
+      .pw-onboarding label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
+      .pw-onboarding input { width: 100%; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #7dd3fc; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+      .pw-onboarding button { padding: 10px 20px; background: var(--pw-primary); color: var(--pw-text); border: none; border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
+      .pw-onboarding button:hover { opacity: 0.95; }
+      .pw-onboarding button:disabled { opacity: 0.6; cursor: not-allowed; }
       
       .pw-form-container { background: #ffffff; padding: 16px; border-top: 1px solid #f1f5f9; box-shadow: 0 -4px 12px rgba(0,0,0,0.02); }
       .pw-status { font-size: 12px; color: #94a3b8; margin-bottom: 12px; text-align: center; font-weight: 500; }
+      .pw-typing { font-size: 12px; color: #64748b; margin-bottom: 8px; min-height: 18px; }
       .pw-form { display: flex; gap: 10px; align-items: flex-end; background: #f1f5f9; padding: 6px; border-radius: 20px; border: 1px solid transparent; transition: border-color 0.2s, background 0.2s; }
       .pw-form:focus-within { background: #ffffff; border-color: var(--pw-primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
       
@@ -145,6 +199,7 @@
         <div class="pw-msgs"></div>
         <div class="pw-form-container">
             <div class="pw-status">Готов к подключению</div>
+            <div class="pw-typing" style="display: none;"></div>
             <form class="pw-form">
             <textarea class="pw-input" placeholder="Напишите сообщение..." rows="1"></textarea>
             <button class="pw-send" type="submit" disabled aria-label="Send">
@@ -163,6 +218,7 @@
     const closeBtn = shadowRoot.querySelector('.pw-close');
     const msgs = shadowRoot.querySelector('.pw-msgs');
     const status = shadowRoot.querySelector('.pw-status');
+    const typingEl = shadowRoot.querySelector('.pw-typing');
     const form = shadowRoot.querySelector('.pw-form');
     const input = shadowRoot.querySelector('.pw-input');
     const sendBtn = shadowRoot.querySelector('.pw-send');
@@ -174,7 +230,12 @@
     let pollTimer = null;
     let echoChannel = null;
     let unreadCount = 0;
+    let typingTimeout = null;
+    let debounceTypingTimer = null;
     let originalDocumentTitle = document.title;
+    let guestOnboardingShown = false;
+    let guestOnboardingCompleted = false;
+    const onboardingText = 'Спасибо за ваше сообщение! Чтобы специалист знал, как к вам обращаться, и мог ответить вам, даже если вы случайно закроете эту страницу, пожалуйста, укажите ваше имя. Также вы можете оставить свою электронную почту (это по желанию).';
 
     function setOpen(open) {
         if (open) {
@@ -182,6 +243,7 @@
             fab.style.display = 'none';
             input.focus();
             clearNotification();
+            if (chatToken && lastMessageId) markMessagesAsRead(lastMessageId);
         } else {
             panel.classList.remove('pw-open');
             setTimeout(() => { fab.style.display = 'flex'; }, 300);
@@ -217,6 +279,24 @@
 
     function setStatus(text) { status.textContent = text; }
 
+    function showOperatorTyping(senderName) {
+        if (!typingEl) return;
+        if (typingTimeout) clearTimeout(typingTimeout);
+        var label = senderName ? senderName + ' \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442...' : '\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440 \u043f\u0435\u0447\u0430\u0442\u0430\u0435\u0442...';
+        typingEl.textContent = label;
+        typingEl.style.display = 'block';
+        typingTimeout = setTimeout(function () {
+            typingEl.style.display = 'none';
+            typingEl.textContent = '';
+            typingTimeout = null;
+        }, 4000);
+    }
+
+    function sendTyping() {
+        if (!chatToken) return;
+        request('/typing', { method: 'POST', body: JSON.stringify({ chat_token: chatToken }) }).catch(function () {});
+    }
+
     function formatTime(iso) {
         if (!iso) return '';
         const d = new Date(iso);
@@ -224,18 +304,88 @@
     }
 
     function renderMessage(message) {
-        if (message.id <= lastMessageId) return;
-        lastMessageId = Math.max(lastMessageId, message.id);
+        var id = message.id;
+        if (id <= lastMessageId) return;
+        if (msgs.querySelector('[data-message-id="' + id + '"]')) return;
+        lastMessageId = Math.max(lastMessageId, id);
 
         const isMe = message.sender_type === 'client';
+        const isRead = !!message.is_read;
         const wrap = document.createElement('div');
-        wrap.className = `pw-msg ${isMe ? 'pw-msg--me' : 'pw-msg--bot'}`;
+        wrap.className = `pw-msg ${isMe ? 'pw-msg--me' : 'pw-msg--bot'}${isRead ? ' pw-msg--read' : ''}`;
+        wrap.setAttribute('data-message-id', String(message.id));
         wrap.innerHTML = `
             <div>${(message.text || '').replace(/[<>&]/g, (m) => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]))}</div>
-            <span class="pw-time">${formatTime(message.created_at)}</span>
+            <span class="pw-time">${formatTime(message.created_at)}${isRead ? readIconSvg : ''}</span>
         `;
         msgs.appendChild(wrap);
         msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function setMessagesRead(messageIds) {
+        if (!messageIds || !messageIds.length) return;
+        messageIds.forEach(function (id) {
+            var el = msgs.querySelector('[data-message-id="' + id + '"]');
+            if (!el) return;
+            el.classList.add('pw-msg--read');
+            var timeEl = el.querySelector('.pw-time');
+            if (timeEl && !timeEl.querySelector('.pw-read-icon')) timeEl.insertAdjacentHTML('beforeend', readIconSvg);
+        });
+    }
+
+    async function markMessagesAsRead(upToMessageId) {
+        if (!chatToken) return;
+        try {
+            await request('/messages/read', {
+                method: 'POST',
+                body: JSON.stringify({ chat_token: chatToken, up_to_message_id: upToMessageId || lastMessageId })
+            });
+        } catch (e) {}
+    }
+
+    function showOnboardingBlock() {
+        if (guestOnboardingCompleted || guestOnboardingShown) return;
+        var existing = msgs.querySelector('.pw-onboarding');
+        if (existing) return;
+        guestOnboardingShown = true;
+        var wrap = document.createElement('div');
+        wrap.className = 'pw-onboarding';
+        wrap.setAttribute('data-pulse-onboarding', '1');
+        wrap.innerHTML = '<p>' + onboardingText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>' +
+            '<label for="pw-guest-name">Имя *</label><input type="text" id="pw-guest-name" name="name" placeholder="Ваше имя" required maxlength="255" autocomplete="name">' +
+            '<label for="pw-guest-email">Email (необязательно)</label><input type="email" id="pw-guest-email" name="email" placeholder="email@example.com" maxlength="255" autocomplete="email">' +
+            '<button type="button" id="pw-onboarding-save">Продолжить</button>';
+        msgs.appendChild(wrap);
+        msgs.scrollTop = msgs.scrollHeight;
+
+        var nameInput = wrap.querySelector('#pw-guest-name');
+        var emailInput = wrap.querySelector('#pw-guest-email');
+        var saveBtn = wrap.querySelector('#pw-onboarding-save');
+
+        function submitOnboarding() {
+            var nameVal = (nameInput && nameInput.value) ? nameInput.value.trim() : '';
+            if (!nameVal) return;
+            saveBtn.disabled = true;
+            var emailVal = (emailInput && emailInput.value) ? emailInput.value.trim() : null;
+            guestDataFromParent = { name: nameVal, email: emailVal || null };
+            var payload = {
+                source_identifier: sourceIdentifier,
+                visitor_id: visitorId,
+                name: nameVal,
+                email: emailVal || undefined,
+                meta: { url: window.location.href, title: document.title, referrer: document.referrer || null, user_agent: navigator.userAgent }
+            };
+            request('/session', { method: 'POST', body: JSON.stringify(payload) })
+                .then(function () {
+                    guestOnboardingCompleted = true;
+                    setGuestDataStored(nameVal, emailVal);
+                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+                })
+                .catch(function () { saveBtn.disabled = false; });
+        }
+
+        saveBtn.addEventListener('click', submitOnboarding);
+        if (nameInput) nameInput.focus();
     }
 
     async function request(path, options = {}) {
@@ -248,13 +398,30 @@
     }
 
     async function ensureSession() {
-        const payload = { source_identifier: sourceIdentifier, visitor_id: visitorId, meta: { url: window.location.href, title: document.title, referrer: document.referrer || null, user_agent: navigator.userAgent } };
+        const guest = getGuestData();
+        const payload = {
+            source_identifier: sourceIdentifier,
+            visitor_id: visitorId,
+            name: guest.name || undefined,
+            email: guest.email || undefined,
+            meta: { url: window.location.href, title: document.title, referrer: document.referrer || null, user_agent: navigator.userAgent }
+        };
         if (!chatToken) {
             const result = await request('/session', { method: 'POST', body: JSON.stringify(payload) });
             chatToken = result.chat_token;
             localStorage.setItem(chatTokenKey, chatToken);
-            if (result.chat && result.chat.id != null) { chatId = String(result.chat.id); localStorage.setItem(chatIdKey, chatId); }
+            if (result.chat && result.chat.id != null) {
+                chatId = String(result.chat.id);
+                localStorage.setItem(chatIdKey, chatId);
+            }
+            if (result.chat && result.chat.guest_name) {
+                guestDataFromParent = { name: result.chat.guest_name, email: result.chat.guest_email || null };
+                guestOnboardingCompleted = true;
+                setGuestDataStored(guestDataFromParent.name, guestDataFromParent.email);
+            }
         }
+        var existingGuest = getGuestData();
+        if (existingGuest.name) guestOnboardingCompleted = true;
         sendBtn.disabled = !chatToken;
         setStatus(chatToken ? 'Оператор на связи' : 'Ошибка подключения');
     }
@@ -306,8 +473,19 @@
                 });
                 echoChannel = echo.channel(channelName);
                 function onNewMessage(e) {
-                    if (e.chatId !== parseInt(chatId, 10) || e.messageId === lastSentMessageId) return;
-                    renderMessage({ id: e.messageId, text: e.text || '', sender_type: 'moderator', created_at: new Date().toISOString() });
+                    if (e.chatId !== parseInt(chatId, 10)) return;
+                    var senderType = (e.sender_type === 'client' || e.sender_type === 'moderator') ? e.sender_type : 'moderator';
+                    if (senderType === 'client') {
+                        if (e.messageId === lastSentMessageId) return;
+                        if (e.messageId <= lastMessageId) return;
+                    }
+                    renderMessage({
+                        id: e.messageId,
+                        text: e.text || '',
+                        sender_type: senderType,
+                        is_read: false,
+                        created_at: new Date().toISOString()
+                    });
                     var chatClosed = !panel.classList.contains('pw-open');
                     var tabHidden = document.hidden;
                     if (chatClosed || tabHidden) {
@@ -318,6 +496,15 @@
                 }
                 echoChannel.listen('.App.Events.NewChatMessage', onNewMessage);
                 echoChannel.listen('.App\\Events\\NewChatMessage', onNewMessage);
+                echoChannel.listen('.App.Events.MessageRead', function (e) {
+                    if (e.chatId === parseInt(chatId, 10) && e.messageIds && e.messageIds.length) setMessagesRead(e.messageIds);
+                });
+                echoChannel.listen('.App\\Events\\MessageRead', function (e) {
+                    if (e.chatId === parseInt(chatId, 10) && e.messageIds && e.messageIds.length) setMessagesRead(e.messageIds);
+                });
+                echoChannel.listen('typing', function (e) {
+                    if (e.chat_id === parseInt(chatId, 10) && e.sender_type === 'moderator') showOperatorTyping(e.sender_name || null);
+                });
             }
             if (window.Pusher && window.Echo) { subscribe(); return; }
             loadScript('https://js.pusher.com/8.3.0/pusher.min.js')
@@ -332,6 +519,7 @@
             setStatus('Подключение...');
             await ensureSession();
             await loadMessages();
+            if (lastMessageId) markMessagesAsRead(lastMessageId);
             connectReverb();
         } catch (error) {
             setStatus('Ошибка подключения');
@@ -351,13 +539,16 @@
             if (result.message) {
                 lastSentMessageId = result.message.id;
                 renderMessage({ id: result.message.id, text: result.message.text, sender_type: 'client', created_at: result.message.created_at });
+                if (!guestOnboardingCompleted && !getGuestData().name) showOnboardingBlock();
             }
         } catch (error) { setStatus('Не удалось отправить. Повторите'); }
     });
 
-    input.addEventListener('input', () => {
+    input.addEventListener('input', function () {
         input.style.height = 'auto';
-        input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        if (debounceTypingTimer) clearTimeout(debounceTypingTimer);
+        debounceTypingTimer = setTimeout(function () { sendTyping(); debounceTypingTimer = null; }, 400);
     });
 
     input.addEventListener('keydown', (event) => {

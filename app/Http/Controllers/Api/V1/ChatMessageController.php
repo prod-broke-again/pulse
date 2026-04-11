@@ -10,14 +10,17 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Http\Requests\Api\V1\ListMessagesRequest;
 use App\Http\Requests\Api\V1\SendMessageRequest;
 use App\Http\Resources\Api\V1\MessageResource;
+use App\Events\MessageRead as MessageReadEvent;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 final class ChatMessageController extends Controller
 {
@@ -61,8 +64,10 @@ final class ChatMessageController extends Controller
             if ($existingId !== null) {
                 $existing = MessageModel::find($existingId);
                 if ($existing !== null) {
+                    $data = (new MessageResource($existing))->toArray($request);
+                    $data['client_message_id'] = $clientMessageId;
                     return response()->json([
-                        'data' => new MessageResource($existing),
+                        'data' => $data,
                     ]);
                 }
             }
@@ -113,8 +118,49 @@ final class ChatMessageController extends Controller
 
         $messageModel?->refresh();
 
+        $data = (new MessageResource($messageModel))->toArray($request);
+        if ($clientMessageId !== null) {
+            $data['client_message_id'] = $clientMessageId;
+        }
+
         return response()->json([
-            'data' => new MessageResource($messageModel),
+            'data' => $data,
         ], 201);
+    }
+
+    public function markRead(ChatModel $chat, Request $request): JsonResponse
+    {
+        Gate::authorize('view', $chat);
+
+        $validated = $request->validate([
+            'message_ids' => ['sometimes', 'array'],
+            'message_ids.*' => ['integer'],
+            'up_to_message_id' => ['sometimes', 'integer', Rule::prohibitedIf(function () use ($request) {
+                return $request->has('message_ids');
+            })],
+        ]);
+
+        $messageIds = $validated['message_ids'] ?? null;
+        if ($messageIds === null && isset($validated['up_to_message_id'])) {
+            $messageIds = MessageModel::where('chat_id', $chat->id)
+                ->where('id', '<=', $validated['up_to_message_id'])
+                ->pluck('id')
+                ->all();
+        }
+        if ($messageIds === null || $messageIds === []) {
+            return response()->json(['ok' => true]);
+        }
+
+        $updated = MessageModel::where('chat_id', $chat->id)
+            ->whereIn('id', $messageIds)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        if ($updated > 0) {
+            $ids = MessageModel::where('chat_id', $chat->id)->whereIn('id', $messageIds)->pluck('id')->all();
+            event(new MessageReadEvent($chat->id, $ids));
+        }
+
+        return response()->json(['ok' => true]);
     }
 }

@@ -8,6 +8,7 @@ use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
+use App\Jobs\GenerateChatTopicJob;
 use App\Models\WidgetConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -70,6 +71,15 @@ final class WidgetApiController extends Controller
             }
         );
 
+        $allowedOrigins = config('widget.allowed_origins', []);
+        if ($allowedOrigins === []) {
+            $appUrl = rtrim((string) config('app.url'), '/');
+            if ($appUrl !== '') {
+                $allowedOrigins = [$appUrl];
+            }
+        }
+        $data['allowed_origins'] = $allowedOrigins;
+
         return response()->json($data);
     }
 
@@ -118,14 +128,34 @@ final class WidgetApiController extends Controller
                 'status' => 'new',
                 'assigned_to' => null,
             ]);
+            $userMetaNew = $chat->user_metadata ?? [];
+            if (($userMetaNew['name'] ?? null) !== null || ($userMetaNew['email'] ?? null) !== null) {
+                event(new \App\Events\ChatGuestUpdated($chat->id, [
+                    'name' => $userMetaNew['name'] ?? null,
+                    'email' => $userMetaNew['email'] ?? null,
+                ]));
+            }
         } else {
             $chat->department_id = $department->id;
+            $previousMeta = $chat->user_metadata ?? [];
             $chat->user_metadata = array_filter(
                 array_merge($chat->user_metadata ?? [], $metadata),
                 static fn ($v) => $v !== null
             );
             $chat->save();
+            $nameOrEmailUpdated = ($metadata['name'] ?? null) !== null || ($metadata['email'] ?? null) !== null;
+            if ($nameOrEmailUpdated) {
+                $userMeta = $chat->user_metadata ?? [];
+                event(new \App\Events\ChatGuestUpdated($chat->id, [
+                    'name' => $userMeta['name'] ?? null,
+                    'email' => $userMeta['email'] ?? null,
+                ]));
+            }
         }
+
+        $userMeta = $chat->user_metadata ?? [];
+        $guestName = isset($userMeta['name']) ? (string) $userMeta['name'] : null;
+        $guestEmail = isset($userMeta['email']) ? (string) $userMeta['email'] : null;
 
         return response()->json([
             'ok' => true,
@@ -134,6 +164,8 @@ final class WidgetApiController extends Controller
                 'id' => $chat->id,
                 'status' => $chat->status,
                 'department' => $chat->department?->name,
+                'guest_name' => $guestName,
+                'guest_email' => $guestEmail,
             ],
         ]);
     }
@@ -161,6 +193,7 @@ final class WidgetApiController extends Controller
                 'text' => $m->text,
                 'payload' => $m->payload ?? [],
                 'created_at' => $m->created_at?->toISOString(),
+                'is_read' => $m->is_read,
             ])
             ->all();
 
@@ -204,7 +237,17 @@ final class WidgetApiController extends Controller
             chatId: $chat->id,
             messageId: $message->id,
             text: $message->text,
+            senderType: $message->sender_type,
+            senderId: $message->sender_id,
         ));
+
+        $clientMessageCount = MessageModel::where('chat_id', $chat->id)
+            ->where('sender_type', 'client')
+            ->count();
+        $topicEmpty = ($chat->topic ?? '') === '';
+        if ($clientMessageCount >= 1 && $clientMessageCount <= 2 && $topicEmpty) {
+            GenerateChatTopicJob::dispatch($chat->id);
+        }
 
         return response()->json([
             'ok' => true,
@@ -216,6 +259,61 @@ final class WidgetApiController extends Controller
                 'created_at' => $message->created_at?->toISOString(),
             ],
         ]);
+    }
+
+    public function typing(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'chat_token' => ['required', 'string'],
+        ]);
+
+        $chat = $this->resolveChatByToken($data['chat_token']);
+        $userMeta = $chat->user_metadata ?? [];
+        $guestName = isset($userMeta['name']) ? (string) $userMeta['name'] : null;
+
+        event(new \App\Events\UserTyping(
+            chatId: $chat->id,
+            senderType: 'client',
+            senderName: $guestName,
+        ));
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function markRead(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'chat_token' => ['required', 'string'],
+            'message_ids' => ['sometimes', 'array'],
+            'message_ids.*' => ['integer'],
+            'up_to_message_id' => ['sometimes', 'integer'],
+        ]);
+
+        $chat = $this->resolveChatByToken($data['chat_token']);
+        $messageIds = $data['message_ids'] ?? null;
+        if ($messageIds === null && isset($data['up_to_message_id'])) {
+            $messageIds = MessageModel::where('chat_id', $chat->id)
+                ->where('sender_type', 'moderator')
+                ->where('id', '<=', $data['up_to_message_id'])
+                ->pluck('id')
+                ->all();
+        }
+        if ($messageIds === null || $messageIds === []) {
+            return response()->json(['ok' => true]);
+        }
+
+        $updated = MessageModel::where('chat_id', $chat->id)
+            ->whereIn('id', $messageIds)
+            ->where('sender_type', 'moderator')
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+
+        if ($updated > 0) {
+            $ids = MessageModel::where('chat_id', $chat->id)->whereIn('id', $messageIds)->pluck('id')->all();
+            event(new \App\Events\MessageRead($chat->id, $ids));
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     private function resolveDepartment(int $sourceId, ?string $slug): ?DepartmentModel

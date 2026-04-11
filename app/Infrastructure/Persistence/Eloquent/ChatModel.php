@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property array|null $user_metadata
  * @property string $status
  * @property int|null $assigned_to
+ * @property string|null $topic
  */
 class ChatModel extends Model
 {
@@ -30,6 +31,7 @@ class ChatModel extends Model
         'user_metadata',
         'status',
         'assigned_to',
+        'topic',
     ];
 
     /** @return array<string, string> */

@@ -17,7 +17,9 @@ Route::get('dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('chat', function () {
-    return Inertia::render('Chat');
+    return Inertia::render('Chat', [
+        'initialChatId' => request()->query('chat') ? (int) request()->query('chat') : null,
+    ]);
 })->middleware(['auth', 'verified'])->name('chat');
 
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])->name('auth.social.redirect');
@@ -32,6 +34,8 @@ Route::prefix('/api/widget')->group(function (): void {
     Route::post('/session', [WidgetApiController::class, 'session'])->name('api.widget.session');
     Route::get('/messages', [WidgetApiController::class, 'messages'])->name('api.widget.messages');
     Route::post('/messages', [WidgetApiController::class, 'send'])->name('api.widget.send');
+    Route::post('/messages/read', [WidgetApiController::class, 'markRead'])->name('api.widget.messages.read');
+    Route::post('/typing', [WidgetApiController::class, 'typing'])->name('api.widget.typing');
 });
 
 require __DIR__.'/settings.php';

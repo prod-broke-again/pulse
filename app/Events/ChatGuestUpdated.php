@@ -4,33 +4,29 @@ declare(strict_types=1);
 
 namespace App\Events;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class NewChatMessage implements ShouldBroadcastNow
+final class ChatGuestUpdated implements ShouldBroadcastNow
 {
     use Dispatchable;
     use InteractsWithSockets;
     use SerializesModels;
 
+    /** @param array{name?: string|null, email?: string|null} $userMetadata */
     public function __construct(
         public int $chatId,
-        public int $messageId,
-        public string $text,
-        public string $senderType = 'client',
-        public ?int $senderId = null,
+        public array $userMetadata,
     ) {}
 
-    /** @return array<int, Channel|PrivateChannel> */
+    /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
     {
         return [
             new PrivateChannel('chat.' . $this->chatId),
-            new Channel('widget-chat.' . $this->chatId),
         ];
     }
 
@@ -39,10 +35,7 @@ final class NewChatMessage implements ShouldBroadcastNow
     {
         return [
             'chatId' => $this->chatId,
-            'messageId' => $this->messageId,
-            'text' => $this->text,
-            'sender_type' => $this->senderType,
-            'sender_id' => $this->senderId,
+            'user_metadata' => $this->userMetadata,
         ];
     }
 }

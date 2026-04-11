@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Application\Communication\Action;
 
+use App\Domains\Communication\Entity\Chat;
 use App\Domains\Communication\Entity\Message;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\Repository\MessageRepositoryInterface;
+use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Domains\Communication\ValueObject\SenderType;
+use App\Events\ChatAssigned as ChatAssignedEvent;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
@@ -35,6 +38,21 @@ final readonly class SendMessage
             throw new \InvalidArgumentException("Chat not found: {$chatId}");
         }
 
+        if ($chat->assignedTo === null && $senderType === SenderType::Moderator && $senderId !== null) {
+            $updated = new Chat(
+                id: $chat->id,
+                sourceId: $chat->sourceId,
+                departmentId: $chat->departmentId,
+                externalUserId: $chat->externalUserId,
+                userMetadata: $chat->userMetadata,
+                status: ChatStatus::Active,
+                assignedTo: $senderId,
+                topic: $chat->topic,
+            );
+            $chat = $this->chatRepository->persist($updated);
+            $this->events->dispatch(new ChatAssignedEvent(chatId: $chat->id, assignedToUserId: $senderId));
+        }
+
         $message = new \App\Domains\Communication\Entity\Message(
             id: 0,
             chatId: $chatId,
@@ -52,6 +70,8 @@ final readonly class SendMessage
             chatId: $chatId,
             messageId: $persisted->id,
             text: $text,
+            senderType: $senderType->value,
+            senderId: $senderId,
         ));
 
         $source = $this->sourceRepository->findById($chat->sourceId);
