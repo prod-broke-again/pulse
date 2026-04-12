@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Bell,
@@ -16,22 +16,17 @@ import {
 import BottomNav from '../components/layout/BottomNav.vue'
 import { useAuthStore } from '../stores/authStore'
 import { useInboxStore } from '../stores/inboxStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import { useUiStore } from '../stores/uiStore'
 
 const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
 const inbox = useInboxStore()
+const settings = useSettingsStore()
 const { isDark } = storeToRefs(ui)
 const { inboxBadge } = storeToRefs(inbox)
-
-const toggles = reactive({
-  push: true,
-  sound: true,
-  vibration: false,
-  aiHints: true,
-  aiSummary: true,
-})
+const { push, sound, vibration, aiHints, aiSummary, pushSyncing } = storeToRefs(settings)
 
 const themeDesc = computed(() => (isDark.value ? 'Включена' : 'Выключена'))
 
@@ -47,10 +42,6 @@ onMounted(() => {
     void auth.fetchMe().catch(() => {})
   }
 })
-
-function toggleLocal(key: keyof typeof toggles) {
-  toggles[key] = !toggles[key]
-}
 
 function onThemeRowClick() {
   ui.toggleTheme()
@@ -130,9 +121,10 @@ async function onLogout() {
             <button
               type="button"
               class="si-toggle"
-              :class="{ on: toggles.push }"
+              :class="{ on: push }"
               aria-label="Push-уведомления"
-              @click="toggleLocal('push')"
+              :disabled="pushSyncing"
+              @click="settings.togglePush()"
             />
           </div>
           <div
@@ -152,9 +144,9 @@ async function onLogout() {
             <button
               type="button"
               class="si-toggle"
-              :class="{ on: toggles.sound }"
+              :class="{ on: sound }"
               aria-label="Звук"
-              @click="toggleLocal('sound')"
+              @click="settings.toggleSound()"
             />
           </div>
           <div class="flex cursor-pointer items-center gap-3 px-4 py-3.5">
@@ -172,9 +164,9 @@ async function onLogout() {
             <button
               type="button"
               class="si-toggle"
-              :class="{ on: toggles.vibration }"
+              :class="{ on: vibration }"
               aria-label="Вибрация"
-              @click="toggleLocal('vibration')"
+              @click="settings.toggleVibration()"
             />
           </div>
         </div>
@@ -244,9 +236,9 @@ async function onLogout() {
             <button
               type="button"
               class="si-toggle"
-              :class="{ on: toggles.aiHints }"
+              :class="{ on: aiHints }"
               aria-label="AI-подсказки"
-              @click="toggleLocal('aiHints')"
+              @click="settings.toggleAiHints()"
             />
           </div>
           <div class="flex cursor-pointer items-center gap-3 px-4 py-3.5">
@@ -264,9 +256,9 @@ async function onLogout() {
             <button
               type="button"
               class="si-toggle"
-              :class="{ on: toggles.aiSummary }"
+              :class="{ on: aiSummary }"
               aria-label="AI-резюме"
-              @click="toggleLocal('aiSummary')"
+              @click="settings.toggleAiSummary()"
             />
           </div>
         </div>

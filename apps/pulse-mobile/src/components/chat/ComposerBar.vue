@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { Paperclip, Send, Sparkles, X, Zap } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
 const chat = useChatStore()
-const { composerText, canSend, pendingReplyMarkup } = storeToRefs(chat)
+const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies } = storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
 const actionsDetails = ref<HTMLDetailsElement | null>(null)
 
@@ -29,7 +29,8 @@ function onPickFiles(e: Event) {
   input.value = ''
 }
 
-const quickReplies = [
+/** Used when API returns no canned responses. */
+const fallbackQuickReplies = [
   {
     label: 'Уточню информацию',
     text: 'Спасибо за обращение! Сейчас уточню информацию.',
@@ -43,6 +44,10 @@ const quickReplies = [
     text: 'Рады были помочь! Если возникнут вопросы — пишите.',
   },
 ]
+
+const quickReplies = computed(() =>
+  cannedQuickReplies.value.length > 0 ? cannedQuickReplies.value : fallbackQuickReplies,
+)
 
 function onSend() {
   chat.sendMessage()

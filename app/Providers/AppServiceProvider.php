@@ -4,11 +4,14 @@ namespace App\Providers;
 
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use SocialiteProviders\Manager\SocialiteWasCalled;
@@ -48,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureFilamentEcho();
+        $this->configureRateLimiting();
         $this->registerSocialiteProviders();
         $this->registerFilamentSocialLoginHook();
 
@@ -55,6 +59,15 @@ class AppServiceProvider extends ServiceProvider
             \App\Infrastructure\Persistence\Eloquent\ChatModel::class,
             \App\Policies\ChatPolicy::class,
         );
+    }
+
+    private function configureRateLimiting(): void
+    {
+        RateLimiter::for('api-chat-read', function (Request $request) {
+            $key = $request->user()?->id ?? $request->ip();
+
+            return Limit::perMinute(120)->by((string) $key);
+        });
     }
 
     private function configureFilamentEcho(): void

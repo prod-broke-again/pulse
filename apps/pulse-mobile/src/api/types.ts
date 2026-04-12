@@ -1,6 +1,9 @@
 /** API v1 chat list row (subset; backend may add fields). */
 export interface ApiChatRow {
   id: number
+  source_id?: number | null
+  assigned_to?: number | null
+  assignee?: { id: number; name: string } | null
   status: string
   category_code?: string | null
   category_label?: string | null
@@ -56,4 +59,13 @@ export interface ApiTabCounts {
   my: number
   unassigned: number
   all: number
+}
+
+export interface ApiCannedResponse {
+  id: number
+  source_id?: number | null
+  code?: string | null
+  title: string
+  text: string
+  is_active?: boolean
 }

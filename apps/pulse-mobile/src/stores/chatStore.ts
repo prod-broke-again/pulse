@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import * as aiApi from '../api/aiRepository'
+import * as cannedApi from '../api/cannedResponseRepository'
 import * as chatApi from '../api/chatRepository'
 import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
@@ -10,6 +11,7 @@ import { mapApiMessageToChatMessage, mapRealtimePayloadToChatMessage } from '../
 import { useAuthStore } from './authStore'
 import { useInboxStore } from './inboxStore'
 import { useUiStore } from './uiStore'
+import type { ApiChatRow } from '../api/types'
 import type {
   AiPanelContent,
   ChannelSource,
@@ -32,11 +34,20 @@ export const useChatStore = defineStore('chat', () => {
   const oldestMessageId = ref<number | null>(null)
   const threadMeta = ref<ChatThreadMeta | null>(null)
   const pendingReplyMarkup = ref<ReplyMarkupButton[]>([])
+  /** Canned responses for quick-reply chips (from API; ComposerBar falls back if empty). */
+  const cannedQuickReplies = ref<Array<{ label: string; text: string }>>([])
 
   let aiTimers: number[] = []
   let unsubscribeRealtime: (() => void) | null = null
   let typingClearTimer: number | null = null
   let readNearBottomTimer: number | null = null
+  let readRequestInFlight = false
+  let lastSentReadWatermarkKey: string | null = null
+
+  watch(activeChatId, () => {
+    readRequestInFlight = false
+    lastSentReadWatermarkKey = null
+  })
 
   const channelSource = computed((): ChannelSource | null => threadMeta.value?.channel ?? null)
 
@@ -54,13 +65,71 @@ export const useChatStore = defineStore('chat', () => {
     return max
   }
 
+  function assigneeUserId(chat: ApiChatRow): number | null {
+    const id = chat.assignee?.id ?? chat.assigned_to
+    return id != null && Number.isFinite(Number(id)) ? Number(id) : null
+  }
+
+  function applyThreadMetaFromApiChat(chat: ApiChatRow, chatIdStr: string) {
+    const preview = mapApiChatToPreview(chat)
+    const prev = threadMeta.value
+    threadMeta.value = {
+      id: chatIdStr,
+      userName: preview.name,
+      status: preview.status,
+      channel: preview.channel,
+      channelLabel: chat.channel_label ?? 'Web',
+      departmentLabel: preview.department,
+      aiSummaryBar: prev?.aiSummaryBar ?? 'Нет данных AI для этого чата.',
+      assignedToUserId: assigneeUserId(chat),
+    }
+  }
+
+  async function assignToMe(): Promise<void> {
+    const chatId = activeChatId.value
+    if (!chatId) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+    const ui = useUiStore()
+    try {
+      const chat = await chatApi.assignMe(id)
+      applyThreadMetaFromApiChat(chat, chatId)
+      await useInboxStore().loadInbox()
+      ui.pushToast('Чат назначен на вас', 'success')
+    } catch {
+      ui.pushToast('Не удалось назначить чат', 'error')
+    }
+  }
+
+  async function closeThread(): Promise<void> {
+    const chatId = activeChatId.value
+    if (!chatId) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+    const ui = useUiStore()
+    try {
+      const chat = await chatApi.closeChat(id)
+      applyThreadMetaFromApiChat(chat, chatId)
+      await useInboxStore().loadInbox()
+      ui.pushToast('Чат закрыт', 'success')
+    } catch {
+      ui.pushToast('Не удалось закрыть чат', 'error')
+    }
+  }
+
   async function markAsRead(chatIdNum: number): Promise<void> {
     const lastId = maxMessageIdFromList()
     if (lastId <= 0) return
+    const key = `${chatIdNum}:${lastId}`
+    if (readRequestInFlight || lastSentReadWatermarkKey === key) return
+    readRequestInFlight = true
     try {
       await chatApi.markChatRead(chatIdNum, lastId)
+      lastSentReadWatermarkKey = key
     } catch {
       /* ignore */
+    } finally {
+      readRequestInFlight = false
     }
   }
 
@@ -72,13 +141,24 @@ export const useChatStore = defineStore('chat', () => {
     loadingOlder.value = true
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
+    cannedQuickReplies.value = []
 
     try {
-      const [chat, rows, aiSummary] = await Promise.all([
-        chatApi.fetchChat(id),
+      const chat = await chatApi.fetchChat(id)
+      const [rows, aiSummary, cannedRows] = await Promise.all([
         msgApi.fetchMessages(id, { limit: 50 }),
         aiApi.fetchAiSummary(id).catch(() => null),
+        cannedApi
+          .fetchCannedResponses(
+            chat.source_id != null ? { source_id: chat.source_id } : undefined,
+          )
+          .catch(() => []),
       ])
+
+      cannedQuickReplies.value = cannedRows.map((r) => ({
+        label: (r.title?.trim() || r.code?.trim() || `Шаблон #${r.id}`).slice(0, 80),
+        text: r.text,
+      }))
 
       const preview = mapApiChatToPreview(chat)
       threadMeta.value = {
@@ -92,6 +172,7 @@ export const useChatStore = defineStore('chat', () => {
           aiSummary?.summary?.trim() ||
           aiSummary?.intent_tag?.trim() ||
           'Нет данных AI для этого чата.',
+        assignedToUserId: assigneeUserId(chat),
       }
 
       messages.value = rows.map(mapApiMessageToChatMessage)
@@ -345,11 +426,14 @@ export const useChatStore = defineStore('chat', () => {
 
   function clearThread() {
     leaveThread()
+    readRequestInFlight = false
+    lastSentReadWatermarkKey = null
     messages.value = []
     threadMeta.value = null
     oldestMessageId.value = null
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
+    cannedQuickReplies.value = []
   }
 
   return {
@@ -365,6 +449,7 @@ export const useChatStore = defineStore('chat', () => {
     hasMoreOlder,
     threadMeta,
     pendingReplyMarkup,
+    cannedQuickReplies,
     channelSource,
     fetchThread,
     loadOlderMessages,
@@ -385,5 +470,7 @@ export const useChatStore = defineStore('chat', () => {
     clearAiTimers,
     clearThread,
     markAsRead,
+    assignToMe,
+    closeThread,
   }
 })

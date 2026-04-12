@@ -43,7 +43,9 @@ Route::prefix('v1')->group(function (): void {
         // Chat Messages
         Route::get('/chats/{chat}/messages', [ChatMessageController::class, 'index'])->name('api.v1.chats.messages.index');
         Route::post('/chats/{chat}/send', [ChatMessageController::class, 'send'])->name('api.v1.chats.messages.send');
-        Route::post('/chats/{chat}/read', [ChatMessageController::class, 'readChat'])->name('api.v1.chats.read');
+        Route::post('/chats/{chat}/read', [ChatMessageController::class, 'readChat'])
+            ->middleware('throttle:api-chat-read')
+            ->name('api.v1.chats.read');
 
         // Uploads
         Route::post('/uploads', [UploadController::class, 'store'])->name('api.v1.uploads.store');

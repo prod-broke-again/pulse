@@ -43,9 +43,41 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     const sendError = ref<string | null>(null);
     const typingName = ref<string | null>(null);
 
+    const readRequestInFlight = ref(false);
+    const lastSentReadWatermarkKey = ref<string | null>(null);
+
+    watch(chatId, () => {
+        readRequestInFlight.value = false;
+        lastSentReadWatermarkKey.value = null;
+    });
+
     const echo = computed(() =>
         getEcho(reverbConfig.value, currentUserId.value ?? null) as ReturnType<typeof getEcho>,
     );
+
+    function buildReadKey(cid: number, lastMessageId: number): string {
+        return `${cid}:${lastMessageId}`;
+    }
+
+    async function markAsRead(lastMessageId: number): Promise<void> {
+        const cid = chatId.value;
+        if (!cid || !Number.isFinite(lastMessageId) || lastMessageId <= 0) {
+            return;
+        }
+        const key = buildReadKey(cid, lastMessageId);
+        if (readRequestInFlight.value || lastSentReadWatermarkKey.value === key) {
+            return;
+        }
+        readRequestInFlight.value = true;
+        try {
+            await api.post(`/chats/${cid}/read`, { last_message_id: lastMessageId });
+            lastSentReadWatermarkKey.value = key;
+        } catch {
+            /* best-effort */
+        } finally {
+            readRequestInFlight.value = false;
+        }
+    }
 
     function fetchMessages(chatIdParam: number, beforeId: number | null = null) {
         if (!beforeId) messagesLoading.value = true;
@@ -65,7 +97,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
                         .filter((n) => Number.isFinite(n) && n > 0);
                     const lastId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
                     if (lastId > 0 && chatId.value === chatIdParam) {
-                        api.post(`/chats/${chatIdParam}/read`, { last_message_id: lastId }).catch(() => {});
+                        void markAsRead(lastId);
                     }
                 } else {
                     messages.value = [...list, ...messages.value];
@@ -86,7 +118,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             .map((m) => Number(m.id))
             .filter((n) => Number.isFinite(n) && n > 0);
         const lastId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
-        if (lastId > 0) markAsRead(lastId);
+        if (lastId > 0) void markAsRead(lastId);
     }
 
     function loadOlderMessages() {
@@ -141,12 +173,6 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             .finally(() => {
                 sendLoading.value = false;
             });
-    }
-
-    function markAsRead(lastMessageId: number) {
-        const cid = chatId.value;
-        if (!cid || !Number.isFinite(lastMessageId) || lastMessageId <= 0) return;
-        api.post(`/chats/${cid}/read`, { last_message_id: lastMessageId }).catch(() => {});
     }
 
     function applyNewMessage(payload: NewChatMessagePayload) {

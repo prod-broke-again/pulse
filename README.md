@@ -87,7 +87,7 @@ See `.env.example`. Main variables:
 |----------|-------------|
 | `DB_CONNECTION` | `pgsql` (required) |
 | `CACHE_STORE` / `QUEUE_CONNECTION` | `redis` recommended |
-| `BROADCAST_CONNECTION` | `reverb` |
+| `BROADCAST_CONNECTION` | `reverb` for WebSockets, or `null` to disable broadcasting |
 | `REVERB_*` | Reverb app id/key/secret/host/port |
 | `VKONTAKTE_*` | VK OAuth (moderator login) |
 | `TELEGRAM_*` | Telegram bot (moderator login) |
@@ -150,6 +150,11 @@ Widget script:
 - Events: `App\Events\NewChatMessage`, `App\Events\ChatAssigned`
 - Channels: `private-chat.{chatId}`, `private-moderator.{userId}`
 - Authorization: `chat.*` — user must have role admin or moderator; `moderator.*` — own user id
+
+**Reverb vs no broadcasting**
+
+- With `BROADCAST_CONNECTION=reverb` in `.env`, start the WebSocket server: `php artisan reverb:start` (matches `REVERB_HOST` / `REVERB_PORT`, often `localhost:8080`). The Laravel app sends broadcast HTTP to that process; if it is not running, you may see connection errors to that port.
+- If you do not need realtime locally, set `BROADCAST_CONNECTION=null` so broadcasting is disabled (no HTTP to Reverb; Inertia/Echo live updates will not push until you enable Reverb again).
 
 Run Reverb: `php artisan reverb:start`.
 

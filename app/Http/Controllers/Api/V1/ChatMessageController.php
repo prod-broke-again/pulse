@@ -156,7 +156,10 @@ final class ChatMessageController extends Controller
 
         MessageModel::where('chat_id', $chat->id)->whereKey($lastMessageId)->firstOrFail();
 
-        DB::transaction(function () use ($chat, $user, $lastMessageId): void {
+        /** @var list<int> */
+        $idsToBroadcast = [];
+
+        DB::transaction(function () use ($chat, $user, $lastMessageId, &$idsToBroadcast): void {
             $state = ChatUserReadStateModel::query()->firstOrNew([
                 'user_id' => $user->id,
                 'chat_id' => $chat->id,
@@ -178,9 +181,13 @@ final class ChatMessageController extends Controller
 
             if ($idsToMark !== []) {
                 MessageModel::whereIn('id', $idsToMark)->update(['is_read' => true]);
-                event(new MessageReadEvent($chat->id, $idsToMark));
+                $idsToBroadcast = $idsToMark;
             }
         });
+
+        if ($idsToBroadcast !== []) {
+            event(new MessageReadEvent($chat->id, $idsToBroadcast));
+        }
 
         return response()->json([
             'data' => ['ok' => true],

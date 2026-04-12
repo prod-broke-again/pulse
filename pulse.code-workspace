@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../id"
+		},
+		{
+			"path": "../messenger-api"
+		}
+	],
+	"settings": {}
+}

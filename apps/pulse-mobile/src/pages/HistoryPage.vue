@@ -5,6 +5,7 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BottomNav from '../components/layout/BottomNav.vue'
 import EmptyState from '../components/common/EmptyState.vue'
+import SkeletonList from '../components/common/SkeletonList.vue'
 import ChatCard from '../components/inbox/ChatCard.vue'
 import { useInboxStore } from '../stores/inboxStore'
 import { useUiStore } from '../stores/uiStore'
@@ -13,7 +14,7 @@ const router = useRouter()
 const inbox = useInboxStore()
 const ui = useUiStore()
 
-const { historySearchQuery, filteredHistoryChats, inboxBadge } = storeToRefs(inbox)
+const { historySearchQuery, filteredHistoryChats, inboxBadge, isLoadingHistory } = storeToRefs(inbox)
 const { isDark } = storeToRefs(ui)
 
 onMounted(() => {
@@ -70,8 +71,10 @@ function openChat(id: string) {
       </div>
     </div>
 
+    <SkeletonList v-if="isLoadingHistory" />
+
     <div
-      v-if="filteredHistoryChats.length > 0"
+      v-else-if="filteredHistoryChats.length > 0"
       class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
     >
       <ChatCard v-for="c in filteredHistoryChats" :key="c.id" :chat="c" @open="openChat" />

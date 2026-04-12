@@ -37,3 +37,13 @@ export async function fetchTabCounts(
 export async function markChatRead(chatId: number, lastMessageId: number): Promise<void> {
   await http.post(`/chats/${chatId}/read`, { last_message_id: lastMessageId })
 }
+
+export async function assignMe(chatId: number): Promise<ApiChatRow> {
+  const res = await http.post<{ data: ApiChatRow }>(`/chats/${chatId}/assign-me`)
+  return res.data.data
+}
+
+export async function closeChat(chatId: number): Promise<ApiChatRow> {
+  const res = await http.post<{ data: ApiChatRow }>(`/chats/${chatId}/close`)
+  return res.data.data
+}

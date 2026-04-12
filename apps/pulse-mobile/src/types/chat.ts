@@ -65,6 +65,8 @@ export interface ChatThreadMeta {
   channelLabel: string
   departmentLabel: string
   aiSummaryBar: string
+  /** Pulse user id of assignee; null if unassigned. */
+  assignedToUserId: number | null
 }
 
 export interface AiReplyOption {
