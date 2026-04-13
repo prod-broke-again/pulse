@@ -32,6 +32,7 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
         Route::get('/auth/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
+        Route::post('/auth/profile/avatar', [AuthController::class, 'uploadAvatar'])->name('api.v1.auth.profile.avatar');
 
         // Chats
         Route::get('/chats', [ChatController::class, 'index'])->name('api.v1.chats.index');

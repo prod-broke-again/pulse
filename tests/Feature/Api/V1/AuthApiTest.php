@@ -6,6 +6,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 final class AuthApiTest extends TestCase
@@ -49,7 +50,7 @@ final class AuthApiTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'token',
-                    'user' => ['id', 'name', 'email', 'roles', 'source_ids', 'department_ids'],
+                    'user' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
                 ],
             ]);
 
@@ -142,7 +143,7 @@ final class AuthApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'data' => ['id', 'name', 'email', 'roles', 'source_ids', 'department_ids'],
+                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
             ])
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('data.email', $user->email);
@@ -174,6 +175,69 @@ final class AuthApiTest extends TestCase
     public function test_logout_returns_401_without_token(): void
     {
         $response = $this->postJson('/api/v1/auth/logout');
+
+        $response->assertUnauthorized();
+    }
+
+    // --- PROFILE AVATAR ---
+
+    public function test_upload_avatar_stores_file_and_returns_user_with_avatar_url(): void
+    {
+        $user = $this->createModerator();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $file = UploadedFile::fake()->image('avatar.png', 120, 120);
+
+        $response = $this->withHeader('Authorization', "Bearer $token")
+            ->post('/api/v1/auth/profile/avatar', [
+                'avatar' => $file,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
+            ]);
+
+        $avatarUrl = $response->json('data.avatar_url');
+        $this->assertIsString($avatarUrl);
+        $this->assertNotSame('', $avatarUrl);
+        $this->assertStringContainsString('/avatars/'.$user->id.'/', $avatarUrl);
+
+        $user->refresh();
+        $this->assertSame($avatarUrl, $user->avatar_url);
+
+        $path = parse_url($avatarUrl, PHP_URL_PATH);
+        $this->assertIsString($path);
+        $fullPath = public_path(ltrim(str_replace('\\', '/', $path), '/'));
+        $this->assertFileExists($fullPath);
+
+        @unlink($fullPath);
+        @rmdir(dirname($fullPath));
+    }
+
+    public function test_upload_avatar_rejects_non_image(): void
+    {
+        $user = $this->createModerator();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $file = UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf');
+
+        $response = $this->withHeader('Authorization', "Bearer $token")
+            ->post('/api/v1/auth/profile/avatar', [
+                'avatar' => $file,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['avatar']);
+    }
+
+    public function test_upload_avatar_returns_401_without_token(): void
+    {
+        $file = UploadedFile::fake()->image('avatar.png', 50, 50);
+
+        $response = $this->post('/api/v1/auth/profile/avatar', [
+            'avatar' => $file,
+        ]);
 
         $response->assertUnauthorized();
     }
