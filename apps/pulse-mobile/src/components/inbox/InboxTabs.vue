@@ -15,7 +15,7 @@ const tabs = computed(() =>
   (
     [
       { id: 'my' as const, label: 'Мои' },
-      { id: 'unassigned' as const, label: 'Нераспределенные' },
+      { id: 'unassigned' as const, label: 'Свободные' },
       { id: 'all' as const, label: 'Все' },
     ] as const
   ).map((t) => ({

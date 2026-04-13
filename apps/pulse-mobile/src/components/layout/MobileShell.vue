@@ -20,7 +20,7 @@ function toastClass(type: string) {
 
 <template>
   <div
-    class="relative mx-auto flex h-dvh max-w-[430px] flex-col overflow-hidden bg-[var(--color-light)] text-[var(--color-dark)] dark:bg-[var(--zinc-900)] dark:text-[var(--zinc-100)]"
+    class="relative mx-auto flex h-dvh flex-col overflow-hidden bg-[var(--color-light)] text-[var(--color-dark)] dark:bg-[var(--zinc-900)] dark:text-[var(--zinc-100)]"
   >
     <div
       class="pointer-events-none absolute left-4 right-4 z-[100] flex flex-col gap-2"
