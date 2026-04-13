@@ -2,6 +2,14 @@
 
 Support platform for multiple channels (Web, VK, Telegram) with department routing, moderator panel (Filament v4), and real-time updates (Laravel Reverb).
 
+## Production readiness / beta
+
+**Pulse (этот репозиторий)** — по стеку и документации подходит для **бета-теста и продакшена**, если закрыты операционные вещи: PostgreSQL и Redis, воркер очереди, при необходимости realtime — процесс Reverb и прокси `wss` в Nginx, `APP_DEBUG=false`, надёжные секреты, HTTPS.
+
+**Интеграция с ACHPP ID (SSO)** в коде реализована (`POST /api/v1/auth/sso/exchange`, профиль с IdP, опционально вебхуки). Для режима только через ID нужны рабочий **внешний сервис IdP** (Laravel Passport или эквивалент) и корректные переменные окружения на Pulse. Сам **сервер ACHPP ID в этом репозитории не поставляется** — его нужно разворачивать отдельно из проекта IdP и настраивать OAuth-клиент и redirect URI под ваш домен Pulse.
+
+Итого: **Pulse на сервер можно выкатывать**; **«запустить ID»** означает отдельную установку приложения IdP, затем привязку Pulse по `ACHPP_ID_*` (см. ниже).
+
 ## Stack
 
 - **PHP 8.4** — Property hooks, asymmetric visibility, constructor promotion
@@ -33,6 +41,83 @@ php artisan migrate
 php artisan db:seed
 npm install && npm run build
 ```
+
+## Установка на сервер (production)
+
+Пути ниже приведены для примера (`/var/www/pulse`); замените на каталог на вашем сервере и пользователя веб-сервера (`www-data` и т.д.).
+
+### 1. Окружение
+
+- **PHP 8.4** с расширениями: `pdo_pgsql`, `redis`, `intl`, `zip`, `mbstring`, `curl`, `openssl`, `pcntl` (для queue/Reverb).
+- **Composer 2**, **Node.js 18+** (только для сборки фронтенда на машине деплоя или CI).
+- **PostgreSQL 16+**, **Redis** — в production для очереди, кэша и (часто) broadcasting обязательны.
+
+### 2. Код и зависимости
+
+```bash
+cd /var/www/pulse
+git pull   # или clone
+composer install --no-dev --optimize-autoloader
+cp .env.example .env
+php artisan key:generate
+```
+
+Заполните `.env` минимум: `APP_URL`, `APP_ENV=production`, `APP_DEBUG=false`, `DB_*`, `REDIS_*`, `CACHE_STORE=redis`, `QUEUE_CONNECTION=redis`, `BROADCAST_CONNECTION=reverb` (или `null`, если WebSockets не нужны), `REVERB_*`, `VITE_*` для Reverb (как в `.env.example`).
+
+### 3. База и фронтенд
+
+```bash
+php artisan migrate --force
+# опционально: php artisan db:seed --force
+npm ci && npm run build
+php artisan storage:link
+```
+
+Права на `storage/` и `bootstrap/cache/` должны позволять веб-пользователю писать логи и кэш:
+
+```bash
+chown -R www-data:www-data storage bootstrap/cache
+```
+
+### 4. Очередь и Reverb (supervisor)
+
+Входящие вебхуки и фоновые задачи требуют воркера. Примеры конфигов: `supervisor-queue-worker.conf`, `supervisor-reverb.conf` в корне репозитория. Скопируйте в `/etc/supervisor/conf.d/`, поправьте пути, затем:
+
+```bash
+sudo supervisorctl reread && sudo supervisorctl update
+sudo supervisorctl start pulse-queue-worker:* pulse-reverb
+```
+
+Reverb слушает отдельный порт (см. `REVERB_HOST` / `REVERB_PORT` в `.env`). В Nginx проксируйте WebSocket на этот порт (пример в `docker/nginx/pulse.appp-psy.ru.conf` и в разделе «Production: Nginx proxy for Reverb» ниже).
+
+### 5. Nginx + PHP-FPM
+
+Корень сайта — `public/`. Пример конфигурации: `docker/nginx/pulse.appp-psy.ru.conf`. Включите HTTPS (Let’s Encrypt и т.д.).
+
+### 6. ACHPP ID (отдельный сервис)
+
+На этом сервере должен быть доступен **уже развёрнутый** ACHPP ID (не из этого репозитория):
+
+- Публичный URL IdP — в `ACHPP_ID_BASE_URL`.
+- Для обмена code→token и профиля с того же хоста, что видит PHP, при необходимости задайте `ACHPP_ID_INTERNAL_URL` (например, внутренний HTTP или `localhost`).
+- В консоли IdP создайте **OAuth2 public client (PKCE)** и укажите его id в `ACHPP_ID_CLIENT_ID`; redirect URI клиентов (web/mobile) должны совпадать с настройками в IdP.
+- Для вебхуков от IdP (опционально): `PULSE_ID_WEBHOOKS_ENABLED`, `PULSE_ID_WEBHOOK_SECRET` и согласованные URL на стороне IdP.
+
+Проверка связи с IdP (с сервера, где установлен Pulse):
+
+```bash
+php artisan pulse:test-idp
+# с токеном IdP: php artisan pulse:test-idp --token="..."
+```
+
+Режим только SSO в Pulse: `PULSE_SSO_ONLY=true` — отключает парольный вход и регистрацию Fortify; вход идёт через ACHPP ID.
+
+### 7. Что проверить перед тестом с другим проектом
+
+- Pulse открывается по HTTPS, `php artisan migrate` применён.
+- Redis и `queue:work` работают (иначе вебхуки мессенджеров могут копиться в очереди).
+- `ACHPP_ID_*` указывают на ваш реальный IdP; OAuth-клиент и redirect URI согласованы.
+- Если используете второй проект (например, мобильное приложение), его `VITE_*` / redirect URI должны быть зарегистрированы в том же IdP.
 
 ## Laragon (Windows)
 
