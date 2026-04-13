@@ -39,4 +39,21 @@ Route::prefix('/api/widget')->group(function (): void {
     Route::post('/typing', [WidgetApiController::class, 'typing'])->name('api.widget.typing');
 });
 
+/*
+| Avatar is stored and edited on ACHPP ID only. Misconfigured clients sometimes POST
+| to Pulse (404 → NOT_FOUND). Respond with a clear pointer to the IdP profile page.
+*/
+Route::match(['post', 'patch'], 'settings/avatars/{userAvatar?}', function () {
+    $idp = rtrim((string) config('pulse.id.id_url_public', ''), '/');
+    $profileUrl = $idp !== '' ? $idp.'/settings/profile' : null;
+
+    return response()->json([
+        'message' => $profileUrl !== null
+            ? 'Фото профиля меняется в ACHPP ID, а не в Pulse. Откройте: '.$profileUrl
+            : 'Фото профиля меняется в ACHPP ID (настройте ACHPP_ID_BASE_URL).',
+        'code' => 'PROFILE_AVATAR_USE_IDP',
+        'idp_profile_url' => $profileUrl,
+    ], 422);
+})->where('userAvatar', '[^/]*');
+
 require __DIR__.'/settings.php';
