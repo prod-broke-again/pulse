@@ -1,6 +1,7 @@
 /** API v1 chat list row (subset; backend may add fields). */
 export interface ApiChatRow {
   id: number
+  external_user_id?: string
   source_id?: number | null
   department_id?: number | null
   assigned_to?: number | null

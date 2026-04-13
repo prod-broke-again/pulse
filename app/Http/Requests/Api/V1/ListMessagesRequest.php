@@ -18,6 +18,7 @@ final class ListMessagesRequest extends FormRequest
     {
         return [
             'before_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'after_id' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],

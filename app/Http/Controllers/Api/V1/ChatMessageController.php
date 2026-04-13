@@ -31,15 +31,29 @@ final class ChatMessageController extends Controller
 
         $validated = $request->validated();
         $beforeId = isset($validated['before_id']) ? (int) $validated['before_id'] : null;
+        $afterId = isset($validated['after_id']) ? (int) $validated['after_id'] : null;
         $limit = (int) ($validated['limit'] ?? $validated['per_page'] ?? 50);
 
         $query = MessageModel::where('chat_id', $chat->id)->with(['media', 'replyTo']);
 
-        if ($beforeId !== null) {
-            $query->where('id', '<', $beforeId);
+        if ($afterId !== null) {
+            $messages = (clone $query)
+                ->where('id', '>', $afterId)
+                ->orderBy('id')
+                ->limit($limit)
+                ->get()
+                ->values();
+        } elseif ($beforeId !== null) {
+            $messages = $query
+                ->where('id', '<', $beforeId)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->reverse()
+                ->values();
+        } else {
+            $messages = $query->orderByDesc('id')->limit($limit)->get()->reverse()->values();
         }
-
-        $messages = $query->orderByDesc('id')->limit($limit)->get()->reverse()->values();
 
         return response()->json([
             'data' => MessageResource::collection($messages),

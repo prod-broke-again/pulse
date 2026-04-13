@@ -6,11 +6,13 @@ import * as chatApi from '../api/chatRepository'
 import * as quickLinkApi from '../api/quickLinkRepository'
 import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
+import { playIncomingTone, vibrateIncoming } from '../lib/notificationFeedback'
 import { subscribeChatChannel } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
 import { mapApiMessageToChatMessage, mapRealtimePayloadToChatMessage } from '../mappers/messageMapper'
 import { useAuthStore } from './authStore'
 import { useInboxStore } from './inboxStore'
+import { useSettingsStore } from './settingsStore'
 import { useUiStore } from './uiStore'
 import type { ApiChatRow } from '../api/types'
 import type {
@@ -409,9 +411,40 @@ export const useChatStore = defineStore('chat', () => {
         ) {
           return
         }
-        const mapped = mapRealtimePayloadToChatMessage(payload)
-        if (messages.value.some((m) => m.id === mapped.id)) return
-        messages.value = [...messages.value, mapped]
+        const settings = useSettingsStore()
+        const prevMax = maxMessageIdFromList()
+        void (async () => {
+          try {
+            const newer = await msgApi.fetchMessages(id, { afterId: prevMax, limit: 30 })
+            if (newer.length > 0) {
+              const byId = new Map(messages.value.map((m) => [m.id, m]))
+              for (const row of newer) {
+                byId.set(String(row.id), mapApiMessageToChatMessage(row))
+              }
+              messages.value = Array.from(byId.values()).sort((a, b) => {
+                const na = Number(a.id)
+                const nb = Number(b.id)
+                if (Number.isFinite(na) && Number.isFinite(nb)) {
+                  return na - nb
+                }
+                return String(a.id).localeCompare(String(b.id))
+              })
+            } else {
+              const mapped = mapRealtimePayloadToChatMessage(payload)
+              if (messages.value.some((m) => m.id === mapped.id)) return
+              messages.value = [...messages.value, mapped]
+            }
+          } catch {
+            const mapped = mapRealtimePayloadToChatMessage(payload)
+            if (messages.value.some((m) => m.id === mapped.id)) return
+            messages.value = [...messages.value, mapped]
+          }
+          if (payload.sender_type === 'client') {
+            playIncomingTone(settings.sound)
+            vibrateIncoming(settings.vibration)
+          }
+          useInboxStore().scheduleInboxRefreshFromRealtime()
+        })()
       },
       onMessageRead: (payload) => {
         if (payload.chatId !== id || payload.messageIds.length === 0) return

@@ -7,7 +7,7 @@ namespace App\Jobs;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Models\DeviceToken;
-use App\Models\User;
+use App\Services\Push\ModeratorPushSupport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -15,7 +15,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 final class SendFcmPushNotificationJob implements ShouldQueue
 {
@@ -34,7 +33,7 @@ final class SendFcmPushNotificationJob implements ShouldQueue
         public string $text,
     ) {}
 
-    public function handle(): void
+    public function handle(ModeratorPushSupport $pushSupport): void
     {
         $message = MessageModel::find($this->messageId);
         if ($message === null || $message->sender_type !== 'client') {
@@ -46,7 +45,7 @@ final class SendFcmPushNotificationJob implements ShouldQueue
             return;
         }
 
-        $moderatorIds = $this->getModeratorsForChat($chat);
+        $moderatorIds = $pushSupport->moderatorUserIdsForChat($chat);
         if ($moderatorIds === []) {
             return;
         }
@@ -66,40 +65,18 @@ final class SendFcmPushNotificationJob implements ShouldQueue
             return;
         }
 
+        $built = $pushSupport->buildNotificationPayload($chat, $this->chatId, $this->messageId, $this->text);
+
         foreach ($tokens as $token) {
-            $this->sendToFcm($fcmServerKey, $token, $chat);
+            $this->sendToFcm($fcmServerKey, $token, $built);
         }
     }
 
     /**
-     * If chat is assigned, notify only that moderator. Otherwise all mods for the source.
-     *
-     * @return list<int>
+     * @param  array{title: string, body: string, data: array<string, string>, tag: string, jsonPayload: string}  $built
      */
-    private function getModeratorsForChat(ChatModel $chat): array
+    private function sendToFcm(string $serverKey, string $token, array $built): void
     {
-        if ($chat->assigned_to !== null) {
-            return [$chat->assigned_to];
-        }
-
-        $sourceId = $chat->source_id;
-        $admins = User::role('admin')->pluck('id')->all();
-        $moderatorsBySource = User::role('moderator')
-            ->whereHas('sources', fn ($q) => $q->where('source_id', $sourceId))
-            ->pluck('id')
-            ->all();
-
-        return array_values(array_unique([...$admins, ...$moderatorsBySource]));
-    }
-
-    private function sendToFcm(string $serverKey, string $token, ChatModel $chat): void
-    {
-        $sourceName = $chat->source?->name ?? 'Pulse';
-        $userMeta = is_array($chat->user_metadata) ? $chat->user_metadata : [];
-        $guestName = $this->resolveGuestName($userMeta, $chat->external_user_id);
-        $title = $sourceName . ': ' . $guestName;
-        $body = Str::limit($this->text, 100);
-
         try {
             Http::withHeaders([
                 'Authorization' => 'key='.$serverKey,
@@ -107,15 +84,10 @@ final class SendFcmPushNotificationJob implements ShouldQueue
             ])->post('https://fcm.googleapis.com/fcm/send', [
                 'to' => $token,
                 'notification' => [
-                    'title' => $title,
-                    'body' => $body,
+                    'title' => $built['title'],
+                    'body' => $built['body'],
                 ],
-                'data' => [
-                    'chat_id' => (string) $this->chatId,
-                    'message_id' => (string) $this->messageId,
-                    'action' => 'new_message',
-                    'url' => '/chat?chat=' . $this->chatId,
-                ],
+                'data' => $built['data'],
             ]);
         } catch (\Throwable $e) {
             Log::error('FCM push failed', [
@@ -123,24 +95,5 @@ final class SendFcmPushNotificationJob implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
-    }
-
-    /** @param array<string, mixed> $userMeta */
-    private function resolveGuestName(array $userMeta, string $externalUserId): string
-    {
-        $name = isset($userMeta['name']) && is_scalar($userMeta['name'])
-            ? trim((string) $userMeta['name'])
-            : '';
-
-        if ($name !== '' && ! $this->isPlaceholderGuestName($name)) {
-            return $name;
-        }
-
-        return $externalUserId !== '' ? $externalUserId : 'Гость';
-    }
-
-    private function isPlaceholderGuestName(string $value): bool
-    {
-        return in_array(mb_strtolower(trim($value)), ['гость', 'guest', 'клиент', 'client'], true);
     }
 }

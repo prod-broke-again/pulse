@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { PushNotifications } from '@capacitor/push-notifications'
+import type { Router } from 'vue-router'
 import * as deviceApi from '../api/deviceRepository'
 
 const DEVICE_TOKEN_PREF = 'pulse:devicePushToken'
@@ -80,6 +81,24 @@ export async function registerPushWithBackend(): Promise<void> {
       settled = true
       reject(new Error('Таймаут регистрации push'))
     }, 25_000)
+  })
+}
+
+/**
+ * Открытие чата по тапу на push (FCM data: chat_id / message_id).
+ */
+export function setupPushNotificationDeepLinks(router: Router): void {
+  if (!Capacitor.isNativePlatform()) {
+    return
+  }
+  void PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+    const data = event.notification.data as Record<string, string | undefined> | undefined
+    const raw = data?.chat_id ?? data?.chatId
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return
+    }
+    const id = String(raw).trim()
+    void router.push({ name: 'chat', params: { id } })
   })
 }
 

@@ -8,6 +8,9 @@ import App from './App.vue'
 import router from './router'
 import { initializeCapacitor } from './lib/capacitor'
 import { parseOAuthCallbackParams } from './lib/oauthUrl'
+import { setupPushNotificationDeepLinks } from './lib/pushDevice'
+import { useChatStore } from './stores/chatStore'
+import { useInboxStore } from './stores/inboxStore'
 import { useUiStore } from './stores/uiStore'
 
 const app = createApp(App)
@@ -16,7 +19,17 @@ setActivePinia(pinia)
 app.use(pinia)
 app.use(router)
 
-initializeCapacitor()
+initializeCapacitor({
+  onAppBecameActive: () => {
+    void useInboxStore().loadInbox()
+    const chat = useChatStore()
+    if (chat.activeChatId) {
+      void chat.fetchThread(chat.activeChatId)
+    }
+  },
+})
+
+setupPushNotificationDeepLinks(router)
 
 /** Native: return from IdP via pulseapp://auth/callback?... */
 if (Capacitor.isNativePlatform()) {

@@ -4,10 +4,11 @@ import type { ApiMessageRow } from './types'
 
 export async function fetchMessages(
   chatId: number,
-  opts: { beforeId?: number; limit?: number } = {},
+  opts: { beforeId?: number; afterId?: number; limit?: number } = {},
 ): Promise<ApiMessageRow[]> {
   const params: Record<string, number> = { limit: opts.limit ?? 50 }
   if (opts.beforeId != null) params.before_id = opts.beforeId
+  if (opts.afterId != null) params.after_id = opts.afterId
   const res = await http.get<{ data: ApiMessageRow[] }>(`/chats/${chatId}/messages`, { params })
   return res.data.data
 }

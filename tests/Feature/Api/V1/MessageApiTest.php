@@ -123,6 +123,33 @@ final class MessageApiTest extends TestCase
         }
     }
 
+    public function test_list_messages_with_after_id_returns_only_newer_messages(): void
+    {
+        $m1 = MessageModel::create([
+            'chat_id' => $this->chat->id,
+            'sender_type' => 'client',
+            'text' => 'Old',
+            'payload' => [],
+            'is_read' => false,
+        ]);
+        $m2 = MessageModel::create([
+            'chat_id' => $this->chat->id,
+            'sender_type' => 'client',
+            'text' => 'Newer',
+            'payload' => [],
+            'is_read' => false,
+        ]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson("/api/v1/chats/{$this->chat->id}/messages?after_id={$m1->id}");
+
+        $response->assertOk();
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertSame($m2->id, $data[0]['id']);
+        $this->assertSame('Newer', $data[0]['text']);
+    }
+
     public function test_list_messages_respects_limit(): void
     {
         for ($i = 0; $i < 10; $i++) {
@@ -172,6 +199,33 @@ final class MessageApiTest extends TestCase
             'sender_type' => 'moderator',
             'sender_id' => $this->moderator->id,
         ]);
+    }
+
+    public function test_send_message_with_client_message_id_is_idempotent_for_reply_markup_only(): void
+    {
+        $uuid = Str::uuid()->toString();
+        $markup = [['text' => 'Btn', 'url' => 'https://example.com/x']];
+
+        $response1 = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson("/api/v1/chats/{$this->chat->id}/send", [
+                'text' => '',
+                'reply_markup' => $markup,
+                'client_message_id' => $uuid,
+            ]);
+
+        $response1->assertCreated();
+        $messageId = $response1->json('data.id');
+
+        $response2 = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson("/api/v1/chats/{$this->chat->id}/send", [
+                'text' => '',
+                'reply_markup' => $markup,
+                'client_message_id' => $uuid,
+            ]);
+
+        $response2->assertOk();
+        $this->assertSame($messageId, $response2->json('data.id'));
+        $this->assertSame(1, MessageModel::where('chat_id', $this->chat->id)->count());
     }
 
     public function test_send_message_with_client_message_id_is_idempotent(): void
