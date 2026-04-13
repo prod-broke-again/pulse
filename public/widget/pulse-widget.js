@@ -279,6 +279,15 @@
 
     function setStatus(text) { status.textContent = text; }
 
+    function setOperatorPresence(isOnline) {
+        if (!status) return;
+        if (isOnline === true) {
+            setStatus('Оператор на связи');
+        } else {
+            setStatus('Сейчас операторов нет в сети — ответим, как только появимся');
+        }
+    }
+
     function showOperatorTyping(senderName) {
         if (!typingEl) return;
         if (typingTimeout) clearTimeout(typingTimeout);
@@ -406,8 +415,10 @@
             email: guest.email || undefined,
             meta: { url: window.location.href, title: document.title, referrer: document.referrer || null, user_agent: navigator.userAgent }
         };
+        var sessionResponse = null;
         if (!chatToken) {
             const result = await request('/session', { method: 'POST', body: JSON.stringify(payload) });
+            sessionResponse = result;
             chatToken = result.chat_token;
             localStorage.setItem(chatTokenKey, chatToken);
             if (result.chat && result.chat.id != null) {
@@ -423,7 +434,15 @@
         var existingGuest = getGuestData();
         if (existingGuest.name) guestOnboardingCompleted = true;
         sendBtn.disabled = !chatToken;
-        setStatus(chatToken ? 'Оператор на связи' : 'Ошибка подключения');
+        if (chatToken) {
+            if (sessionResponse && typeof sessionResponse.is_online === 'boolean') {
+                setOperatorPresence(sessionResponse.is_online);
+            } else {
+                setStatus('Оператор на связи');
+            }
+        } else {
+            setStatus('Ошибка подключения');
+        }
     }
 
     async function loadMessages() {
@@ -431,13 +450,20 @@
         const result = await request(`/messages?chat_token=${encodeURIComponent(chatToken)}&limit=100`);
         msgs.innerHTML = ''; lastMessageId = 0;
         for (const message of result.messages || []) renderMessage(message);
-        if (!result.messages || result.messages.length === 0) setStatus('Напишите нам, мы скоро ответим');
+        if (typeof result.is_online === 'boolean') {
+            setOperatorPresence(result.is_online);
+        } else if (!result.messages || result.messages.length === 0) {
+            setStatus('Напишите нам, мы скоро ответим');
+        }
     }
 
     async function pollMessages() {
         if (!chatToken) return;
         const result = await request(`/messages?chat_token=${encodeURIComponent(chatToken)}&limit=30`);
         for (const message of result.messages || []) renderMessage(message);
+        if (typeof result.is_online === 'boolean') {
+            setOperatorPresence(result.is_online);
+        }
     }
 
     function loadScript(src) {
@@ -540,6 +566,9 @@
                 lastSentMessageId = result.message.id;
                 renderMessage({ id: result.message.id, text: result.message.text, sender_type: 'client', created_at: result.message.created_at });
                 if (!guestOnboardingCompleted && !getGuestData().name) showOnboardingBlock();
+            }
+            if (typeof result.is_online === 'boolean') {
+                setOperatorPresence(result.is_online);
             }
         } catch (error) { setStatus('Не удалось отправить. Повторите'); }
     });

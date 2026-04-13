@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $status
  * @property int|null $assigned_to
  * @property string|null $topic
+ * @property \Illuminate\Support\Carbon|null $last_auto_reply_at
  * @property-read int|null $unread_count
  */
 class ChatModel extends Model
@@ -34,6 +35,7 @@ class ChatModel extends Model
         'status',
         'assigned_to',
         'topic',
+        'last_auto_reply_at',
     ];
 
     /** @return array<string, string> */
@@ -41,6 +43,7 @@ class ChatModel extends Model
     {
         return [
             'user_metadata' => 'array',
+            'last_auto_reply_at' => 'datetime',
         ];
     }
 

@@ -8,7 +8,9 @@ import type { BreadcrumbItem } from '@/types';
 import { api, type ApiChat, type ApiCannedResponse } from '@/lib/api';
 import { getEcho, leaveChat, leaveModerator, subscribeToModerator } from '@/composables/useEcho';
 import { useChatMessages } from '@/composables/useChatMessages';
+import { useModeratorPresence } from '@/composables/useModeratorPresence';
 import ChatMessageItem from '@/components/chat/ChatMessageItem.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 import Button from '@/components/ui/button/Button.vue';
 import { Input } from '@/components/ui/input';
 import { Search, UserPlus, XCircle, Send, Loader2, Bell } from 'lucide-vue-next';
@@ -16,6 +18,9 @@ import { useWebPush } from '@/composables/useWebPush';
 
 const page = usePage();
 const authUser = computed(() => (page.props.auth as { user?: { id: number } })?.user);
+const isModeratorStaff = computed(
+    () => (page.props.auth as { isModeratorStaff?: boolean }).isModeratorStaff === true,
+);
 const initialChatId = computed(() => (page.props.initialChatId as number | null) ?? null);
 const reverbConfig = computed(() => page.props.reverb);
 const { supported: pushSupported, loading: pushLoading, error: pushError, subscribe: subscribePush } = useWebPush();
@@ -40,6 +45,28 @@ const selectedChat = ref<ApiChat | null>(null);
 const newMessageText = ref('');
 const cannedResponses = ref<ApiCannedResponse[]>([]);
 const assigningInProgress = ref(false);
+
+const { presence, presenceError, setManualOnline, sendActivity } = useModeratorPresence(isModeratorStaff);
+
+const debouncedPresenceActivity = useDebounceFn(() => {
+    void sendActivity();
+}, 1500);
+
+const presenceStatusLabel = computed(() => {
+    if (!isModeratorStaff.value) return '';
+    const p = presence.value;
+    if (p === null) return '';
+    if (p.manual_online && p.is_online && p.is_away) {
+        return t('chat.presence.away');
+    }
+    if (p.manual_online && p.is_online) {
+        return t('chat.presence.live');
+    }
+    if (p.manual_online && !p.is_online) {
+        return t('chat.presence.noHeartbeat');
+    }
+    return t('chat.presence.offDuty');
+});
 
 const {
     messages,
@@ -141,6 +168,7 @@ function selectChat(chat: ApiChat) {
     router.get('/chat', { chat: chat.id }, { preserveState: true });
     if (chat.source_id) fetchCannedResponses(chat.source_id);
     fetchMessages(chat.id);
+    void sendActivity();
 }
 
 function assignToMe() {
@@ -280,6 +308,20 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
             <div
                 class="flex w-full flex-col rounded-xl border border-sidebar-border/70 bg-sidebar dark:border-sidebar-border md:w-80 md:shrink-0"
             >
+                <div
+                    v-if="isModeratorStaff"
+                    class="border-sidebar-border/70 flex flex-wrap items-center gap-2 border-b px-2 py-1.5 dark:border-sidebar-border"
+                >
+                    <label class="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                            :checked="presence?.manual_online ?? false"
+                            @update:checked="(v: boolean) => setManualOnline(v)"
+                        />
+                        <span>{{ t('chat.presence.onDuty') }}</span>
+                    </label>
+                    <span class="text-xs text-muted-foreground">{{ presenceStatusLabel }}</span>
+                    <span v-if="presenceError" class="text-xs text-destructive">{{ presenceError }}</span>
+                </div>
                 <div class="border-sidebar-border/70 flex flex-wrap items-center gap-2 border-b p-2 dark:border-sidebar-border">
                     <div class="flex rounded-lg bg-muted/50 p-0.5">
                         <button
@@ -521,7 +563,12 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                     type="text"
                                     :placeholder="t('chat.typeMessage')"
                                     class="min-w-0 flex-1"
-                                    @input="debouncedSendTyping"
+                                    @input="
+                                        () => {
+                                            debouncedSendTyping();
+                                            debouncedPresenceActivity();
+                                        }
+                                    "
                                 />
                                 <Button type="submit" :disabled="sendLoading || !newMessageText.trim()">
                                     <Loader2 v-if="sendLoading" class="size-4 animate-spin" />

@@ -45,9 +45,14 @@ final class WebhookControllerTest extends TestCase
         ]);
 
         $payload = [
-            'user_id' => '12345',
-            'body' => 'Hello',
-            'message_id' => 999,
+            'type' => 'message_new',
+            'object' => [
+                'message' => [
+                    'from_id' => 12345,
+                    'text' => 'Hello',
+                    'id' => 999,
+                ],
+            ],
         ];
 
         $response = $this->postJson(route('webhook.vk', ['sourceId' => $source->id]), $payload);

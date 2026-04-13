@@ -16,6 +16,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Schema;
@@ -95,6 +96,15 @@ class SourceModelResource extends Resource
                     ->maxLength(512)
                     ->columnSpanFull()
                     ->nullable(),
+                Toggle::make('offline_auto_reply_enabled')
+                    ->label('Автоответ при отсутствии модераторов онлайн')
+                    ->helperText('Не чаще 1 раза в 30 минут на чат, только если никто из модераторов не в сети (heartbeat + переключатель).')
+                    ->default(false),
+                Textarea::make('offline_auto_reply_text')
+                    ->label('Текст автоответа (офлайн)')
+                    ->rows(3)
+                    ->columnSpanFull()
+                    ->nullable(),
             ])
                 ->statePath('settings')
                 ->visible(fn (callable $get): bool => $get('type') === 'vk')
@@ -124,6 +134,19 @@ class SourceModelResource extends Resource
                 ->reorderable()
                 ->hidden(fn (callable $get): bool => $get('type') === 'vk')
                 ->dehydrated(fn (callable $get): bool => $get('type') !== 'vk'),
+            Group::make([
+                Toggle::make('offline_auto_reply_enabled')
+                    ->label('Автоответ при отсутствии модераторов онлайн')
+                    ->helperText('Не чаще 1 раза в 30 минут на чат, только если никто из модераторов не в сети (heartbeat + переключатель).')
+                    ->default(false),
+                Textarea::make('offline_auto_reply_text')
+                    ->label('Текст автоответа (офлайн)')
+                    ->rows(3)
+                    ->columnSpanFull()
+                    ->nullable(),
+            ])
+                ->visible(fn (callable $get): bool => $get('type') !== 'vk')
+                ->columnSpanFull(),
             Placeholder::make('integration_wizard')
                 ->label('Мастер подключения')
                 ->content(function (?SourceModel $record): string {

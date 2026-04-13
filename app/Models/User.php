@@ -10,6 +10,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -71,6 +72,11 @@ class User extends Authenticatable implements FilamentUser
     public function assignedChats(): HasMany
     {
         return $this->hasMany(\App\Infrastructure\Persistence\Eloquent\ChatModel::class, 'assigned_to');
+    }
+
+    public function moderatorPresence(): HasOne
+    {
+        return $this->hasOne(ModeratorPresence::class);
     }
 
     /** Moderator's departments (only those departments' chats appear in "Нераспределённые"). */

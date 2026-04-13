@@ -41,7 +41,14 @@
         "cannedResponses": "Canned responses",
         "attachments": "Attachments",
         "enableNotifications": "Enable notifications",
-        "notificationsEnabled": "Notifications enabled"
+        "notificationsEnabled": "Notifications enabled",
+        "presence": {
+            "onDuty": "On duty (accepting chats)",
+            "live": "Status: online",
+            "away": "Status: away (inactive)",
+            "noHeartbeat": "Status: no heartbeat — check connection",
+            "offDuty": "Status: off duty"
+        }
     },
     "errors": {
         "network": "Network error",

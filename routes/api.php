@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ChatController;
 use App\Http\Controllers\Api\V1\ChatMessageController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\ModeratorPresenceController;
 use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use App\Http\Controllers\Api\V1\QuickLinkController;
 use App\Http\Controllers\Api\V1\SsoExchangeController;
@@ -80,5 +81,13 @@ Route::prefix('v1')->group(function (): void {
 
         // Web Push subscriptions
         Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('api.v1.push-subscriptions.store');
+
+        // Moderator presence (web / desktop / mobile)
+        Route::prefix('moderator/presence')->group(function (): void {
+            Route::get('/me', [ModeratorPresenceController::class, 'me'])->name('api.v1.moderator.presence.me');
+            Route::post('/toggle', [ModeratorPresenceController::class, 'toggle'])->name('api.v1.moderator.presence.toggle');
+            Route::post('/heartbeat', [ModeratorPresenceController::class, 'heartbeat'])->name('api.v1.moderator.presence.heartbeat');
+            Route::post('/activity', [ModeratorPresenceController::class, 'activity'])->name('api.v1.moderator.presence.activity');
+        });
     });
 });

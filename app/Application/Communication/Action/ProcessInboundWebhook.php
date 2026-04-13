@@ -12,7 +12,9 @@ use App\Domains\Integration\Repository\DepartmentRepositoryInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
 use App\Domains\Integration\ValueObject\SourceType;
 use App\Infrastructure\Integration\Client\VkApiClient;
+use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Jobs\DownloadInboundAttachmentJob;
+use App\Services\MaybeSendOfflineAutoReply;
 use Illuminate\Support\Facades\Log;
 
 final readonly class ProcessInboundWebhook
@@ -23,6 +25,7 @@ final readonly class ProcessInboundWebhook
         private CreateMessage $createMessage,
         private SourceRepositoryInterface $sourceRepository,
         private DepartmentRepositoryInterface $departmentRepository,
+        private MaybeSendOfflineAutoReply $maybeSendOfflineAutoReply,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -83,10 +86,15 @@ final readonly class ProcessInboundWebhook
         );
 
         $this->dispatchAttachmentDownloads($attachments, $message->id);
+
+        $chatModel = ChatModel::query()->find($chat->id);
+        if ($chatModel !== null) {
+            $this->maybeSendOfflineAutoReply->run($chatModel);
+        }
     }
 
     /**
-     * @param list<array{url: string, file_name: string, mime_type: string, kind?: string}> $attachments
+     * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      */
     private function dispatchAttachmentDownloads(array $attachments, int $messageId): void
     {
@@ -104,7 +112,7 @@ final readonly class ProcessInboundWebhook
     /**
      * Extract downloadable attachment info from webhook payload.
      *
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
      */
     private function extractAttachments(array $payload): array
@@ -244,12 +252,13 @@ final readonly class ProcessInboundWebhook
         if ($first === null) {
             throw new \InvalidArgumentException("No department configured for source: {$sourceId}");
         }
+
         return $first->id;
     }
 
     /** @param array<string, mixed> $payload */
     /**
-     * @param list<array{url: string, file_name: string, mime_type: string, kind?: string}> $attachments
+     * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      */
     private function extractText(array $payload, array $attachments): string
     {
@@ -342,7 +351,7 @@ final readonly class ProcessInboundWebhook
     }
 
     /**
-     * @param list<array{url: string, file_name: string, mime_type: string, kind?: string}> $attachments
+     * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      */
     private function buildAttachmentPlaceholderText(array $attachments): string
     {
@@ -372,7 +381,7 @@ final readonly class ProcessInboundWebhook
     }
 
     /**
-     * @param list<array{url: string, file_name: string, mime_type: string, kind?: string}> $attachments
+     * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
      */
     private function uniqueAttachments(array $attachments): array
@@ -399,9 +408,9 @@ final readonly class ProcessInboundWebhook
     }
 
     /**
-     * @param array<string, mixed> $settings
-     * @param array<string, mixed> $payload
-     * @param array<string, mixed> $userMetadata
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $userMetadata
      * @return array<string, mixed>
      */
     private function enrichUserMetadataFromSource(
@@ -459,8 +468,8 @@ final readonly class ProcessInboundWebhook
     }
 
     /**
-     * @param array<string, mixed> $current
-     * @param array<string, mixed> $incoming
+     * @param  array<string, mixed>  $current
+     * @param  array<string, mixed>  $incoming
      * @return array<string, mixed>
      */
     private function mergeUserMetadata(array $current, array $incoming): array

@@ -10,6 +10,8 @@ use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Jobs\GenerateChatTopicJob;
 use App\Models\WidgetConfig;
+use App\Services\MaybeSendOfflineAutoReply;
+use App\Services\ModeratorPresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -19,6 +21,11 @@ use Illuminate\Validation\ValidationException;
 
 final class WidgetApiController extends Controller
 {
+    public function __construct(
+        private readonly ModeratorPresenceService $moderatorPresenceService,
+        private readonly MaybeSendOfflineAutoReply $maybeSendOfflineAutoReply,
+    ) {}
+
     public function config(): JsonResponse
     {
         $driver = config('broadcasting.default');
@@ -157,15 +164,19 @@ final class WidgetApiController extends Controller
         $guestName = isset($userMeta['name']) ? (string) $userMeta['name'] : null;
         $guestEmail = isset($userMeta['email']) ? (string) $userMeta['email'] : null;
 
+        $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($source->id);
+
         return response()->json([
             'ok' => true,
             'chat_token' => $this->makeChatToken($chat),
+            'is_online' => $isOnline,
             'chat' => [
                 'id' => $chat->id,
                 'status' => $chat->status,
                 'department' => $chat->department?->name,
                 'guest_name' => $guestName,
                 'guest_email' => $guestEmail,
+                'is_online' => $isOnline,
             ],
         ]);
     }
@@ -197,8 +208,11 @@ final class WidgetApiController extends Controller
             ])
             ->all();
 
+        $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($chat->source_id);
+
         return response()->json([
             'ok' => true,
+            'is_online' => $isOnline,
             'messages' => $messages,
         ]);
     }
@@ -249,8 +263,14 @@ final class WidgetApiController extends Controller
             GenerateChatTopicJob::dispatch($chat->id);
         }
 
+        $chat->refresh();
+        $this->maybeSendOfflineAutoReply->run($chat);
+
+        $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($chat->source_id);
+
         return response()->json([
             'ok' => true,
+            'is_online' => $isOnline,
             'message' => [
                 'id' => $message->id,
                 'sender_type' => $message->sender_type,
