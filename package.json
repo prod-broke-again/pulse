@@ -15,7 +15,10 @@
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix",
-        "client": " cd desktop-client && npm run dev"
+        "desktop:dev": "npm run dev -w pulse-desktop",
+        "desktop:build": "npm run build -w pulse-desktop",
+        "desktop:preview": "npm run preview -w pulse-desktop",
+        "client": "npm run desktop:dev"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",

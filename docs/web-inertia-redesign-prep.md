@@ -1,6 +1,6 @@
 # Подготовка Inertia-редизайна (новый веб) на базе desktop UX
 
-Цель: после паритета `desktop-client` и `apps/pulse-mobile` по API v1 вынести UI на новый Inertia 2 + Vue 3, повторно используя паттерны из `desktop-client` (layouts, компоненты чата, инбокс).
+Цель: после паритета `apps/pulse-desktop` и `apps/pulse-mobile` по API v1 вынести UI на новый Inertia 2 + Vue 3, повторно используя паттерны из десктопа (layouts, компоненты чата, инбокс).
 
 ## Принципы
 
@@ -18,5 +18,5 @@
 ## Технические якоря в репозитории
 
 - API: [`routes/api.php`](../routes/api.php), [`app/Http/Controllers/Api/V1`](../app/Http/Controllers/Api/V1)
-- Референс UX: [`desktop-client/src`](../desktop-client/src)
+- Референс UX: [`apps/pulse-desktop/src`](../apps/pulse-desktop/src)
 - Push (веб): [`resources/js/composables/useWebPush.ts`](../resources/js/composables/useWebPush.ts), [`app/Services/Push/ModeratorPushSupport.php`](../app/Services/Push/ModeratorPushSupport.php)
