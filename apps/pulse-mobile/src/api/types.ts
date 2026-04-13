@@ -2,6 +2,7 @@
 export interface ApiChatRow {
   id: number
   source_id?: number | null
+  department_id?: number | null
   assigned_to?: number | null
   assignee?: { id: number; name: string } | null
   status: string
@@ -16,7 +17,7 @@ export interface ApiChatRow {
   last_message_at?: string | null
   user_metadata?: { name?: string } | null
   source?: { type?: string } | null
-  department?: { name?: string; category?: string } | null
+  department?: { id?: number; name?: string; category?: string } | null
 }
 
 export interface ApiPaginatedMeta {
@@ -68,4 +69,13 @@ export interface ApiCannedResponse {
   title: string
   text: string
   is_active?: boolean
+}
+
+export interface ApiQuickLink {
+  id: number
+  source_id?: number | null
+  title: string
+  url: string
+  is_active?: boolean
+  sort_order?: number
 }

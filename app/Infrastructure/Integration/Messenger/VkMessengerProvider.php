@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Infrastructure\Integration\Messenger;
 
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
+use App\Exceptions\MessengerDeliveryFailedException;
 use App\Infrastructure\Integration\Client\VkApiClient;
+use Illuminate\Support\Facades\Log;
+use VK\Exceptions\VKApiException as VkApiException;
 
 final class VkMessengerProvider implements MessengerProviderInterface
 {
@@ -23,7 +26,30 @@ final class VkMessengerProvider implements MessengerProviderInterface
             unset($params['reply_markup']);
         }
 
-        $this->client->sendMessage($externalUserId, $text, $params);
+        try {
+            $this->client->sendMessage($externalUserId, $text, $params);
+        } catch (VkApiException $e) {
+            Log::warning('VK messages.send failed', [
+                'external_user_id' => $externalUserId,
+                'vk_error_code' => $e->getErrorCode(),
+                'vk_message' => $e->getMessage(),
+            ]);
+
+            throw new MessengerDeliveryFailedException(
+                $this->friendlyMessageForVkError($e),
+                $e,
+            );
+        }
+    }
+
+    private function friendlyMessageForVkError(VkApiException $e): string
+    {
+        return match ($e->getErrorCode()) {
+            5, 15 => 'ВКонтакте: не настроен или недействителен токен доступа сообщества. Проверьте токен в настройках источника.',
+            901 => 'ВКонтакте: пользователь запретил сообщения от сообщества.',
+            945 => 'ВКонтакте: чат недоступен для отправки.',
+            default => 'ВКонтакте: не удалось отправить сообщение ('.$e->getMessage().').',
+        };
     }
 
     /**

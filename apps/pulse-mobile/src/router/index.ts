@@ -5,6 +5,8 @@ import HistoryPage from '../pages/HistoryPage.vue'
 import InboxPage from '../pages/InboxPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
 import SettingsPage from '../pages/SettingsPage.vue'
+import SettingsQuickLinksPage from '../pages/SettingsQuickLinksPage.vue'
+import SettingsTemplatesPage from '../pages/SettingsTemplatesPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,6 +37,16 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: SettingsPage,
+    },
+    {
+      path: '/settings/templates',
+      name: 'settings-templates',
+      component: SettingsTemplatesPage,
+    },
+    {
+      path: '/settings/quick-links',
+      name: 'settings-quick-links',
+      component: SettingsQuickLinksPage,
     },
     {
       path: '/chat/:id',

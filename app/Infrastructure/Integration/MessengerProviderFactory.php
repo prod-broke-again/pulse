@@ -14,6 +14,7 @@ use App\Infrastructure\Integration\Messenger\MaxMessengerProvider;
 use App\Infrastructure\Integration\Messenger\TelegramMessengerProvider;
 use App\Infrastructure\Integration\Messenger\VkMessengerProvider;
 use App\Infrastructure\Integration\Messenger\WebMessengerProvider;
+use Illuminate\Support\Facades\Config;
 use TH\MAX\Client\MAXClient;
 use TH\MAX\Client\Request\MAXRequest;
 
@@ -23,7 +24,7 @@ final class MessengerProviderFactory implements MessengerProviderFactoryInterfac
     {
         return match ($source->type) {
             SourceType::Vk => new VkMessengerProvider(
-                new VkApiClient((string) ($source->settings['access_token'] ?? '')),
+                new VkApiClient($this->vkAccessToken($source)),
             ),
             SourceType::Tg => new TelegramMessengerProvider(
                 new TelegramApiClient((string) ($source->settings['bot_token'] ?? '')),
@@ -33,5 +34,16 @@ final class MessengerProviderFactory implements MessengerProviderFactoryInterfac
             ),
             SourceType::Web => new WebMessengerProvider,
         };
+    }
+
+    private function vkAccessToken(Source $source): string
+    {
+        $fromSettings = $source->settings['access_token'] ?? null;
+
+        if (is_string($fromSettings) && $fromSettings !== '') {
+            return $fromSettings;
+        }
+
+        return (string) Config::get('pulse.vk.bot_token', '');
     }
 }

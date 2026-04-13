@@ -47,3 +47,19 @@ export async function closeChat(chatId: number): Promise<ApiChatRow> {
   const res = await http.post<{ data: ApiChatRow }>(`/chats/${chatId}/close`)
   return res.data.data
 }
+
+export interface DepartmentOption {
+  id: number
+  name: string
+  slug: string
+}
+
+export async function fetchDepartments(sourceId: number): Promise<DepartmentOption[]> {
+  const res = await http.get<{ data: DepartmentOption[] }>('/departments', { params: { source_id: sourceId } })
+  return res.data.data
+}
+
+export async function changeChatDepartment(chatId: number, departmentId: number): Promise<ApiChatRow> {
+  const res = await http.patch<{ data: ApiChatRow }>(`/chats/${chatId}/department`, { department_id: departmentId })
+  return res.data.data
+}

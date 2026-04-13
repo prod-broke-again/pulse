@@ -309,4 +309,85 @@ final class ChatApiTest extends TestCase
         $this->assertTrue($m1->fresh()->is_read);
         $this->assertTrue($m2->fresh()->is_read);
     }
+
+    // --- DEPARTMENTS LIST ---
+
+    public function test_departments_index_returns_for_source(): void
+    {
+        $dept2 = DepartmentModel::create([
+            'source_id' => $this->source->id,
+            'name' => 'Billing',
+            'slug' => 'billing',
+            'is_active' => true,
+        ]);
+
+        $this->moderator->departments()->sync([$this->department->id, $dept2->id]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson('/api/v1/departments?source_id='.$this->source->id);
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($this->department->id, $ids);
+        $this->assertContains($dept2->id, $ids);
+    }
+
+    // --- CHANGE DEPARTMENT ---
+
+    public function test_change_department_updates_chat(): void
+    {
+        $dept2 = DepartmentModel::create([
+            'source_id' => $this->source->id,
+            'name' => 'Billing',
+            'slug' => 'billing-'.uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->moderator->departments()->sync([$this->department->id, $dept2->id]);
+
+        $chat = $this->createChat(['department_id' => $this->department->id]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->patchJson("/api/v1/chats/{$chat->id}/department", [
+                'department_id' => $dept2->id,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.department_id', $dept2->id)
+            ->assertJsonPath('data.department.id', $dept2->id);
+
+        $this->assertDatabaseHas('chats', [
+            'id' => $chat->id,
+            'department_id' => $dept2->id,
+        ]);
+    }
+
+    public function test_change_department_rejects_foreign_department(): void
+    {
+        $otherSource = SourceModel::create([
+            'name' => 'Other',
+            'type' => 'tg',
+            'identifier' => 'other_src_'.uniqid(),
+            'secret_key' => null,
+            'settings' => [],
+        ]);
+
+        $foreignDept = DepartmentModel::create([
+            'source_id' => $otherSource->id,
+            'name' => 'Foreign',
+            'slug' => 'foreign-'.uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->moderator->departments()->sync([$this->department->id]);
+
+        $chat = $this->createChat(['department_id' => $this->department->id]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->patchJson("/api/v1/chats/{$chat->id}/department", [
+                'department_id' => $foreignDept->id,
+            ]);
+
+        $response->assertStatus(422);
+    }
 }

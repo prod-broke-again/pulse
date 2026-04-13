@@ -2,13 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CannedResponseController;
 use App\Http\Controllers\Api\V1\ChatAiController;
 use App\Http\Controllers\Api\V1\ChatController;
 use App\Http\Controllers\Api\V1\ChatMessageController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\PushSubscriptionController;
+use App\Http\Controllers\Api\V1\QuickLinkController;
 use App\Http\Controllers\Api\V1\SsoExchangeController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\Webhooks\IdUserRevokedWebhookController;
@@ -35,6 +38,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/chats/tab-counts', [ChatController::class, 'tabCounts'])->name('api.v1.chats.tab-counts');
         Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.v1.chats.show');
         Route::post('/chats/{chat}/assign-me', [ChatController::class, 'assignMe'])->name('api.v1.chats.assign-me');
+        Route::patch('/chats/{chat}/department', [ChatController::class, 'changeDepartment'])->name('api.v1.chats.department');
         Route::post('/chats/{chat}/close', [ChatController::class, 'close'])->name('api.v1.chats.close');
         Route::post('/chats/{chat}/typing', [ChatController::class, 'typing'])->name('api.v1.chats.typing');
         Route::get('/chats/{chat}/ai/summary', [ChatAiController::class, 'summary'])->name('api.v1.chats.ai.summary');
@@ -50,8 +54,24 @@ Route::prefix('v1')->group(function (): void {
         // Uploads
         Route::post('/uploads', [UploadController::class, 'store'])->name('api.v1.uploads.store');
 
+        // Departments (для смены отдела в чате)
+        Route::get('/departments', [DepartmentController::class, 'index'])->name('api.v1.departments.index');
+
+        // Analytics
+        Route::get('/analytics/overview', [AnalyticsController::class, 'overview'])->name('api.v1.analytics.overview');
+
         // Canned Responses
         Route::get('/canned-responses', [CannedResponseController::class, 'index'])->name('api.v1.canned-responses.index');
+        Route::post('/canned-responses', [CannedResponseController::class, 'store'])->name('api.v1.canned-responses.store');
+        Route::patch('/canned-responses/{cannedResponse}', [CannedResponseController::class, 'update'])->name('api.v1.canned-responses.update');
+        Route::delete('/canned-responses/{cannedResponse}', [CannedResponseController::class, 'destroy'])->name('api.v1.canned-responses.destroy');
+
+        // Quick links (reply_markup presets)
+        Route::get('/quick-links', [QuickLinkController::class, 'index'])->name('api.v1.quick-links.index');
+        Route::post('/quick-links', [QuickLinkController::class, 'store'])->name('api.v1.quick-links.store');
+        Route::post('/quick-links/reorder', [QuickLinkController::class, 'reorder'])->name('api.v1.quick-links.reorder');
+        Route::patch('/quick-links/{quickLink}', [QuickLinkController::class, 'update'])->name('api.v1.quick-links.update');
+        Route::delete('/quick-links/{quickLink}', [QuickLinkController::class, 'destroy'])->name('api.v1.quick-links.destroy');
 
         // Device Tokens (FCM)
         Route::post('/devices/register-token', [DeviceController::class, 'register'])->name('api.v1.devices.register');

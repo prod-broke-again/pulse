@@ -62,13 +62,19 @@ const emit = defineEmits<{
       </div>
       <div class="mt-0.5 flex flex-wrap items-center gap-1.5">
         <span
-          v-if="chat.status === 'closed'"
-          class="rounded-md bg-[var(--zinc-200)] px-[7px] py-0.5 text-[10px] font-semibold text-[var(--zinc-600)] dark:bg-[var(--zinc-700)] dark:text-[var(--zinc-300)]"
+          class="rounded-md px-[7px] py-0.5 text-[10px] font-semibold"
+          :class="
+            chat.status === 'open'
+              ? 'bg-[rgba(34,197,94,0.12)] text-[#16a34a] dark:bg-[rgba(34,197,94,0.15)] dark:text-[#4ade80]'
+              : 'bg-[var(--zinc-200)] text-[var(--zinc-600)] dark:bg-[var(--zinc-700)] dark:text-[var(--zinc-300)]'
+          "
         >
-          Закрыт
+          {{ chat.status === 'open' ? 'Открыт' : 'Закрыт' }}
         </span>
         <span
-          class="rounded-md bg-[var(--color-brand-50)] px-[7px] py-0.5 text-[10px] font-semibold text-[var(--color-brand-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
+          v-if="chat.department"
+          class="max-w-[min(140px,45vw)] truncate rounded-md bg-[var(--color-brand-50)] px-[7px] py-0.5 text-[10px] font-semibold text-[var(--color-brand-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
+          :title="chat.department"
         >
           {{ chat.department }}
         </span>

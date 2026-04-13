@@ -7,6 +7,7 @@ namespace App\Http\Requests\Api\V1;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 final class SendMessageRequest extends FormRequest
 {
@@ -19,7 +20,11 @@ final class SendMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'text' => ['required_without:attachments', 'nullable', 'string', 'max:10000'],
+            'text' => [
+                'nullable',
+                'string',
+                'max:10000',
+            ],
             'attachments' => ['sometimes', 'array', 'max:10'],
             'attachments.*' => ['string'],
             'client_message_id' => ['sometimes', 'nullable', 'string', 'uuid', 'max:36'],
@@ -39,5 +44,24 @@ final class SendMessageRequest extends FormRequest
             'reply_markup.*.text' => ['required', 'string', 'max:40'],
             'reply_markup.*.url' => ['required', 'url'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $text = $this->input('text');
+            $hasText = is_string($text) && trim($text) !== '';
+            $attachments = $this->input('attachments');
+            $hasAttachments = is_array($attachments) && count($attachments) > 0;
+            $markup = $this->input('reply_markup');
+            $hasMarkup = is_array($markup) && count($markup) > 0;
+
+            if (! $hasText && ! $hasAttachments && ! $hasMarkup) {
+                $validator->errors()->add(
+                    'text',
+                    __('validation.required', ['attribute' => 'text']),
+                );
+            }
+        });
     }
 }

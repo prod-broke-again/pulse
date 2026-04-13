@@ -59,4 +59,21 @@ return [
         'replay_tolerance_seconds' => (int) env('PULSE_ID_WEBHOOK_REPLAY_TOLERANCE', 300),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | VK (community token + Callback API defaults)
+    |--------------------------------------------------------------------------
+    |
+    | Outbound: group access token for messages.send when the source has no
+    | settings.access_token. Inbound: optional fallback for webhook secret and
+    | confirmation string when the Filament source fields are empty.
+    |
+    */
+    'vk' => [
+        'bot_token' => (string) env('VK_BOT_TOKEN', ''),
+        'group_id' => (string) env('VK_GROUP_ID', ''),
+        'callback_secret' => (string) env('VK_CALLBACK_SECRET', ''),
+        'callback_confirmation' => (string) env('VK_CALLBACK_CONFIRMATION', ''),
+    ],
+
 ];

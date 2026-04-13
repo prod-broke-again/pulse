@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import * as aiApi from '../api/aiRepository'
 import * as cannedApi from '../api/cannedResponseRepository'
 import * as chatApi from '../api/chatRepository'
+import * as quickLinkApi from '../api/quickLinkRepository'
 import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
 import { subscribeChatChannel } from '../lib/realtime'
@@ -36,6 +37,8 @@ export const useChatStore = defineStore('chat', () => {
   const pendingReplyMarkup = ref<ReplyMarkupButton[]>([])
   /** Canned responses for quick-reply chips (from API; ComposerBar falls back if empty). */
   const cannedQuickReplies = ref<Array<{ label: string; text: string }>>([])
+  /** Quick link buttons for Zap menu (from API). */
+  const quickLinkPresets = ref<ReplyMarkupButton[]>([])
 
   let aiTimers: number[] = []
   let unsubscribeRealtime: (() => void) | null = null
@@ -80,6 +83,8 @@ export const useChatStore = defineStore('chat', () => {
       channel: preview.channel,
       channelLabel: chat.channel_label ?? 'Web',
       departmentLabel: preview.department,
+      sourceId: chat.source_id ?? null,
+      departmentId: chat.department_id ?? chat.department?.id ?? null,
       aiSummaryBar: prev?.aiSummaryBar ?? 'Нет данных AI для этого чата.',
       assignedToUserId: assigneeUserId(chat),
     }
@@ -117,6 +122,22 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function changeDepartment(departmentId: number): Promise<void> {
+    const chatId = activeChatId.value
+    if (!chatId) return
+    const id = Number(chatId)
+    if (!Number.isFinite(id)) return
+    const ui = useUiStore()
+    try {
+      const chat = await chatApi.changeChatDepartment(id, departmentId)
+      applyThreadMetaFromApiChat(chat, chatId)
+      await useInboxStore().loadInbox()
+      ui.pushToast('Отдел обновлён', 'success')
+    } catch {
+      ui.pushToast('Не удалось сменить отдел', 'error')
+    }
+  }
+
   async function markAsRead(chatIdNum: number): Promise<void> {
     const lastId = maxMessageIdFromList()
     if (lastId <= 0) return
@@ -142,14 +163,20 @@ export const useChatStore = defineStore('chat', () => {
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
     cannedQuickReplies.value = []
+    quickLinkPresets.value = []
 
     try {
       const chat = await chatApi.fetchChat(id)
-      const [rows, aiSummary, cannedRows] = await Promise.all([
+      const [rows, aiSummary, cannedRows, linkRows] = await Promise.all([
         msgApi.fetchMessages(id, { limit: 50 }),
         aiApi.fetchAiSummary(id).catch(() => null),
         cannedApi
           .fetchCannedResponses(
+            chat.source_id != null ? { source_id: chat.source_id } : undefined,
+          )
+          .catch(() => []),
+        quickLinkApi
+          .fetchQuickLinks(
             chat.source_id != null ? { source_id: chat.source_id } : undefined,
           )
           .catch(() => []),
@@ -160,6 +187,11 @@ export const useChatStore = defineStore('chat', () => {
         text: r.text,
       }))
 
+      quickLinkPresets.value = linkRows.map((l) => ({
+        text: l.title,
+        url: l.url,
+      }))
+
       const preview = mapApiChatToPreview(chat)
       threadMeta.value = {
         id: chatId,
@@ -168,6 +200,8 @@ export const useChatStore = defineStore('chat', () => {
         channel: preview.channel,
         channelLabel: chat.channel_label ?? 'Web',
         departmentLabel: preview.department,
+        sourceId: chat.source_id ?? null,
+        departmentId: chat.department_id ?? chat.department?.id ?? null,
         aiSummaryBar:
           aiSummary?.summary?.trim() ||
           aiSummary?.intent_tag?.trim() ||
@@ -235,7 +269,10 @@ export const useChatStore = defineStore('chat', () => {
     composerText.value = value
   }
 
-  const canSend = computed(() => composerText.value.trim().length > 0)
+  const canSend = computed(
+    () =>
+      composerText.value.trim().length > 0 || pendingReplyMarkup.value.length > 0,
+  )
 
   function pad2(n: number) {
     return n.toString().padStart(2, '0')
@@ -252,11 +289,11 @@ export const useChatStore = defineStore('chat', () => {
   async function sendMessage() {
     const text = composerText.value.trim()
     const chatId = activeChatId.value
-    if (!text || !chatId) return
+    const markupSnapshot = [...pendingReplyMarkup.value]
+    if ((!text && markupSnapshot.length === 0) || !chatId) return
     const id = Number(chatId)
     if (!Number.isFinite(id)) return
 
-    const markupSnapshot = [...pendingReplyMarkup.value]
     const clientMessageId = crypto.randomUUID?.() ?? `cm-${Date.now()}`
     const now = new Date()
     const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
@@ -266,7 +303,7 @@ export const useChatStore = defineStore('chat', () => {
       {
         id: tempId,
         kind: 'outgoing',
-        text,
+        text: text || '\u00a0',
         time,
         clientMessageId,
         ...(markupSnapshot.length > 0 ? { reply_markup: markupSnapshot } : {}),
@@ -276,7 +313,7 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const payload: Parameters<typeof msgApi.sendMessage>[1] = {
-        text,
+        text: text || '',
         client_message_id: clientMessageId,
       }
       if (markupSnapshot.length > 0) {
@@ -434,6 +471,7 @@ export const useChatStore = defineStore('chat', () => {
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
     cannedQuickReplies.value = []
+    quickLinkPresets.value = []
   }
 
   return {
@@ -450,6 +488,7 @@ export const useChatStore = defineStore('chat', () => {
     threadMeta,
     pendingReplyMarkup,
     cannedQuickReplies,
+    quickLinkPresets,
     channelSource,
     fetchThread,
     loadOlderMessages,
@@ -472,5 +511,6 @@ export const useChatStore = defineStore('chat', () => {
     markAsRead,
     assignToMe,
     closeThread,
+    changeDepartment,
   }
 })

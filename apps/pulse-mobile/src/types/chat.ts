@@ -64,6 +64,10 @@ export interface ChatThreadMeta {
   channel: ChannelSource
   channelLabel: string
   departmentLabel: string
+  /** Источник чата — для списка отделов (GET /departments). */
+  sourceId: number | null
+  /** Текущий отдел (id). */
+  departmentId: number | null
   aiSummaryBar: string
   /** Pulse user id of assignee; null if unassigned. */
   assignedToUserId: number | null

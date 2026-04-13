@@ -6,15 +6,10 @@ import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
 const chat = useChatStore()
-const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies } = storeToRefs(chat)
+const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies, quickLinkPresets } =
+  storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
 const actionsDetails = ref<HTMLDetailsElement | null>(null)
-
-const actionPresets: ReplyMarkupButton[] = [
-  { text: 'Поиск психолога', url: 'https://kukushechka.ru/psychologists' },
-  { text: 'Личный кабинет', url: 'https://appp-psy.ru' },
-  { text: 'Сброс пароля', url: 'https://id.appp-psy.ru/forgot-password' },
-]
 
 function pickPreset(btn: ReplyMarkupButton) {
   chat.addReplyMarkupPreset(btn)
@@ -123,9 +118,15 @@ function onSend() {
         <div
           class="absolute bottom-[calc(100%+6px)] left-0 z-20 min-w-[220px] overflow-hidden rounded-xl border border-[var(--zinc-700)] bg-[var(--zinc-850)] py-1 shadow-lg dark:bg-[var(--zinc-850)]"
         >
+          <div
+            v-if="quickLinkPresets.length === 0"
+            class="px-3 py-2.5 text-xs text-[var(--zinc-400)]"
+          >
+            Нет быстрых ссылок для этого источника
+          </div>
           <button
-            v-for="(preset, idx) in actionPresets"
-            :key="idx"
+            v-for="(preset, idx) in quickLinkPresets"
+            :key="`${preset.url}-${idx}`"
             type="button"
             class="flex w-full cursor-pointer px-3 py-2.5 text-left text-sm text-[var(--zinc-100)] transition-colors hover:bg-[var(--zinc-800)]"
             @click="pickPreset(preset)"

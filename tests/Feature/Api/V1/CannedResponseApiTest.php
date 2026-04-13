@@ -33,6 +33,8 @@ final class CannedResponseApiTest extends TestCase
             'secret_key' => null,
             'settings' => [],
         ]);
+
+        $this->moderator->sources()->sync([$this->source->id]);
     }
 
     public function test_list_canned_responses_returns_active_only(): void

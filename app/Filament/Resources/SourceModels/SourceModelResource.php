@@ -14,11 +14,14 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 
 class SourceModelResource extends Resource
 {
@@ -56,6 +59,7 @@ class SourceModelResource extends Resource
                     'tg' => 'Telegram-бот',
                     'max' => 'Мессенджер MAX',
                 ])
+                ->live()
                 ->required(),
             TextInput::make('identifier')
                 ->label('Идентификатор')
@@ -65,13 +69,61 @@ class SourceModelResource extends Resource
             TextInput::make('secret_key')
                 ->label('Секретный ключ')
                 ->password()
+                ->revealable()
                 ->maxLength(255)
-                ->helperText('VK: payload.secret, Telegram: X-Telegram-Bot-Api-Secret-Token, MAX: X-Max-Bot-Secret'),
-            KeyValue::make('settings')
+                ->helperText('VK: payload.secret (тот же «Секретный ключ», что в Callback API сообщества), Telegram: X-Telegram-Bot-Api-Secret-Token, MAX: X-Max-Bot-Secret'),
+            Group::make([
+                Textarea::make('access_token')
+                    ->label('ВК: токен доступа сообщества (access_token)')
+                    ->helperText('Ключ API из настроек сообщества ВК (хранится в JSON settings).')
+                    ->rows(4)
+                    ->columnSpanFull()
+                    ->nullable(),
+                TextInput::make('group_id')
+                    ->label('ВК: ID сообщества (group_id)')
+                    ->numeric()
+                    ->nullable(),
+                TextInput::make('vk_callback_confirmation')
+                    ->label('ВК: строка подтверждения Callback API')
+                    ->helperText('Текст из блока «Подтверждение адреса сервера» (не JSON).')
+                    ->maxLength(255)
+                    ->nullable(),
+                TextInput::make('public_app_url')
+                    ->label('Публичный URL приложения (для подсказки вебхука)')
+                    ->helperText('Если задан — в «Мастере подключения» ниже подставится этот хост вместо APP_URL (например https://pulse.appp-psy.ru).')
+                    ->url()
+                    ->maxLength(512)
+                    ->columnSpanFull()
+                    ->nullable(),
+            ])
+                ->statePath('settings')
+                ->visible(fn (callable $get): bool => $get('type') === 'vk')
+                ->columnSpanFull(),
+            Placeholder::make('settings_json_preview')
+                ->label('JSON settings (как сохранено в БД)')
+                ->helperText('Только чтение. Обновляется после «Сохранить»; несохранённые правки в полях выше в JSON не попадут.')
+                ->content(function (?SourceModel $record): HtmlString {
+                    $settings = $record?->settings ?? [];
+                    $json = json_encode(
+                        is_array($settings) ? $settings : [],
+                        JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                    );
+
+                    return new HtmlString(
+                        '<pre class="fi-input-wrp rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-gray-900 dark:border-white/10 dark:bg-white/5 dark:text-gray-100 max-h-96 overflow-y-auto">'
+                        .e($json)
+                        .'</pre>',
+                    );
+                })
+                ->visible(fn (callable $get): bool => $get('type') === 'vk')
+                ->columnSpanFull(),
+            KeyValue::make('connection_settings')
                 ->label('Настройки подключения')
                 ->keyLabel('Ключ')
                 ->valueLabel('Значение')
-                ->reorderable(),
+                ->reorderable()
+                ->hidden(fn (callable $get): bool => $get('type') === 'vk')
+                ->dehydrated(fn (callable $get): bool => $get('type') !== 'vk'),
             Placeholder::make('integration_wizard')
                 ->label('Мастер подключения')
                 ->content(function (?SourceModel $record): string {
@@ -79,7 +131,8 @@ class SourceModelResource extends Resource
                         return '1) Сначала сохраните источник. 2) Создайте отделы. 3) Используйте URL вебхука ниже в настройках бота.';
                     }
 
-                    $base = rtrim((string) config('app.url'), '/');
+                    $publicUrl = $record->settings['public_app_url'] ?? null;
+                    $base = rtrim((string) (is_string($publicUrl) && $publicUrl !== '' ? $publicUrl : config('app.url')), '/');
                     $webhook = match ($record->type) {
                         'vk' => $base.'/webhook/vk/'.$record->id,
                         'tg' => $base.'/webhook/telegram/'.$record->id,
@@ -87,7 +140,11 @@ class SourceModelResource extends Resource
                         default => $base.'/api/widget/session',
                     };
 
-                    return "Webhook / endpoint:\n{$webhook}\n\nДля встраивания виджета: {$base}/widget/pulse-widget.js";
+                    $vkExtra = $record->type === 'vk'
+                        ? "\n\nВК: в поле «Секретный ключ» укажите тот же ключ, что в Callback API сообщества; в «строка подтверждения» — значение из экрана подтверждения."
+                        : '';
+
+                    return "Webhook / endpoint:\n{$webhook}{$vkExtra}\n\nДля встраивания виджета: {$base}/widget/pulse-widget.js";
                 }),
             Select::make('users')
                 ->label('Модераторы / Администраторы')

@@ -229,6 +229,22 @@ final class MessageApiTest extends TestCase
             ->assertJsonPath('data.text', 'Admin message');
     }
 
+    public function test_send_message_accepts_reply_markup_without_text(): void
+    {
+        $replyMarkup = [
+            ['text' => 'Кабинет', 'url' => 'https://example.com/app'],
+        ];
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->postJson("/api/v1/chats/{$this->chat->id}/send", [
+                'text' => '',
+                'reply_markup' => $replyMarkup,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.reply_markup', $replyMarkup);
+    }
+
     public function test_send_message_persists_reply_markup(): void
     {
         $replyMarkup = [

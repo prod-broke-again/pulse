@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ChevronLeft, UserPlus, X } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { ChevronLeft, UserPlus, X, Loader2 } from 'lucide-vue-next'
+import { Teleport, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import * as chatApi from '../../api/chatRepository'
 import type { ChatThreadMeta, ChannelSource } from '../../types/chat'
 import ChannelGlyph from '../common/ChannelGlyph.vue'
 import { useAuthStore } from '../../stores/authStore'
@@ -25,6 +26,13 @@ const showAssignButton = computed(() => {
 
 const showCloseButton = computed(() => props.meta.status === 'open')
 const headerAction = ref<'assign' | 'close' | null>(null)
+
+const deptSheetOpen = ref(false)
+const departmentsLoading = ref(false)
+
+const showDepartmentPicker = computed(
+  () => props.meta.status === 'open' && props.meta.sourceId != null,
+)
 
 function channelColor(ch: ChannelSource) {
   if (ch === 'tg') return '#2AABEE'
@@ -54,6 +62,35 @@ async function onCloseChat() {
   } finally {
     headerAction.value = null
   }
+}
+
+const departments = ref<Awaited<ReturnType<typeof chatApi.fetchDepartments>>>([])
+
+async function openDeptSheet(): Promise<void> {
+  const sid = props.meta.sourceId
+  if (sid == null) return
+  deptSheetOpen.value = true
+  departmentsLoading.value = true
+  try {
+    departments.value = await chatApi.fetchDepartments(sid)
+  } catch {
+    departments.value = []
+  } finally {
+    departmentsLoading.value = false
+  }
+}
+
+function closeDeptSheet(): void {
+  deptSheetOpen.value = false
+}
+
+function pickDepartment(id: number): void {
+  if (id === props.meta.departmentId) {
+    closeDeptSheet()
+    return
+  }
+  closeDeptSheet()
+  void chat.changeDepartment(id)
 }
 </script>
 
@@ -85,7 +122,15 @@ async function onCloseChat() {
           <ChannelGlyph :channel="meta.channel" :size="10" />
         </span>
         <span :style="{ color: channelColor(meta.channel) }">{{ meta.channelLabel }}</span>
-        <span>· {{ meta.departmentLabel }}</span>
+        <button
+          v-if="showDepartmentPicker"
+          type="button"
+          class="min-w-0 truncate border-none bg-transparent p-0 text-left text-[11px] text-[var(--zinc-400)] underline decoration-dotted underline-offset-2"
+          @click="openDeptSheet()"
+        >
+          · {{ meta.departmentLabel }}
+        </button>
+        <span v-else>· {{ meta.departmentLabel }}</span>
       </div>
     </div>
     <div class="flex gap-1">
@@ -118,5 +163,50 @@ async function onCloseChat() {
         />
       </button>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="deptSheetOpen"
+        class="fixed inset-0 z-[100] flex flex-col justify-end bg-black/40"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Выбор отдела"
+        @click.self="closeDeptSheet"
+      >
+        <div
+          class="max-h-[70vh] overflow-y-auto rounded-t-2xl bg-white px-4 pb-[calc(16px+var(--safe-bottom))] pt-4 dark:bg-[var(--zinc-900)]"
+          @click.stop
+        >
+          <div class="mb-3 text-sm font-semibold text-[var(--color-dark)] dark:text-[var(--zinc-100)]">
+            Перевести в отдел
+          </div>
+          <div v-if="departmentsLoading" class="flex justify-center py-8">
+            <Loader2 class="size-8 animate-spin text-[var(--color-brand)]" aria-hidden="true" />
+          </div>
+          <p v-else-if="departments.length === 0" class="py-4 text-center text-sm text-[var(--zinc-500)]">
+            Нет доступных отделов
+          </p>
+          <ul v-else class="space-y-1 pb-2">
+            <li v-for="d in departments" :key="d.id">
+              <button
+                type="button"
+                class="flex w-full rounded-xl px-3 py-3 text-left text-sm font-medium text-[var(--color-dark)] transition active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+                :class="d.id === meta.departmentId ? 'bg-[var(--color-brand-bg)] dark:bg-[var(--zinc-800)]' : ''"
+                @click="pickDepartment(d.id)"
+              >
+                {{ d.name }}
+              </button>
+            </li>
+          </ul>
+          <button
+            type="button"
+            class="mt-2 w-full rounded-xl border border-[var(--color-gray-line)] py-2.5 text-sm font-medium text-[var(--zinc-600)] dark:border-[var(--zinc-700)] dark:text-[var(--zinc-300)]"
+            @click="closeDeptSheet"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

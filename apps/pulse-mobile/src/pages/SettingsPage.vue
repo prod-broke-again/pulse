@@ -6,6 +6,7 @@ import {
   Bell,
   ChevronRight,
   FileText,
+  Link2,
   LogOut,
   Moon,
   Sparkles,
@@ -93,6 +94,58 @@ async function onLogout() {
           <div class="mt-0.5 text-xs text-[var(--zinc-500)]">{{ displaySubtitle }}</div>
         </div>
         <ChevronRight class="ml-auto size-4 shrink-0 text-[var(--zinc-300)] dark:text-[var(--zinc-600)]" />
+      </div>
+
+      <div class="mb-6">
+        <div
+          class="px-1 pb-2 text-[11px] font-bold uppercase tracking-wide text-[var(--zinc-400)]"
+        >
+          Чат и контент
+        </div>
+        <div
+          class="overflow-hidden rounded-2xl border border-[var(--color-gray-line)] bg-white dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)]"
+        >
+          <button
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-3 border-b border-[var(--color-gray-line)] px-4 py-3.5 text-left dark:border-[var(--zinc-700)]"
+            @click="router.push({ name: 'settings-templates' })"
+          >
+            <div
+              class="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-brand-50)] text-[var(--color-brand)] dark:bg-[rgba(85,23,94,0.2)] dark:text-[var(--color-brand-200)]"
+            >
+              <FileText class="size-[15px]" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium text-[var(--color-dark)] dark:text-[var(--zinc-100)]">
+                Шаблоны ответов
+              </div>
+              <div class="mt-px text-xs text-[var(--zinc-400)]">
+                Редактирование быстрых текстов
+              </div>
+            </div>
+            <ChevronRight class="size-3.5 shrink-0 text-[var(--zinc-300)] dark:text-[var(--zinc-600)]" />
+          </button>
+          <button
+            type="button"
+            class="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left"
+            @click="router.push({ name: 'settings-quick-links' })"
+          >
+            <div
+              class="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#e0e7ff] text-[#4f46e5] dark:bg-[rgba(79,70,229,0.2)] dark:text-[#a5b4fc]"
+            >
+              <Link2 class="size-[15px]" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium text-[var(--color-dark)] dark:text-[var(--zinc-100)]">
+                Быстрые ссылки
+              </div>
+              <div class="mt-px text-xs text-[var(--zinc-400)]">
+                Кнопки с URL для отправки в чат
+              </div>
+            </div>
+            <ChevronRight class="size-3.5 shrink-0 text-[var(--zinc-300)] dark:text-[var(--zinc-600)]" />
+          </button>
+        </div>
       </div>
 
       <div class="mb-6">

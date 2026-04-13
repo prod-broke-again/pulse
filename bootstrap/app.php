@@ -90,4 +90,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
         });
+
+        $exceptions->render(function (\App\Exceptions\MessengerDeliveryFailedException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'code' => 'MESSENGER_DELIVERY_FAILED',
+                ], 502);
+            }
+        });
     })->create();

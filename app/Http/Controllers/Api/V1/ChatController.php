@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Application\Communication\Action\AssignChatToModerator;
+use App\Application\Communication\Action\ChangeChatDepartment;
 use App\Application\Communication\Query\ListChatsQuery;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Events\UserTyping as UserTypingEvent;
+use App\Http\Requests\Api\V1\ChangeChatDepartmentRequest;
 use App\Http\Requests\Api\V1\ListChatsRequest;
 use App\Http\Resources\Api\V1\ChatResource;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
@@ -122,6 +124,26 @@ final class ChatController extends Controller
 
         return response()->json([
             'data' => ['message' => 'OK'],
+        ]);
+    }
+
+    public function changeDepartment(
+        ChatModel $chat,
+        ChangeChatDepartmentRequest $request,
+        ChangeChatDepartment $action,
+    ): JsonResponse {
+        Gate::authorize('update', $chat);
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        $action->run($chat->id, (int) $request->validated('department_id'), $user);
+
+        $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->loadUnreadCountForUser($user);
+
+        return response()->json([
+            'data' => new ChatResource($chat),
         ]);
     }
 }
