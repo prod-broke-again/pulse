@@ -1,16 +1,10 @@
 import { http } from '../lib/http'
+import { buildSourceListParams, type SourceListQueryParams } from './sourceListQueryParams'
 import type { ApiCannedResponse } from './types'
 
-export async function fetchCannedResponses(params?: {
-  source_id?: number
-  q?: string
-  include_inactive?: boolean
-}): Promise<ApiCannedResponse[]> {
+export async function fetchCannedResponses(params?: SourceListQueryParams): Promise<ApiCannedResponse[]> {
   const res = await http.get<{ data: ApiCannedResponse[] }>('/canned-responses', {
-    params: {
-      ...params,
-      include_inactive: params?.include_inactive ? 1 : undefined,
-    },
+    params: buildSourceListParams(params),
   })
   return res.data.data
 }

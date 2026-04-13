@@ -6,11 +6,14 @@ import * as chatApi from '../api/chatRepository'
 import * as quickLinkApi from '../api/quickLinkRepository'
 import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
+import { maxNumericMessageIdFromList, parseApiChatId } from '../lib/chatIds'
 import { playIncomingTone, vibrateIncoming } from '../lib/notificationFeedback'
 import { subscribeChatChannel } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
-import { mapApiMessageToChatMessage, mapRealtimePayloadToChatMessage } from '../mappers/messageMapper'
+import { mapApiMessageToChatMessage } from '../mappers/messageMapper'
+import { appendRealtimeMessageIfNew, mergeFetchedNewerRows } from './chat/realtimeMerge'
 import { useAuthStore } from './authStore'
+import { useChatUiStore } from './chatUiStore'
 import { useInboxStore } from './inboxStore'
 import { useSettingsStore } from './settingsStore'
 import { useUiStore } from './uiStore'
@@ -28,10 +31,7 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const composerText = ref('')
   const isTyping = ref(false)
-  const aiProcessing = ref(false)
   const aiContent = ref<AiPanelContent | null>(null)
-  const overlayVisible = ref(false)
-  const panelOpen = ref(false)
   const loadingOlder = ref(false)
   const hasMoreOlder = ref(true)
   const oldestMessageId = ref<number | null>(null)
@@ -42,7 +42,6 @@ export const useChatStore = defineStore('chat', () => {
   /** Quick link buttons for Zap menu (from API). */
   const quickLinkPresets = ref<ReplyMarkupButton[]>([])
 
-  let aiTimers: number[] = []
   let unsubscribeRealtime: (() => void) | null = null
   let typingClearTimer: number | null = null
   let readNearBottomTimer: number | null = null
@@ -56,18 +55,8 @@ export const useChatStore = defineStore('chat', () => {
 
   const channelSource = computed((): ChannelSource | null => threadMeta.value?.channel ?? null)
 
-  function clearAiTimers() {
-    aiTimers.forEach((t) => window.clearTimeout(t))
-    aiTimers = []
-  }
-
   function maxMessageIdFromList(): number {
-    let max = 0
-    for (const m of messages.value) {
-      const n = Number(m.id)
-      if (Number.isFinite(n) && n > max) max = n
-    }
-    return max
+    return maxNumericMessageIdFromList(messages.value.map((m) => m.id))
   }
 
   function assigneeUserId(chat: ApiChatRow): number | null {
@@ -94,13 +83,12 @@ export const useChatStore = defineStore('chat', () => {
 
   async function assignToMe(): Promise<void> {
     const chatId = activeChatId.value
-    if (!chatId) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
     const ui = useUiStore()
     try {
       const chat = await chatApi.assignMe(id)
-      applyThreadMetaFromApiChat(chat, chatId)
+      applyThreadMetaFromApiChat(chat, chatId!)
       await useInboxStore().loadInbox()
       ui.pushToast('Чат назначен на вас', 'success')
     } catch {
@@ -110,13 +98,12 @@ export const useChatStore = defineStore('chat', () => {
 
   async function closeThread(): Promise<void> {
     const chatId = activeChatId.value
-    if (!chatId) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
     const ui = useUiStore()
     try {
       const chat = await chatApi.closeChat(id)
-      applyThreadMetaFromApiChat(chat, chatId)
+      applyThreadMetaFromApiChat(chat, chatId!)
       await useInboxStore().loadInbox()
       ui.pushToast('Чат закрыт', 'success')
     } catch {
@@ -126,13 +113,12 @@ export const useChatStore = defineStore('chat', () => {
 
   async function changeDepartment(departmentId: number): Promise<void> {
     const chatId = activeChatId.value
-    if (!chatId) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
     const ui = useUiStore()
     try {
       const chat = await chatApi.changeChatDepartment(id, departmentId)
-      applyThreadMetaFromApiChat(chat, chatId)
+      applyThreadMetaFromApiChat(chat, chatId!)
       await useInboxStore().loadInbox()
       ui.pushToast('Отдел обновлён', 'success')
     } catch {
@@ -157,8 +143,8 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function fetchThread(chatId: string): Promise<void> {
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
 
     activeChatId.value = chatId
     loadingOlder.value = true
@@ -246,8 +232,8 @@ export const useChatStore = defineStore('chat', () => {
     const chatId = activeChatId.value
     const before = oldestMessageId.value
     if (!chatId || before == null || loadingOlder.value || !hasMoreOlder.value) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
 
     loadingOlder.value = true
     try {
@@ -293,8 +279,8 @@ export const useChatStore = defineStore('chat', () => {
     const chatId = activeChatId.value
     const markupSnapshot = [...pendingReplyMarkup.value]
     if ((!text && markupSnapshot.length === 0) || !chatId) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
 
     const clientMessageId = crypto.randomUUID?.() ?? `cm-${Date.now()}`
     const now = new Date()
@@ -338,8 +324,8 @@ export const useChatStore = defineStore('chat', () => {
   async function sendWithAttachments(files: File[]) {
     const chatId = activeChatId.value
     if (!chatId || files.length === 0) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
 
     const paths: string[] = []
     for (const f of files) {
@@ -364,31 +350,9 @@ export const useChatStore = defineStore('chat', () => {
     composerText.value = text
   }
 
-  function openAiPanel() {
-    clearAiTimers()
-    overlayVisible.value = true
-    aiProcessing.value = true
-    const t1 = window.setTimeout(() => {
-      panelOpen.value = true
-    }, 10)
-    const t2 = window.setTimeout(() => {
-      aiProcessing.value = false
-    }, 1200)
-    aiTimers.push(t1, t2)
-  }
-
-  function closeAiPanel() {
-    panelOpen.value = false
-    const t = window.setTimeout(() => {
-      overlayVisible.value = false
-      aiProcessing.value = false
-    }, 350)
-    aiTimers.push(t)
-  }
-
   function useAiReply(text: string) {
     composerText.value = text
-    closeAiPanel()
+    useChatUiStore().closeAiPanel()
   }
 
   function setTyping(value: boolean) {
@@ -397,8 +361,8 @@ export const useChatStore = defineStore('chat', () => {
 
   function subscribeThread(chatId: string): void {
     unsubscribeRealtime?.()
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
 
     const auth = useAuthStore()
     unsubscribeRealtime = subscribeChatChannel(id, {
@@ -417,27 +381,12 @@ export const useChatStore = defineStore('chat', () => {
           try {
             const newer = await msgApi.fetchMessages(id, { afterId: prevMax, limit: 30 })
             if (newer.length > 0) {
-              const byId = new Map(messages.value.map((m) => [m.id, m]))
-              for (const row of newer) {
-                byId.set(String(row.id), mapApiMessageToChatMessage(row))
-              }
-              messages.value = Array.from(byId.values()).sort((a, b) => {
-                const na = Number(a.id)
-                const nb = Number(b.id)
-                if (Number.isFinite(na) && Number.isFinite(nb)) {
-                  return na - nb
-                }
-                return String(a.id).localeCompare(String(b.id))
-              })
+              messages.value = mergeFetchedNewerRows(messages.value, newer)
             } else {
-              const mapped = mapRealtimePayloadToChatMessage(payload)
-              if (messages.value.some((m) => m.id === mapped.id)) return
-              messages.value = [...messages.value, mapped]
+              messages.value = appendRealtimeMessageIfNew(messages.value, payload)
             }
           } catch {
-            const mapped = mapRealtimePayloadToChatMessage(payload)
-            if (messages.value.some((m) => m.id === mapped.id)) return
-            messages.value = [...messages.value, mapped]
+            messages.value = appendRealtimeMessageIfNew(messages.value, payload)
           }
           if (payload.sender_type === 'client') {
             playIncomingTone(settings.sound)
@@ -484,9 +433,8 @@ export const useChatStore = defineStore('chat', () => {
 
   function onThreadScrolledNearBottom(): void {
     const chatId = activeChatId.value
-    if (!chatId) return
-    const id = Number(chatId)
-    if (!Number.isFinite(id)) return
+    const id = parseApiChatId(chatId)
+    if (id == null) return
     if (readNearBottomTimer != null) window.clearTimeout(readNearBottomTimer)
     readNearBottomTimer = window.setTimeout(() => {
       readNearBottomTimer = null
@@ -507,15 +455,25 @@ export const useChatStore = defineStore('chat', () => {
     quickLinkPresets.value = []
   }
 
+  /** Delegates to {@link useChatUiStore} for backwards-compatible API. */
+  function openAiPanel() {
+    useChatUiStore().openAiPanel()
+  }
+
+  function closeAiPanel() {
+    useChatUiStore().closeAiPanel()
+  }
+
+  function clearAiTimers() {
+    useChatUiStore().clearAiTimers()
+  }
+
   return {
     activeChatId,
     messages,
     composerText,
     isTyping,
-    aiProcessing,
     aiContent,
-    overlayVisible,
-    panelOpen,
     loadingOlder,
     hasMoreOlder,
     threadMeta,

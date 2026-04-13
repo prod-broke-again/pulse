@@ -3,15 +3,18 @@ import { ArrowRight, ArrowUpRight, Sparkles, Tag, X } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import type { AiPanelContent } from '../../types/chat'
 import { useChatStore } from '../../stores/chatStore'
+import { useChatUiStore } from '../../stores/chatUiStore'
 import { useUiStore } from '../../stores/uiStore'
 
 const chat = useChatStore()
+const chatUi = useChatUiStore()
 const ui = useUiStore()
-const { overlayVisible, panelOpen, aiProcessing, aiContent } = storeToRefs(chat)
+const { overlayVisible, panelOpen, aiProcessing } = storeToRefs(chatUi)
+const { aiContent } = storeToRefs(chat)
 
 function onTransfer(_content: AiPanelContent) {
   ui.pushToast('Обращение передано в отдел регистрации', 'success')
-  chat.closeAiPanel()
+  chatUi.closeAiPanel()
 }
 </script>
 
@@ -21,7 +24,7 @@ function onTransfer(_content: AiPanelContent) {
       class="ai-overlay-fade absolute inset-0 z-50 bg-black/40 dark:bg-black/60"
       :class="overlayVisible ? 'block opacity-100' : 'pointer-events-none hidden opacity-0'"
       aria-hidden="true"
-      @click="chat.closeAiPanel()"
+      @click="chatUi.closeAiPanel()"
     />
     <div
       class="ai-panel-slide absolute bottom-0 left-0 right-0 z-[51] flex max-h-[75vh] flex-col overflow-hidden rounded-t-[20px] bg-white dark:bg-[var(--zinc-850)]"
@@ -42,7 +45,7 @@ function onTransfer(_content: AiPanelContent) {
           type="button"
           class="flex size-8 cursor-pointer items-center justify-center rounded-xl border-none bg-[var(--color-brand-50)] text-[13px] text-[var(--color-brand)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
           aria-label="Закрыть"
-          @click="chat.closeAiPanel()"
+          @click="chatUi.closeAiPanel()"
         >
           <X class="size-4" />
         </button>

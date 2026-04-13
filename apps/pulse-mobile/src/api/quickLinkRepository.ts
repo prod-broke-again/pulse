@@ -1,16 +1,10 @@
 import { http } from '../lib/http'
+import { buildSourceListParams, type SourceListQueryParams } from './sourceListQueryParams'
 import type { ApiQuickLink } from './types'
 
-export async function fetchQuickLinks(params?: {
-  source_id?: number
-  q?: string
-  include_inactive?: boolean
-}): Promise<ApiQuickLink[]> {
+export async function fetchQuickLinks(params?: SourceListQueryParams): Promise<ApiQuickLink[]> {
   const res = await http.get<{ data: ApiQuickLink[] }>('/quick-links', {
-    params: {
-      ...params,
-      include_inactive: params?.include_inactive ? 1 : undefined,
-    },
+    params: buildSourceListParams(params),
   })
   return res.data.data
 }
