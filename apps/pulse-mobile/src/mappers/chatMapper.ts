@@ -36,8 +36,18 @@ function formatTimeLabel(iso: string | undefined): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(d)
 }
 
+function resolveGuestName(row: ApiChatRow): string {
+  const raw = row.user_metadata?.name?.trim() ?? ''
+  const normalized = raw.toLowerCase()
+  if (raw && !['гость', 'guest', 'клиент', 'client'].includes(normalized)) {
+    return raw
+  }
+
+  return row.external_user_id?.trim() || 'Клиент'
+}
+
 export function mapApiChatToPreview(row: ApiChatRow): ChatPreviewItem {
-  const name = row.user_metadata?.name?.trim() || 'Клиент'
+  const name = resolveGuestName(row)
   const channel = channelFromApi(row.channel ?? row.source?.type)
   const department = row.category_label ?? row.department?.name ?? 'Поддержка'
   const status = row.status === 'closed' ? 'closed' : 'open'

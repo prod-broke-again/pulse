@@ -8,6 +8,7 @@ use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
@@ -31,18 +32,51 @@ final class DownloadInboundAttachmentJob implements ShouldQueue
         public string $fileUrl,
         public string $fileName,
         public string $mimeType,
+        public ?string $kind = null,
     ) {}
 
     public function handle(): void
     {
-        $message = MessageModel::find($this->messageId);
-        if ($message === null) {
-            Log::warning('DownloadInboundAttachmentJob: message not found', ['message_id' => $this->messageId]);
-
-            return;
-        }
-
         try {
+            $alreadyProcessed = false;
+
+            DB::transaction(function () use (&$alreadyProcessed): void {
+                $message = MessageModel::query()
+                    ->whereKey($this->messageId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($message === null) {
+                    Log::warning('DownloadInboundAttachmentJob: message not found', ['message_id' => $this->messageId]);
+                    $alreadyProcessed = true;
+
+                    return;
+                }
+
+                $payload = $message->payload ?? [];
+                $existingAttachments = is_array($payload['attachments'] ?? null) ? $payload['attachments'] : [];
+                $alreadyExists = collect($existingAttachments)->contains(function ($item): bool {
+                    if (! is_array($item)) {
+                        return false;
+                    }
+
+                    $existingSource = isset($item['source_url']) ? trim((string) $item['source_url']) : '';
+                    $existingKind = isset($item['kind']) ? trim((string) $item['kind']) : '';
+
+                    return $existingSource !== ''
+                        && $existingSource === trim($this->fileUrl)
+                        && $existingKind === trim((string) ($this->kind ?? ''));
+                });
+
+                if ($alreadyExists) {
+                    $alreadyProcessed = true;
+                }
+            });
+
+            if ($alreadyProcessed) {
+                return;
+            }
+
             $tempDir = 'temp/inbound';
             $localName = Str::uuid()->toString().'_'.$this->fileName;
             $tempPath = $tempDir.'/'.$localName;
@@ -61,22 +95,51 @@ final class DownloadInboundAttachmentJob implements ShouldQueue
             Storage::disk('local')->put($tempPath, $response->body());
             $fullPath = Storage::disk('local')->path($tempPath);
 
-            $media = $message
-                ->addMedia($fullPath)
-                ->usingFileName($localName)
-                ->toMediaCollection('attachments');
+            DB::transaction(function () use ($fullPath, $localName): void {
+                $message = MessageModel::query()
+                    ->whereKey($this->messageId)
+                    ->lockForUpdate()
+                    ->first();
 
-            $payload = $message->payload ?? [];
-            $attachments = $payload['attachments'] ?? [];
-            $attachments[] = [
-                'id' => $media->id,
-                'name' => $this->fileName,
-                'mime_type' => $this->mimeType,
-                'size' => $media->size,
-                'url' => $media->getUrl(),
-            ];
-            $payload['attachments'] = $attachments;
-            $message->update(['payload' => $payload]);
+                if ($message === null) {
+                    return;
+                }
+
+                $payload = $message->payload ?? [];
+                $existingAttachments = is_array($payload['attachments'] ?? null) ? $payload['attachments'] : [];
+                $alreadyExists = collect($existingAttachments)->contains(function ($item): bool {
+                    if (! is_array($item)) {
+                        return false;
+                    }
+
+                    $existingSource = isset($item['source_url']) ? trim((string) $item['source_url']) : '';
+                    $existingKind = isset($item['kind']) ? trim((string) $item['kind']) : '';
+
+                    return $existingSource !== ''
+                        && $existingSource === trim($this->fileUrl)
+                        && $existingKind === trim((string) ($this->kind ?? ''));
+                });
+                if ($alreadyExists) {
+                    return;
+                }
+
+                $media = $message
+                    ->addMedia($fullPath)
+                    ->usingFileName($localName)
+                    ->toMediaCollection('attachments');
+
+                $existingAttachments[] = [
+                    'id' => $media->id,
+                    'name' => $this->fileName,
+                    'mime_type' => $this->mimeType,
+                    'size' => $media->size,
+                    'url' => $media->getUrl(),
+                    'kind' => $this->kind,
+                    'source_url' => $this->fileUrl,
+                ];
+                $payload['attachments'] = $existingAttachments;
+                $message->update(['payload' => $payload]);
+            });
 
         } catch (\Throwable $e) {
             Log::error('DownloadInboundAttachmentJob: exception', [

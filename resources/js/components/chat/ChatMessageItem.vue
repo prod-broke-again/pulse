@@ -8,6 +8,28 @@ const props = defineProps<{
 }>();
 
 const isModerator = computed(() => props.message.sender_type === 'moderator');
+const attachments = computed(() => {
+    const list = props.message.attachments ?? [];
+    const unique: typeof list = [];
+    const seen = new Set<string>();
+
+    for (const att of list) {
+        const key = `${att.url ?? ''}|${String(att.id ?? '')}|${att.name ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(att);
+    }
+
+    return unique;
+});
+
+function isImage(mime?: string): boolean {
+    return typeof mime === 'string' && mime.startsWith('image/');
+}
+
+function isAudio(mime?: string): boolean {
+    return typeof mime === 'string' && mime.startsWith('audio/');
+}
 
 const status = computed(() => {
     if (props.message.sender_type !== 'moderator') return null;
@@ -29,6 +51,36 @@ const status = computed(() => {
         ]"
     >
         <p class="whitespace-pre-wrap break-words">{{ message.text }}</p>
+        <div v-if="attachments.length" class="mt-2 space-y-2">
+            <div
+                v-for="att in attachments"
+                :key="att.id"
+                class="rounded-md border border-border/60 p-2"
+            >
+                <img
+                    v-if="isImage(att.mime_type)"
+                    :src="att.url"
+                    :alt="att.name"
+                    class="max-h-64 w-full rounded object-cover"
+                    loading="lazy"
+                />
+                <audio
+                    v-else-if="isAudio(att.mime_type)"
+                    :src="att.url"
+                    controls
+                    class="w-full"
+                />
+                <a
+                    v-else
+                    :href="att.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs underline"
+                >
+                    {{ att.name }}
+                </a>
+            </div>
+        </div>
         <div class="mt-1 flex items-center justify-end gap-1">
             <span class="text-xs opacity-80">
                 {{ new Date(message.created_at).toLocaleString() }}

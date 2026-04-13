@@ -180,11 +180,21 @@ function insertCannedResponse(item: ApiCannedResponse) {
     newMessageText.value = item.text;
 }
 
+function resolveInterlocutorName(chat: ApiChat): string {
+    const meta = chat.user_metadata as { name?: unknown } | undefined;
+    const rawName = typeof meta?.name === 'string' ? meta.name.trim() : '';
+    const normalized = rawName.toLowerCase();
+    if (rawName && !['гость', 'guest', 'клиент', 'client'].includes(normalized)) {
+        return rawName;
+    }
+
+    return chat.external_user_id ?? '—';
+}
+
 const interlocutorDisplay = computed(() => {
     const chat = selectedChat.value;
     if (!chat) return '—';
-    const meta = chat.user_metadata as { name?: string } | undefined;
-    return meta?.name ?? chat.external_user_id ?? '—';
+    return resolveInterlocutorName(chat);
 });
 
 const isAssignedToMe = computed(
@@ -200,6 +210,13 @@ watch(searchQuery, () => {
 });
 
 const messagesScrollRef = ref<HTMLElement | null>(null);
+
+function avatarUrlFromChat(chat: ApiChat | null): string | null {
+    if (!chat) return null;
+    const meta = chat.user_metadata as { avatar_url?: unknown } | undefined;
+    const raw = typeof meta?.avatar_url === 'string' ? meta.avatar_url.trim() : '';
+    return raw !== '' ? raw : null;
+}
 
 watch(messages, () => {
     nextTick(() => {
@@ -341,9 +358,23 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                             ]"
                             @click="selectChat(chat)"
                         >
-                            <span class="truncate font-medium">{{ chat.source?.name ?? '—' }}</span>
+                            <div class="mb-1 flex items-center gap-2">
+                                <img
+                                    v-if="avatarUrlFromChat(chat)"
+                                    :src="avatarUrlFromChat(chat) ?? ''"
+                                    alt="avatar"
+                                    class="h-6 w-6 rounded-full object-cover"
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                />
+                                <span
+                                    v-else
+                                    class="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground"
+                                >👤</span>
+                                <span class="truncate font-medium">{{ chat.source?.name ?? '—' }}</span>
+                            </div>
                             <span class="truncate text-xs text-muted-foreground">
-                                {{ (chat.user_metadata as { name?: string })?.name ?? chat.external_user_id ?? '—' }}
+                                {{ resolveInterlocutorName(chat) }}
                             </span>
                             <span class="truncate text-xs text-muted-foreground/80">
                                 {{ chat.topic || (chat.latest_message?.text ? (chat.latest_message.text.length > 50 ? chat.latest_message.text.slice(0, 50) + '…' : chat.latest_message.text) : '—') }}
@@ -368,7 +399,21 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                         class="border-sidebar-border/70 flex flex-wrap items-center justify-between gap-2 border-b p-3 dark:border-sidebar-border"
                     >
                         <div class="min-w-0">
-                            <h2 class="truncate font-semibold">{{ selectedChat.source?.name ?? '—' }}</h2>
+                            <div class="flex items-center gap-2">
+                                <img
+                                    v-if="avatarUrlFromChat(selectedChat)"
+                                    :src="avatarUrlFromChat(selectedChat) ?? ''"
+                                    alt="avatar"
+                                    class="h-7 w-7 rounded-full object-cover"
+                                    loading="lazy"
+                                    referrerpolicy="no-referrer"
+                                />
+                                <span
+                                    v-else
+                                    class="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground"
+                                >👤</span>
+                                <h2 class="truncate font-semibold">{{ selectedChat.source?.name ?? '—' }}</h2>
+                            </div>
                             <p class="text-xs text-muted-foreground">
                                 {{ t('chat.interlocutor') }}: {{ interlocutorDisplay }}
                             </p>

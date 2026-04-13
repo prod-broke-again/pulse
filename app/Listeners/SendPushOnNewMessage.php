@@ -12,6 +12,11 @@ final class SendPushOnNewMessage
 {
     public function handle(NewChatMessage $event): void
     {
+        // Push notifications should be sent only for inbound client messages.
+        if ($event->senderType !== 'client') {
+            return;
+        }
+
         SendFcmPushNotificationJob::dispatch(
             $event->chatId,
             $event->messageId,

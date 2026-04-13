@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Models\DeviceToken;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -35,6 +36,11 @@ final class SendFcmPushNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
+        $message = MessageModel::find($this->messageId);
+        if ($message === null || $message->sender_type !== 'client') {
+            return;
+        }
+
         $chat = ChatModel::with(['source'])->find($this->chatId);
         if ($chat === null) {
             return;
@@ -90,12 +96,7 @@ final class SendFcmPushNotificationJob implements ShouldQueue
     {
         $sourceName = $chat->source?->name ?? 'Pulse';
         $userMeta = is_array($chat->user_metadata) ? $chat->user_metadata : [];
-        $guestName = isset($userMeta['name']) && is_scalar($userMeta['name'])
-            ? (string) $userMeta['name']
-            : 'Гость';
-        if ($guestName === '') {
-            $guestName = $chat->external_user_id ?: 'Гость';
-        }
+        $guestName = $this->resolveGuestName($userMeta, $chat->external_user_id);
         $title = $sourceName . ': ' . $guestName;
         $body = Str::limit($this->text, 100);
 
@@ -122,5 +123,24 @@ final class SendFcmPushNotificationJob implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /** @param array<string, mixed> $userMeta */
+    private function resolveGuestName(array $userMeta, string $externalUserId): string
+    {
+        $name = isset($userMeta['name']) && is_scalar($userMeta['name'])
+            ? trim((string) $userMeta['name'])
+            : '';
+
+        if ($name !== '' && ! $this->isPlaceholderGuestName($name)) {
+            return $name;
+        }
+
+        return $externalUserId !== '' ? $externalUserId : 'Гость';
+    }
+
+    private function isPlaceholderGuestName(string $value): bool
+    {
+        return in_array(mb_strtolower(trim($value)), ['гость', 'guest', 'клиент', 'client'], true);
     }
 }
