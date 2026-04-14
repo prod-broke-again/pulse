@@ -1,79 +1,67 @@
-# electron-vite-vue
+# Pulse Desktop
 
-🥳 Really simple `Electron` + `Vue` + `Vite` boilerplate.
+Десктоп-клиент для модераторов Pulse (АЧПП): инбокс обращений, тред сообщений, назначение и **перехват чатов** (takeover), смена отдела, синхронизация истории с мессенджером, OAuth через ACHPP ID в окне Electron.
 
-<!-- [![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite) -->
-<!-- [![Netlify Status](https://api.netlify.com/api/v1/badges/ae3863e3-1aec-4eb1-8f9f-1890af56929d/deploy-status)](https://app.netlify.com/sites/electron-vite/deploys) -->
-<!-- [![GitHub license](https://img.shields.io/github/license/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue/blob/main/LICENSE) -->
-<!-- [![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/electron-vite-vue?color=fa6470)](https://github.com/electron-vite/electron-vite-vue) -->
-<!-- [![GitHub forks](https://img.shields.io/github/forks/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue) -->
-[![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
-[![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK)
+Стек: **Vue 3**, **TypeScript**, **Vite**, **Electron** (main/preload/renderer), **Pinia**, **Laravel Echo** + Reverb (`private-chat.*`, `private-moderator.*`), опционально **Capacitor** для мобильных оболочек (android/ios в репозитории).
 
-## Features
+Код живёт в монорепозитории Pulse: `apps/pulse-desktop` — не отдельный submodule.
 
-📦 Out of the box  
-🎯 Based on the official [template-vue-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-vue-ts), less invasive  
-🌱 Extensible, really simple directory structure  
-💪 Support using Node.js API in Electron-Renderer  
-🔩 Support C/C++ native addons  
-🖥 It's easy to implement multiple windows  
+## Требования
 
-## Quick Setup
+- Node.js 18+
+- Для сборки EXE/установщика: зависимости `electron-builder` (см. `electron-builder.json5`)
 
-```sh
-# clone the project
-git clone https://github.com/electron-vite/electron-vite-vue.git
+## Установка и запуск
 
-# enter the project directory
-cd electron-vite-vue
+Из **корня** репозитория Pulse (рекомендуется — workspaces):
 
-# install dependency
+```bash
 npm install
+npm run desktop:dev
+```
 
-# develop
+Или из этой папки:
+
+```bash
+cd apps/pulse-desktop
+npm install
 npm run dev
 ```
 
-## Debug
+`npm run dev` поднимает Vite (по умолчанию порт из конфига; для Electron см. `vite.config.ts` / `electron`).
 
-![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)
+Сборка production (typecheck + vite + electron-builder):
 
-## Directory
-
-```diff
-+ ├─┬ electron
-+ │ ├─┬ main
-+ │ │ └── index.ts    entry of Electron-Main
-+ │ └─┬ preload
-+ │   └── index.ts    entry of Preload-Scripts
-  ├─┬ src
-  │ └── main.ts       entry of Electron-Renderer
-  ├── index.html
-  ├── package.json
-  └── vite.config.ts
+```bash
+# из корня
+npm run desktop:build
 ```
 
-<!--
-## Be aware
+## Переменные окружения
 
-🚨 By default, this template integrates Node.js in the Renderer process. If you don't need it, you just remove the option below. [Because it will modify the default config of Vite](https://github.com/electron-vite/vite-plugin-electron-renderer#config-presets-opinionated).
+Скопируйте `.env.example` → `.env`. Все значения с префиксом `VITE_*` попадают в клиентский бандл.
 
-```diff
-# vite.config.ts
+| Переменная | Назначение |
+|------------|------------|
+| `VITE_API_BASE_URL` | База API Pulse, например `https://pulse.test/api/v1` |
+| `VITE_REVERB_*` | Ключ, хост, порт, схема для WebSocket (Echo) |
+| При необходимости | URL IdP, redirect для OAuth — по аналогии с мобильным клиентом и `.env.example` |
 
-export default {
-  plugins: [
--   // Use Node.js API in the Renderer-process
--   renderer({
--     nodeIntegration: true,
--   }),
-  ],
-}
+Секреты сервера в `.env` клиента не кладутся.
+
+## Поведение в сети
+
+- Очередь исходящих при офлайне (Electron + локальное хранилище) — см. `messageStore` / outbox.
+- При смене владельца чата по WebSocket обновляются список и шапка треда; поле ввода блокируется, если чат назначен **другому** модератору, пока не нажато «Забрать себе».
+
+## Структура (кратко)
+
 ```
--->
+electron/          # main, preload (IPC, OAuth callback)
+src/               # Vue: App, inbox, chat, stores, api, lib/realtime
+android/, ios/     # Capacitor (опционально)
+```
 
-## FAQ
+## Лицензия
 
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+MIT (см. `LICENSE`).

@@ -22,6 +22,28 @@ Support platform for multiple channels (Web, VK, Telegram) with department routi
 - **Laravel Socialite** — VK & Telegram login for moderators
 - **DDD** — Domains, Application, Infrastructure, Interfaces
 
+## Клиенты в монорепозитории (`apps/`)
+
+В одном репозитории с бэкендом лежат клиенты для модераторов (npm **workspaces** `apps/*`):
+
+| Каталог | Стек | Назначение |
+|---------|------|------------|
+| [`apps/pulse-mobile`](apps/pulse-mobile/README.md) | Vue 3, Vite, Capacitor | iOS / Android |
+| [`apps/pulse-desktop`](apps/pulse-desktop/README.md) | Vue 3, Vite, Electron | Windows (десктоп), опционально оболочки через Capacitor |
+
+Веб-панель модератора на **Inertia** — в корне: `resources/js/pages/Chat.vue`, маршрут `/chat` (см. Wayfinder / роуты приложения).
+
+Из корня после `npm install`:
+
+```bash
+npm run mobile:dev      # dev Vite — pulse-mobile
+npm run desktop:dev     # dev — pulse-desktop
+npm run mobile:build
+npm run desktop:build
+```
+
+Подробности по env, OAuth ACHPP ID и сборке — в README соответствующего приложения.
+
 ## Requirements
 
 - PHP 8.4 (extensions: pdo_pgsql, redis, intl, zip)
@@ -40,6 +62,7 @@ php artisan key:generate
 php artisan migrate
 php artisan db:seed
 npm install && npm run build
+# опционально: клиенты модераторов — см. apps/pulse-mobile, apps/pulse-desktop
 ```
 
 ## Установка на сервер (production)
@@ -194,6 +217,7 @@ Seed roles: `php artisan db:seed --class=RolesAndPermissionsSeeder`.
 | `/dashboard` | User dashboard (auth) |
 | `/admin` | Filament panel (admin/moderator) |
 | `/settings/*` | Profile, password, 2FA |
+| `/chat` | Inertia: панель модератора (инбокс, тред, realtime Echo) |
 | `/auth/{provider}/redirect` | Social login redirect (VK, telegram) |
 | `/auth/{provider}/callback` | Social login callback |
 
@@ -232,8 +256,9 @@ Widget script:
 
 ## Real-time
 
-- Events: `App\Events\NewChatMessage`, `App\Events\ChatAssigned`
-- Channels: `private-chat.{chatId}`, `private-moderator.{userId}`
+- Events: `App\Events\NewChatMessage`, `App\Events\ChatAssigned`, `App\Events\MessageRead`, и др.
+- Каналы: `private-chat.{chatId}`, `private-moderator.{userId}` (в т.ч. bump инбокса у назначенного модератора).
+- `ChatAssigned` — смена `assigned_to`; клиенты обновляют шапку чата и список; при передаче чата другому модератору в тред пишется **системное сообщение** (audit trail).
 - Authorization: `chat.*` — user must have role admin or moderator; `moderator.*` — own user id
 
 **Reverb vs no broadcasting**

@@ -1,40 +1,68 @@
-# Pulse Mobile (Vue + Vite + Capacitor)
+# Pulse Mobile
 
-Mobile client scaffold for Pulse, running as a workspace app in this monorepo.
+Клиент модератора Pulse для **iOS и Android** на **Vue 3**, **Vite**, **Capacitor 8**. Работает в монорепозитории Pulse (`apps/pulse-mobile`).
 
-## Scripts
+## Возможности
 
-- `npm run dev -w pulse-mobile` - start local dev server
-- `npm run build -w pulse-mobile` - production build
-- `npm run preview -w pulse-mobile` - preview build
-- `npm run cap:sync -w pulse-mobile` - build + sync Capacitor platforms
-- `npm run cap:android -w pulse-mobile` - open Android project
-- `npm run cap:ios -w pulse-mobile` - open iOS project
+- Вкладки инбокса: мои / свободные / все, поиск, открытые/закрытые.
+- Тред переписки, ответы, вложения, шаблоны и быстрые ссылки (reply markup).
+- **Назначение на себя и перехват чата** у другого модератора; при назначении не вам поле ввода блокируется до перехвата.
+- Realtime: `NewChatMessage`, `MessageRead`, `ChatAssigned` (обновление меты треда и инбокса).
+- Вход через **ACHPP ID** (OAuth2 PKCE): веб — редирект; нативно — InApp Browser и deep link `pulseapp://auth/callback`.
+- Уведомления, звук, вибрация (настройки в приложении).
 
-## Environment
+## Скрипты
 
-Copy `.env.example` to `.env.local` (or create `.env` for CI) and set only public values:
+Рекомендуется запуск из **корня** репозитория Pulse (`workspaces: apps/*`):
 
-- `VITE_API_BASE_URL`
-- `VITE_API_ORIGIN`
-- `VITE_REVERB_APP_KEY`
-- `VITE_REVERB_HOST`
-- `VITE_REVERB_PORT`
-- `VITE_REVERB_SCHEME`
-- `VITE_ACHPP_ID_BASE_URL`, `VITE_ACHPP_ID_CLIENT_ID`, `VITE_ACHPP_ID_REDIRECT_URI`, `VITE_ACHPP_ID_SCOPE` (OAuth PKCE к ACHPP ID)
-- опционально `VITE_REQUIRE_AUTH=true` — без `api-token` редирект на `/login`
+| Команда (из корня) | Действие |
+|--------------------|----------|
+| `npm install` | Установка зависимостей всех workspace |
+| `npm run mobile:dev` | Dev-сервер Vite |
+| `npm run mobile:build` | Production-сборка |
+| `npm run mobile:preview` | Превью сборки |
+| `npm run mobile:assets` | Иконки/сплэш (`capacitor-assets`) |
+
+Локально из `apps/pulse-mobile`:
+
+```bash
+npm run dev
+npm run build
+npm run cap:sync    # build + cap sync
+npm run cap:android
+npm run cap:ios
+```
+
+## Окружение
+
+Скопируйте `.env.example` → `.env` или `.env.local`. Только **публичные** переменные с префиксом `VITE_*`:
+
+- `VITE_API_BASE_URL` — API Pulse (`…/api/v1`)
+- `VITE_API_ORIGIN` — origin для `broadcasting/auth` (без `/api/v1`)
+- `VITE_REVERB_APP_KEY`, `VITE_REVERB_HOST`, `VITE_REVERB_PORT`, `VITE_REVERB_SCHEME`
+- `VITE_ACHPP_ID_BASE_URL`, `VITE_ACHPP_ID_CLIENT_ID`, `VITE_ACHPP_ID_REDIRECT_URI`, `VITE_ACHPP_ID_SCOPE`
+- Опционально `VITE_REQUIRE_AUTH=true` — без токена редирект на логин
+
+Секреты IdP и сервера только на бэкенде; в APK/IPA не кладите приватные ключи.
 
 ## Вход (ACHPP ID → Pulse)
 
-1. Public OAuth2 клиент (Passport + PKCE): для web на `localhost` используется `http://localhost:5174/auth/callback`; для нативных сборок — `pulseapp://auth/callback` (см. `MOBILE_OAUTH_REDIRECT_URI` в `src/lib/oauthConfig.ts`).
-2. Кнопка **«Войти через АЧПП ID»** вызывает `redirectToIdP()` — PKCE, `state` (base64 JSON с `platform` и nonce), web: `location.assign`, native: InApp Browser (`@capacitor/browser`).
-3. `/auth/callback` вызывает Pulse `POST /api/v1/auth/sso/exchange` с `code`, `code_verifier`, `state`, `redirect_uri` (обмен code→token на стороне Pulse). Токен Sanctum в `localStorage['api-token']`.
-4. Ручной ввод access token — только для разработки.
+1. В консоли IdP — OAuth2 public client (PKCE), redirect для web и для нативного клиента (`pulseapp://auth/callback` — см. `src/lib/oauthConfig.ts`).
+2. Обмен `code` на сессию Pulse: `POST /api/v1/auth/sso/exchange`; токен хранится как `api-token` (Preferences / localStorage в зависимости от платформы).
+3. Ручной ввод access token — только для отладки.
 
-## Security note
+## Структура (кратко)
 
-All `VITE_*` variables are embedded into the frontend bundle at build time and can be extracted from APK/IPA/web assets.
+```
+src/
+  api/           # HTTP к Pulse
+  components/    # UI чата, инбокса
+  pages/         # маршруты
+  stores/        # Pinia (чат, инбокс, auth)
+  lib/           # Echo, OAuth, id генераторы
+android/, ios/   # нативные проекты Capacitor
+```
 
-- Never store secrets in frontend env files.
-- Do not put API private keys, server keys, app secrets, signing secrets, or tokens here.
-- Keep sensitive credentials on backend only.
+## Лицензия
+
+Совпадает с корневым проектом Pulse (см. корневой `README.md`).
