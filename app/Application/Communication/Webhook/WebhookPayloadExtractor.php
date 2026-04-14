@@ -78,12 +78,22 @@ final readonly class WebhookPayloadExtractor
      */
     public function extractReplyToExternalMessageId(array $payload): ?string
     {
-        $reply = null;
-        if (isset($payload['message']['reply_to_message']) && is_array($payload['message']['reply_to_message'])) {
-            $reply = $payload['message']['reply_to_message'];
+        $containers = [
+            $payload['message'] ?? null,
+            $payload['edited_message'] ?? null,
+            $payload['channel_post'] ?? null,
+        ];
+        if (isset($payload['callback_query']['message']) && is_array($payload['callback_query']['message'])) {
+            $containers[] = $payload['callback_query']['message'];
         }
-        if (is_array($reply) && isset($reply['message_id'])) {
-            return (string) $reply['message_id'];
+        foreach ($containers as $msg) {
+            if (! is_array($msg)) {
+                continue;
+            }
+            $reply = $msg['reply_to_message'] ?? null;
+            if (is_array($reply) && isset($reply['message_id'])) {
+                return (string) $reply['message_id'];
+            }
         }
 
         $vkReply = $payload['object']['message']['reply_message'] ?? null;

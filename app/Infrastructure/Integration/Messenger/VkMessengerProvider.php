@@ -7,6 +7,7 @@ namespace App\Infrastructure\Integration\Messenger;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Exceptions\MessengerDeliveryFailedException;
 use App\Infrastructure\Integration\Client\VkApiClient;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use Illuminate\Support\Facades\Log;
 use VK\Exceptions\VKApiException as VkApiException;
 
@@ -19,6 +20,7 @@ final class VkMessengerProvider implements MessengerProviderInterface
     public function sendMessage(string $externalUserId, string $text, array $options = []): void
     {
         $params = $options;
+        $pulseMessageId = isset($params['message_id']) ? (int) $params['message_id'] : null;
         unset($params['message_id'], $params['local_attachment_paths'], $params['reply_to_external_message_id']);
 
         if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
@@ -27,7 +29,8 @@ final class VkMessengerProvider implements MessengerProviderInterface
         }
 
         try {
-            $this->client->sendMessage($externalUserId, $text, $params);
+            $response = $this->client->sendMessage($externalUserId, $text, $params);
+            $this->persistOutboundVkMessageId($pulseMessageId, $response);
         } catch (VkApiException $e) {
             Log::warning('VK messages.send failed', [
                 'external_user_id' => $externalUserId,
@@ -40,6 +43,31 @@ final class VkMessengerProvider implements MessengerProviderInterface
                 $e,
             );
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function persistOutboundVkMessageId(?int $pulseMessageId, array $response): void
+    {
+        if ($pulseMessageId === null || $pulseMessageId <= 0) {
+            return;
+        }
+
+        $rid = $response['response'] ?? null;
+        if (is_int($rid)) {
+            $ext = (string) $rid;
+        } elseif (is_array($rid) && isset($rid['message_id'])) {
+            $ext = (string) $rid['message_id'];
+        } else {
+            return;
+        }
+
+        if ($ext === '') {
+            return;
+        }
+
+        MessageModel::query()->where('id', $pulseMessageId)->update(['external_message_id' => $ext]);
     }
 
     private function friendlyMessageForVkError(VkApiException $e): string

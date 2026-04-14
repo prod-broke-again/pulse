@@ -6,6 +6,7 @@ namespace App\Infrastructure\Integration\Messenger;
 
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Infrastructure\Integration\Client\TelegramApiClient;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use Illuminate\Support\Facades\RateLimiter;
 
 final class TelegramMessengerProvider implements MessengerProviderInterface
@@ -29,6 +30,7 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
         RateLimiter::hit($key, self::SEND_RATE_DECAY_SECONDS);
 
         $params = $options;
+        $pulseMessageId = isset($params['message_id']) ? (int) $params['message_id'] : null;
         unset($params['message_id']);
 
         $localPaths = [];
@@ -46,12 +48,24 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
         }
 
         if ($localPaths !== []) {
-            $this->client->sendWithLocalFiles($externalUserId, $text, $localPaths, $params);
+            $telegramMessageId = $this->client->sendWithLocalFiles($externalUserId, $text, $localPaths, $params);
+            $this->persistOutboundTelegramMessageId($pulseMessageId, $telegramMessageId);
 
             return;
         }
 
-        $this->client->sendMessage($externalUserId, $text, $params);
+        $json = $this->client->sendMessage($externalUserId, $text, $params);
+        $telegramMessageId = $this->client->messageIdFromSendResponse($json);
+        $this->persistOutboundTelegramMessageId($pulseMessageId, $telegramMessageId);
+    }
+
+    private function persistOutboundTelegramMessageId(?int $pulseMessageId, ?string $telegramMessageId): void
+    {
+        if ($pulseMessageId === null || $pulseMessageId <= 0 || $telegramMessageId === null || $telegramMessageId === '') {
+            return;
+        }
+
+        MessageModel::query()->where('id', $pulseMessageId)->update(['external_message_id' => $telegramMessageId]);
     }
 
     /** @param array<string, mixed> $payload */

@@ -72,12 +72,38 @@ final class TelegramApiClient
     }
 
     /**
+     * Telegram message_id from sendMessage / sendPhoto / sendDocument JSON response.
+     *
+     * @param  array<string, mixed>  $json
+     */
+    public function messageIdFromSendResponse(array $json): ?string
+    {
+        if (($json['ok'] ?? false) !== true) {
+            return null;
+        }
+        $result = $json['result'] ?? null;
+        if (! is_array($result)) {
+            return null;
+        }
+        $mid = $result['message_id'] ?? null;
+        if ($mid === null && isset($result['message']) && is_array($result['message'])) {
+            $mid = $result['message']['message_id'] ?? null;
+        }
+        if (is_int($mid) || (is_string($mid) && ctype_digit($mid))) {
+            return (string) $mid;
+        }
+
+        return null;
+    }
+
+    /**
      * Send first attachment with caption (full text), others without caption. reply_to only on first outgoing.
      *
      * @param  list<string>  $absolutePaths
      * @param  array<string, mixed>  $params  reply_markup, reply_to_message_id
+     * @return Telegram message_id of the first sent message (or fallback sendMessage), if any
      */
-    public function sendWithLocalFiles(string $chatId, string $text, array $absolutePaths, array $params = []): void
+    public function sendWithLocalFiles(string $chatId, string $text, array $absolutePaths, array $params = []): ?string
     {
         if ($this->botToken === '') {
             throw new \RuntimeException('Telegram bot token is empty');
@@ -99,6 +125,7 @@ final class TelegramApiClient
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         }
 
+        $firstId = null;
         $first = true;
         foreach ($absolutePaths as $path) {
             if (! is_string($path) || ! is_file($path)) {
@@ -155,12 +182,20 @@ final class TelegramApiClient
                 throw new \RuntimeException('Telegram media send invalid response: '.$response->body());
             }
 
+            if ($first) {
+                $firstId = $this->messageIdFromSendResponse($json);
+            }
+
             $first = false;
         }
 
         if ($first === true) {
-            $this->sendMessage($chatId, $text, $params);
+            $fallback = $this->sendMessage($chatId, $text, $params);
+
+            return $this->messageIdFromSendResponse($fallback);
         }
+
+        return $firstId ?? null;
     }
 
     /**
