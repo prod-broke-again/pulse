@@ -7,6 +7,7 @@ import './style.css'
 import App from './App.vue'
 import router from './router'
 import { initializeCapacitor } from './lib/capacitor'
+import { nudgeModeratorPresenceOnForeground } from './lib/moderatorPresenceMobile'
 import { parseOAuthCallbackParams } from './lib/oauthUrl'
 import { setupPushNotificationDeepLinks } from './lib/pushDevice'
 import { useChatStore } from './stores/chatStore'
@@ -21,6 +22,7 @@ app.use(router)
 
 initializeCapacitor({
   onAppBecameActive: () => {
+    nudgeModeratorPresenceOnForeground()
     void useInboxStore().loadInbox()
     const chat = useChatStore()
     if (chat.activeChatId) {
