@@ -149,7 +149,7 @@ class SourceModelResource extends Resource
                 ->columnSpanFull(),
             Placeholder::make('integration_wizard')
                 ->label('Мастер подключения')
-                ->content(function (?SourceModel $record): string {
+                ->content(function (?SourceModel $record): HtmlString|string {
                     if ($record === null) {
                         return '1) Сначала сохраните источник. 2) Создайте отделы. 3) Используйте URL вебхука ниже в настройках бота.';
                     }
@@ -167,7 +167,34 @@ class SourceModelResource extends Resource
                         ? "\n\nВК: в поле «Секретный ключ» укажите тот же ключ, что в Callback API сообщества; в «строка подтверждения» — значение из экрана подтверждения."
                         : '';
 
-                    return "Webhook / endpoint:\n{$webhook}{$vkExtra}\n\nДля встраивания виджета: {$base}/widget/pulse-widget.js";
+                    $wizardText = "Webhook / endpoint:\n{$webhook}{$vkExtra}\n\nДля встраивания виджета: {$base}/widget/pulse-widget.js";
+                    $html = '<pre class="fi-input-wrp rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-gray-900 dark:border-white/10 dark:bg-white/5 dark:text-gray-100">'
+                        .e($wizardText)
+                        .'</pre>';
+
+                    if ($record->type === 'tg') {
+                        $botToken = trim((string) ($record->settings['bot_token'] ?? ''));
+                        if ($botToken !== '') {
+                            $query = ['url' => $webhook];
+                            $secretToken = trim((string) ($record->secret_key ?? ''));
+                            if ($secretToken !== '') {
+                                $query['secret_token'] = $secretToken;
+                            }
+
+                            $setWebhookUrl = 'https://api.telegram.org/bot'.$botToken.'/setWebhook?'.http_build_query($query);
+                            $html .= '<div class="mt-3">'
+                                .'<a href="'.e($setWebhookUrl).'" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500">'
+                                .'Установить webhook в Telegram'
+                                .'</a>'
+                                .'</div>';
+                        } else {
+                            $html .= '<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">'
+                                .'Для кнопки автоустановки добавьте ключ <code>bot_token</code> в «Настройки подключения».'
+                                .'</p>';
+                        }
+                    }
+
+                    return new HtmlString($html);
                 }),
             Select::make('users')
                 ->label('Модераторы / Администраторы')
