@@ -127,6 +127,50 @@ final readonly class WebhookPayloadExtractor
         return [];
     }
 
+    /**
+     * Telegram album id when the user sends several photos as one group.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function extractTelegramMediaGroupId(array $payload): ?string
+    {
+        $containers = [
+            $payload['message'] ?? null,
+            $payload['edited_message'] ?? null,
+            $payload['channel_post'] ?? null,
+        ];
+        foreach ($containers as $msg) {
+            if (! is_array($msg)) {
+                continue;
+            }
+            $id = $msg['media_group_id'] ?? null;
+            if ($id === null) {
+                continue;
+            }
+            if (is_int($id) || (is_string($id) && $id !== '')) {
+                return (string) $id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Raw user-visible text from a Telegram message (caption or text), without attachment placeholder fallback.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function extractRawTelegramMessageText(array $payload): string
+    {
+        $message = $payload['message'] ?? $payload['edited_message'] ?? $payload['channel_post'] ?? null;
+        if (! is_array($message)) {
+            return '';
+        }
+        $text = $message['caption'] ?? $message['text'] ?? null;
+
+        return trim((string) $text);
+    }
+
     /** @param array<string, mixed> $payload */
     public function extractExternalMessageId(array $payload): ?string
     {

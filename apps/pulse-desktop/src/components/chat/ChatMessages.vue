@@ -3,14 +3,13 @@ import {
   Check,
   CheckCheck,
   Loader2,
-  FileIcon,
-  Download,
   ChevronUp,
   ChevronDown,
   Reply,
 } from 'lucide-vue-next'
 import {
   nextTick,
+  onBeforeUnmount,
   onBeforeUpdate,
   onUpdated,
   ref,
@@ -19,6 +18,8 @@ import {
 import type { MessageItem } from '../../types/chat'
 import type { ApiMessage } from '../../types/dto/chat.types'
 import { fetchMessageContext } from '../../api/messages'
+import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue'
+import { formatMessagesTelegramStyle } from '../../utils/telegramCopyFormat'
 
 const NEAR_BOTTOM_PX = 140
 
@@ -27,6 +28,8 @@ const props = defineProps<{
   isLoading?: boolean
   canLoadMore?: boolean
   peerName: string
+  /** Имя модератора для копирования в стиле Telegram */
+  moderatorName?: string
   chatId?: number | null
   clientTyping?: boolean
 }>()
@@ -48,6 +51,128 @@ const lastTimelineFirstId = ref<number | null>(null)
 const lastTimelineLen = ref(0)
 const highlightMessageId = ref<number | null>(null)
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+const selectionMode = ref(false)
+const selectedIds = ref<number[]>([])
+const anchorId = ref<number | null>(null)
+
+function moderatorLabel(): string {
+  return props.moderatorName?.trim() || 'Модератор'
+}
+
+function isMsgSelected(id: number): boolean {
+  return selectedIds.value.includes(id)
+}
+
+function enterSelectionMode(): void {
+  selectionMode.value = true
+  selectedIds.value = []
+  anchorId.value = null
+}
+
+function exitSelectionMode(): void {
+  selectionMode.value = false
+  selectedIds.value = []
+  anchorId.value = null
+}
+
+function toggleSelectMessage(id: number, shiftKey: boolean): void {
+  const row = props.timeline.find((m) => m.id === id)
+  if (!row || row.from === 'system') {
+    return
+  }
+  if (shiftKey && anchorId.value !== null) {
+    const ids = props.timeline.map((m) => m.id)
+    const ia = ids.indexOf(anchorId.value)
+    const ib = ids.indexOf(id)
+    if (ia < 0 || ib < 0) {
+      return
+    }
+    const lo = Math.min(ia, ib)
+    const hi = Math.max(ia, ib)
+    const range: number[] = []
+    for (let i = lo; i <= hi; i++) {
+      const item = props.timeline[i]
+      if (item && item.from !== 'system') {
+        range.push(item.id)
+      }
+    }
+    selectedIds.value = [...new Set([...selectedIds.value, ...range])]
+    return
+  }
+  anchorId.value = id
+  const s = new Set(selectedIds.value)
+  if (s.has(id)) {
+    s.delete(id)
+  } else {
+    s.add(id)
+  }
+  selectedIds.value = [...s]
+}
+
+function onContextMessage(item: MessageItem): void {
+  if (item.from === 'system') {
+    return
+  }
+  enterSelectionMode()
+  selectedIds.value = [item.id]
+  anchorId.value = item.id
+}
+
+function onBubbleSelectClick(item: MessageItem, e: MouseEvent): void {
+  if (!selectionMode.value || item.from === 'system') {
+    return
+  }
+  e.stopPropagation()
+  toggleSelectMessage(item.id, e.shiftKey)
+}
+
+async function copySelectedToClipboard(): Promise<void> {
+  if (selectedIds.value.length === 0) {
+    return
+  }
+  const text = formatMessagesTelegramStyle(
+    props.timeline,
+    new Set(selectedIds.value),
+    props.peerName,
+    moderatorLabel(),
+  )
+  try {
+    await navigator.clipboard.writeText(text)
+    emit('toast', 'Скопировано')
+    exitSelectionMode()
+  } catch {
+    emit('toast', 'Не удалось скопировать')
+  }
+}
+
+function onGlobalCopy(e: ClipboardEvent): void {
+  if (!selectionMode.value || selectedIds.value.length === 0) {
+    return
+  }
+  e.preventDefault()
+  const text = formatMessagesTelegramStyle(
+    props.timeline,
+    new Set(selectedIds.value),
+    props.peerName,
+    moderatorLabel(),
+  )
+  e.clipboardData?.setData('text/plain', text)
+  emit('toast', 'Скопировано')
+  exitSelectionMode()
+}
+
+watch(selectionMode, (on) => {
+  if (on) {
+    document.addEventListener('copy', onGlobalCopy)
+  } else {
+    document.removeEventListener('copy', onGlobalCopy)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('copy', onGlobalCopy)
+})
 
 function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
   const el = scrollRoot.value
@@ -130,6 +255,7 @@ onUpdated(() => {
 watch(
   () => props.chatId,
   () => {
+    exitSelectionMode()
     pendingBelowCount.value = 0
     isNearBottom.value = true
     lastTimelineFirstId.value = null
@@ -149,24 +275,6 @@ watch(
     }
   },
 )
-
-function isImage(mimeType: string): boolean {
-  return mimeType.startsWith('image/')
-}
-
-function isAudio(mimeType: string): boolean {
-  return mimeType.startsWith('audio/')
-}
-
-function formatSize(bytes: number): string {
-  if (bytes === 0) {
-    return '0 B'
-  }
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
-}
 
 function scrollToMessageById(id: number): void {
   highlightMessageId.value = id
@@ -207,6 +315,8 @@ async function jumpToReply(replyToId: number | null | undefined): Promise<void> 
 defineExpose({
   scrollToMessageById,
   jumpToReply,
+  enterSelectionMode,
+  exitSelectionMode,
 })
 </script>
 
@@ -274,12 +384,16 @@ defineExpose({
           v-else-if="item.from === 'client'"
           class="msg-group user"
           :data-message-id="item.id"
-          :class="{ 'msg-jump-highlight': highlightMessageId === item.id }"
+          :class="{
+            'msg-jump-highlight': highlightMessageId === item.id,
+            'msg--selected': selectionMode && isMsgSelected(item.id),
+          }"
+          @contextmenu.prevent="onContextMessage(item)"
         >
           <div class="msg-sender">
             {{ peerName }}
           </div>
-          <div class="msg-bubble">
+          <div class="msg-bubble" @click="onBubbleSelectClick(item, $event)">
             <div
               v-if="item.reply_to && (item.reply_to.id == null || item.reply_to.id <= 0)"
               class="mb-2 border-l-2 border-[var(--color-brand)] pl-2 text-[11px] leading-snug opacity-90"
@@ -295,22 +409,10 @@ defineExpose({
               {{ item.reply_to.text }}
             </button>
             <template v-if="item.text">{{ item.text }}</template>
-            <template v-if="item.attachments && item.attachments.length > 0">
-              <div v-for="file in item.attachments" :key="file.id">
-                <template v-if="isImage(file.mime_type)">
-                  <img :src="file.url" :alt="file.name" class="mt-1 max-h-64 max-w-full rounded-[var(--radius-sm)] object-cover">
-                </template>
-                <audio v-else-if="isAudio(file.mime_type)" :src="file.url" controls class="mt-2 max-w-full" />
-                <div v-else class="msg-attachment">
-                  <FileIcon class="h-3.5 w-3.5 shrink-0" />
-                  <span class="min-w-0 truncate">{{ file.name }}</span>
-                  <span class="shrink-0 text-[10px] opacity-80">{{ formatSize(file.size) }}</span>
-                  <a :href="file.url" target="_blank" class="ml-auto shrink-0 p-0.5" @click.stop>
-                    <Download class="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </template>
+            <MessageAttachmentsGallery
+              v-if="item.attachments && item.attachments.length > 0"
+              :files="item.attachments"
+            />
             <div v-if="item.reply_markup && item.reply_markup.length" class="mt-2 flex flex-wrap gap-1.5">
               <a
                 v-for="(btn, idx) in item.reply_markup"
@@ -329,7 +431,7 @@ defineExpose({
               type="button"
               class="rounded p-0.5 opacity-50 hover:opacity-100"
               title="Ответить"
-              @click="emit('reply', item.id)"
+              @click.stop="emit('reply', item.id)"
             >
               <Reply class="h-3 w-3" />
             </button>
@@ -341,7 +443,11 @@ defineExpose({
           v-else-if="item.from === 'moderator'"
           class="msg-group mod"
           :data-message-id="item.id"
-          :class="{ 'msg-jump-highlight': highlightMessageId === item.id }"
+          :class="{
+            'msg-jump-highlight': highlightMessageId === item.id,
+            'msg--selected': selectionMode && isMsgSelected(item.id),
+          }"
+          @contextmenu.prevent="onContextMessage(item)"
         >
           <div class="msg-sender">
             Модератор
@@ -349,6 +455,7 @@ defineExpose({
           <div
             class="msg-bubble"
             :class="item.from === 'moderator' && item.pending ? 'opacity-90' : ''"
+            @click="onBubbleSelectClick(item, $event)"
           >
             <div
               v-if="item.reply_to && (item.reply_to.id == null || item.reply_to.id <= 0)"
@@ -365,22 +472,10 @@ defineExpose({
               {{ item.reply_to.text }}
             </button>
             <template v-if="item.text">{{ item.text }}</template>
-            <template v-if="item.attachments && item.attachments.length > 0">
-              <div v-for="file in item.attachments" :key="file.id">
-                <template v-if="isImage(file.mime_type)">
-                  <img :src="file.url" :alt="file.name" class="mt-1 max-h-64 max-w-full rounded-[var(--radius-sm)] object-cover">
-                </template>
-                <audio v-else-if="isAudio(file.mime_type)" :src="file.url" controls class="mt-2 max-w-full" />
-                <div v-else class="msg-attachment">
-                  <FileIcon class="h-3.5 w-3.5 shrink-0" />
-                  <span class="min-w-0 truncate">{{ file.name }}</span>
-                  <span class="shrink-0 text-[10px] opacity-80">{{ formatSize(file.size) }}</span>
-                  <a :href="file.url" target="_blank" class="ml-auto shrink-0 p-0.5 text-white/80" @click.stop>
-                    <Download class="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </template>
+            <MessageAttachmentsGallery
+              v-if="item.attachments && item.attachments.length > 0"
+              :files="item.attachments"
+            />
             <div v-if="item.reply_markup && item.reply_markup.length" class="mt-2 flex flex-wrap gap-1.5">
               <a
                 v-for="(btn, idx) in item.reply_markup"
@@ -398,7 +493,7 @@ defineExpose({
               type="button"
               class="rounded p-0.5 opacity-50 hover:opacity-100"
               title="Ответить"
-              @click="emit('reply', item.id)"
+              @click.stop="emit('reply', item.id)"
             >
               <Reply class="h-3 w-3 text-white/80" />
             </button>
@@ -430,10 +525,34 @@ defineExpose({
       </p>
     </div>
 
+    <div
+      v-if="selectionMode"
+      class="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-2 border-t px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
+      style="background: var(--bg-inbox); border-color: var(--border-light)"
+    >
+      <span class="mr-auto text-xs" style="color: var(--text-muted)">Выбор сообщений · Shift — диапазон</span>
+      <button
+        type="button"
+        class="btn btn-secondary text-sm"
+        @click="exitSelectionMode"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary text-sm"
+        :disabled="selectedIds.length === 0"
+        @click="copySelectedToClipboard"
+      >
+        Копировать ({{ selectedIds.length }})
+      </button>
+    </div>
+
     <button
       v-if="timeline.length > 0 && !isNearBottom"
       type="button"
-      class="absolute bottom-24 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
+      class="absolute right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
+      :class="selectionMode ? 'bottom-28' : 'bottom-24'"
       style="background: var(--color-brand-200); color: white; box-shadow: var(--shadow-md)"
       title="К последним сообщениям"
       aria-label="К последним сообщениям"
@@ -484,5 +603,10 @@ defineExpose({
     box-shadow: 0 0 0 0 transparent;
     background-color: transparent;
   }
+}
+
+.msg--selected .msg-bubble {
+  outline: 2px solid var(--color-brand-200);
+  outline-offset: 2px;
 }
 </style>

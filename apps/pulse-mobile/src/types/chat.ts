@@ -28,6 +28,16 @@ export interface MessageAttachment {
   sizeLabel: string
 }
 
+/** Full attachment row from API (images, audio, files). */
+export interface MessageMediaItem {
+  id?: number
+  url: string
+  name: string
+  mime_type: string
+  size?: number
+  sizeLabel?: string
+}
+
 export type MessageKind = 'incoming' | 'outgoing' | 'system'
 
 export interface ReplyMarkupButton {
@@ -40,7 +50,12 @@ export interface ChatMessage {
   kind: MessageKind
   text: string
   time?: string
+  /** ISO8601 для копирования в стиле Telegram */
+  createdAtIso?: string
+  /** @deprecated Prefer mediaAttachments; kept for older cached rows */
   attachment?: MessageAttachment
+  /** When API returns attachments (images, audio, documents). */
+  mediaAttachments?: MessageMediaItem[]
   /** Quoted message (API + realtime). */
   reply_to?: { id: number | null; text: string; sender_type: string }
   /** Inline URL buttons (moderator presets), shown under bubble. */

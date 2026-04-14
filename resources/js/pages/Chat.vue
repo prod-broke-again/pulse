@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useDebounceFn } from '@vueuse/core';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { api, type ApiChat, type ApiCannedResponse } from '@/lib/api';
+import { api, type ApiChat, type ApiCannedResponse, type ApiMessage } from '@/lib/api';
 import { getEcho, leaveChat, leaveModerator, subscribeToModerator } from '@/composables/useEcho';
 import { useChatMessages } from '@/composables/useChatMessages';
 import { useModeratorPresence } from '@/composables/useModeratorPresence';
@@ -13,8 +13,9 @@ import ChatMessageItem from '@/components/chat/ChatMessageItem.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import Button from '@/components/ui/button/Button.vue';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, XCircle, Send, Loader2, Bell, X } from 'lucide-vue-next';
+import { Search, UserPlus, XCircle, Send, Loader2, Bell, X, Copy } from 'lucide-vue-next';
 import { useWebPush } from '@/composables/useWebPush';
+import { formatApiMessagesTelegramStyle } from '@/utils/telegramCopyFormat';
 
 const page = usePage();
 const authUser = computed(() => (page.props.auth as { user?: { id: number } })?.user);
@@ -270,6 +271,134 @@ const assignPrimaryLabel = computed(() => {
     return t('chat.assignToMe');
 });
 
+const selectionMode = ref(false);
+const selectedMessageIds = ref<string[]>([]);
+const selectAnchorId = ref<string | null>(null);
+
+function exitMessageSelection(): void {
+    selectionMode.value = false;
+    selectedMessageIds.value = [];
+    selectAnchorId.value = null;
+}
+
+function enterMessageSelection(): void {
+    selectionMode.value = true;
+    selectedMessageIds.value = [];
+    selectAnchorId.value = null;
+}
+
+function isMessageSelected(msg: { id: number | string }): boolean {
+    return selectedMessageIds.value.includes(String(msg.id));
+}
+
+function toggleMessageSelect(msg: ApiMessage, shiftKey: boolean): void {
+    if (msg.sender_type === 'system') {
+        return;
+    }
+    const id = String(msg.id);
+    if (shiftKey && selectAnchorId.value !== null) {
+        const ids = messages.value.map((m) => String(m.id));
+        const ia = ids.indexOf(selectAnchorId.value);
+        const ib = ids.indexOf(id);
+        if (ia < 0 || ib < 0) {
+            return;
+        }
+        const lo = Math.min(ia, ib);
+        const hi = Math.max(ia, ib);
+        const range: string[] = [];
+        for (let i = lo; i <= hi; i++) {
+            const row = messages.value[i];
+            if (row && row.sender_type !== 'system') {
+                range.push(String(row.id));
+            }
+        }
+        selectedMessageIds.value = [...new Set([...selectedMessageIds.value, ...range])];
+        return;
+    }
+    selectAnchorId.value = id;
+    const s = new Set(selectedMessageIds.value);
+    if (s.has(id)) {
+        s.delete(id);
+    } else {
+        s.add(id);
+    }
+    selectedMessageIds.value = [...s];
+}
+
+function onMessageRowClickInSelection(msg: ApiMessage, e: MouseEvent): void {
+    if (!selectionMode.value) {
+        return;
+    }
+    const t = e.target as HTMLElement;
+    if (t.closest('a') || t.closest('button')) {
+        return;
+    }
+    if (msg.sender_type === 'system') {
+        return;
+    }
+    toggleMessageSelect(msg, e.shiftKey);
+}
+
+function onMessageContextMenu(msg: ApiMessage): void {
+    if (msg.sender_type === 'system') {
+        return;
+    }
+    enterMessageSelection();
+    selectedMessageIds.value = [String(msg.id)];
+    selectAnchorId.value = String(msg.id);
+}
+
+function moderatorDisplayName(): string {
+    const u = page.props.auth as { user?: { name?: string } } | undefined;
+    const n = u?.user?.name?.trim();
+    return n && n.length > 0 ? n : 'Модератор';
+}
+
+async function copySelectedMessagesWeb(): Promise<void> {
+    if (selectedMessageIds.value.length === 0) {
+        return;
+    }
+    const text = formatApiMessagesTelegramStyle(
+        messages.value,
+        new Set(selectedMessageIds.value),
+        interlocutorDisplay.value,
+        moderatorDisplayName(),
+    );
+    try {
+        await navigator.clipboard.writeText(text);
+        exitMessageSelection();
+    } catch {
+        /* ignore */
+    }
+}
+
+function onWebGlobalCopy(e: ClipboardEvent): void {
+    if (!selectionMode.value || selectedMessageIds.value.length === 0) {
+        return;
+    }
+    e.preventDefault();
+    const text = formatApiMessagesTelegramStyle(
+        messages.value,
+        new Set(selectedMessageIds.value),
+        interlocutorDisplay.value,
+        moderatorDisplayName(),
+    );
+    e.clipboardData?.setData('text/plain', text);
+    exitMessageSelection();
+}
+
+watch(selectionMode, (on) => {
+    if (on) {
+        document.addEventListener('copy', onWebGlobalCopy);
+    } else {
+        document.removeEventListener('copy', onWebGlobalCopy);
+    }
+});
+
+watch(selectedChatId, () => {
+    exitMessageSelection();
+});
+
 const echo = computed(() => getEcho(reverbConfig.value, authUser.value?.id ?? null));
 
 watch([activeTab, statusFilter], () => fetchChats(), { immediate: false });
@@ -334,6 +463,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    document.removeEventListener('copy', onWebGlobalCopy);
     const e = echo.value;
     if (e) {
         leaveChat(e);
@@ -522,6 +652,10 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                 <UserPlus v-else class="size-4" />
                                 {{ assignPrimaryLabel }}
                             </Button>
+                            <Button variant="outline" size="sm" class="gap-1" @click="enterMessageSelection">
+                                <Copy class="size-4" />
+                                Выбор
+                            </Button>
                             <Button variant="outline" size="sm" class="gap-1" @click="closeChat">
                                 <XCircle class="size-4" />
                                 {{ t('chat.closeChat') }}
@@ -573,14 +707,37 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                             </template>
                             <template v-else>
                                 <div class="flex flex-col gap-3">
-                                    <ChatMessageItem
+                                    <div
                                         v-for="msg in messages"
                                         :key="String(msg.id)"
-                                        :message="msg"
-                                        @reply="onReplyToMessage"
-                                    />
+                                        :class="[
+                                            'max-w-full rounded-2xl transition-shadow',
+                                            selectionMode && isMessageSelected(msg)
+                                                ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                                                : '',
+                                        ]"
+                                        @contextmenu.prevent="onMessageContextMenu(msg)"
+                                        @click="onMessageRowClickInSelection(msg, $event)"
+                                    >
+                                        <ChatMessageItem :message="msg" @reply="onReplyToMessage" />
+                                    </div>
                                 </div>
                             </template>
+                        </div>
+
+                        <div
+                            v-if="selectionMode"
+                            class="border-sidebar-border/70 flex flex-wrap items-center justify-end gap-2 border-t bg-muted/30 px-3 py-2 dark:border-sidebar-border"
+                        >
+                            <span class="mr-auto text-xs text-muted-foreground">Выбор · Shift — диапазон</span>
+                            <Button variant="outline" size="sm" @click="exitMessageSelection">Отмена</Button>
+                            <Button
+                                size="sm"
+                                :disabled="selectedMessageIds.length === 0"
+                                @click="copySelectedMessagesWeb"
+                            >
+                                Копировать ({{ selectedMessageIds.length }})
+                            </Button>
                         </div>
 
                         <!-- Canned responses -->

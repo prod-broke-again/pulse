@@ -125,6 +125,29 @@ final class TelegramApiClient
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         }
 
+        /** @var list<array{contents: string, filename: string, is_image: bool}> $prepared */
+        $prepared = [];
+        foreach ($absolutePaths as $path) {
+            if (! is_string($path) || ! is_file($path)) {
+                continue;
+            }
+            $mime = @mime_content_type($path) ?: 'application/octet-stream';
+            $contents = @file_get_contents($path);
+            if ($contents === false) {
+                continue;
+            }
+            $prepared[] = [
+                'contents' => $contents,
+                'filename' => basename($path),
+                'is_image' => str_starts_with((string) $mime, 'image/'),
+            ];
+        }
+
+        if ($prepared !== [] && count($prepared) >= 2 && count($prepared) <= 10
+            && array_reduce($prepared, static fn (bool $carry, array $row): bool => $carry && $row['is_image'], true)) {
+            return $this->sendMediaGroupLocalPhotos($chatId, $text, $prepared, $replyTo, $replyMarkup);
+        }
+
         $firstId = null;
         $first = true;
         foreach ($absolutePaths as $path) {
@@ -196,6 +219,74 @@ final class TelegramApiClient
         }
 
         return $firstId ?? null;
+    }
+
+    /**
+     * @param  list<array{contents: string, filename: string, is_image: bool}>  $photos
+     */
+    private function sendMediaGroupLocalPhotos(
+        string $chatId,
+        string $text,
+        array $photos,
+        ?int $replyTo,
+        ?string $replyMarkup,
+    ): ?string {
+        $multipart = [
+            ['name' => 'chat_id', 'contents' => $chatId],
+        ];
+        if ($replyTo !== null) {
+            $multipart[] = ['name' => 'reply_to_message_id', 'contents' => (string) $replyTo];
+        }
+        if ($replyMarkup !== null) {
+            $multipart[] = ['name' => 'reply_markup', 'contents' => $replyMarkup];
+        }
+
+        $media = [];
+        foreach ($photos as $i => $photo) {
+            $attach = 'p'.$i;
+            $entry = [
+                'type' => 'photo',
+                'media' => 'attach://'.$attach,
+            ];
+            if ($i === 0 && trim($text) !== '') {
+                $entry['caption'] = $text;
+            }
+            $media[] = $entry;
+            $multipart[] = [
+                'name' => $attach,
+                'contents' => $photo['contents'],
+                'filename' => $photo['filename'],
+            ];
+        }
+
+        $multipart[] = [
+            'name' => 'media',
+            'contents' => json_encode($media, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+        ];
+
+        $response = Http::timeout(120)->asMultipart()->post($this->apiBase().'/sendMediaGroup', $multipart);
+        if (! $response->successful()) {
+            throw new \RuntimeException('Telegram sendMediaGroup failed: '.$response->body());
+        }
+        $json = $response->json();
+        if (! is_array($json) || ($json['ok'] ?? false) !== true) {
+            throw new \RuntimeException('Telegram sendMediaGroup invalid response: '.$response->body());
+        }
+
+        $result = $json['result'] ?? null;
+        if (! is_array($result) || $result === []) {
+            return null;
+        }
+        $first = $result[0] ?? null;
+        if (! is_array($first)) {
+            return null;
+        }
+        $mid = $first['message_id'] ?? null;
+        if (is_int($mid) || (is_string($mid) && ctype_digit($mid))) {
+            return (string) $mid;
+        }
+
+        return null;
     }
 
     /**

@@ -500,6 +500,7 @@ function showToast(message: string): void {
               @close-chat="closeChatAction"
               @change-department="onChangeDepartment"
               @sync-history="onSyncHistory"
+              @select-messages-for-copy="() => chatMessagesRef?.enterSelectionMode()"
             />
 
             <div
@@ -528,6 +529,7 @@ function showToast(message: string): void {
                 ref="chatMessagesRef"
                 :timeline="messages"
                 :peer-name="currentConversation.name"
+                :moderator-name="authStore.user?.name?.trim() || 'Модератор'"
                 :chat-id="chatStore.selectedChatId"
                 :client-typing="messageStore.clientTyping"
                 :is-loading="messageStore.isLoading"

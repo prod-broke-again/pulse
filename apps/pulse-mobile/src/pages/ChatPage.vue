@@ -60,7 +60,7 @@ watch(
 
 <template>
   <div v-if="threadMeta" class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-    <ChatHeader :meta="threadMeta" />
+    <ChatHeader :meta="threadMeta" @select-for-copy="() => listRef?.enterSelectionMode?.()" />
 
     <button
       type="button"

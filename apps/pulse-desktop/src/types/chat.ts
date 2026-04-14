@@ -26,6 +26,8 @@ export interface MessageItem {
   from: 'client' | 'moderator' | 'system'
   text: string
   time: string
+  /** ISO8601 from API for экспорта копирования в стиле Telegram */
+  createdAtIso: string | null
   /** Сообщение в очереди отправки (офлайн / сеть недоступна). */
   pending?: boolean
   reply_markup?: Array<{ text: string; url: string }>

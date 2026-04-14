@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bot, Check, FileText, Reply } from 'lucide-vue-next'
+import { Bot, Check, Reply } from 'lucide-vue-next'
 import type { ChatMessage } from '../../types/chat'
+import MessageMediaGallery from './MessageMediaGallery.vue'
 import ReplyMarkupInline from './ReplyMarkupInline.vue'
 
 const props = defineProps<{
@@ -44,6 +45,9 @@ function onReplyQuoteClick() {
     emit('jumpReply', id)
   }
 }
+
+const hasText = computed(() => !!(props.message.text ?? '').trim())
+const hasMedia = computed(() => (props.message.mediaAttachments?.length ?? 0) > 0)
 </script>
 
 <template>
@@ -74,78 +78,47 @@ function onReplyQuoteClick() {
         <Reply class="size-3 shrink-0" aria-hidden="true" />
         Ответить
       </button>
-      <template v-if="message.attachment && !message.text">
-        <button
-          v-if="message.reply_to && replyQuoteTargetId() != null"
-          type="button"
-          class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-left text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
-          @click="onReplyQuoteClick"
-        >
-          {{ message.reply_to!.text }}
-        </button>
-        <p
-          v-else-if="message.reply_to"
-          class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
-        >
-          {{ message.reply_to.text }}
-        </p>
-        <div
-          class="flex items-center gap-2 rounded-[10px] bg-black/[0.05] px-3 py-2 text-xs text-[var(--zinc-600)] dark:bg-white/[0.06] dark:text-[var(--zinc-300)]"
-        >
-          <FileText class="size-3.5 shrink-0 text-[var(--color-brand)]" aria-hidden="true" />
-          <span>{{ message.attachment.fileName }}</span>
-          <span class="ml-auto text-[10px] text-[var(--zinc-400)]">{{
-            message.attachment.sizeLabel
-          }}</span>
-        </div>
-        <ReplyMarkupInline
-          v-if="message.reply_markup && message.reply_markup.length > 0"
-          :buttons="message.reply_markup"
-        />
-        <span
+      <button
+        v-if="message.reply_to && replyQuoteTargetId() != null"
+        type="button"
+        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-left text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+        @click="onReplyQuoteClick"
+      >
+        {{ message.reply_to.text }}
+      </button>
+      <p
+        v-else-if="message.reply_to"
+        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+      >
+        {{ message.reply_to.text }}
+      </p>
+      <div
+        v-if="hasText"
+        class="rounded-[18px] rounded-bl-md bg-white px-3.5 py-2.5 text-sm leading-[1.55] text-[var(--color-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-100)]"
+      >
+        {{ message.text }}
+      </div>
+      <MessageMediaGallery
+        v-if="hasMedia"
+        class="mt-1.5"
+        :items="message.mediaAttachments ?? []"
+        variant="incoming"
+      />
+      <ReplyMarkupInline
+        v-if="message.reply_markup && message.reply_markup.length > 0"
+        :buttons="message.reply_markup"
+      />
+      <span
+        v-if="message.time || message.isRead"
+        class="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--zinc-400)]"
+      >
+        <span v-if="message.time">{{ message.time }}</span>
+        <Check
           v-if="message.isRead"
-          class="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--zinc-400)]"
-        >
-          <Check class="size-3 shrink-0 text-[var(--color-brand)]" aria-label="Прочитано" />
-        </span>
-      </template>
-      <template v-else>
-        <div
-          v-if="message.text || message.reply_to"
-          class="rounded-[18px] rounded-bl-md bg-white px-3.5 py-2.5 text-sm leading-[1.55] text-[var(--color-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-100)]"
-        >
-          <button
-            v-if="message.reply_to && replyQuoteTargetId() != null"
-            type="button"
-            class="mb-2 w-full border-l-2 border-[var(--color-brand)]/60 pl-2 text-left text-[11px] text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
-            @click="onReplyQuoteClick"
-          >
-            {{ message.reply_to.text }}
-          </button>
-          <p
-            v-else-if="message.reply_to"
-            class="mb-2 border-l-2 border-[var(--color-brand)]/60 pl-2 text-[11px] text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
-          >
-            {{ message.reply_to.text }}
-          </p>
-          <template v-if="message.text">{{ message.text }}</template>
-        </div>
-        <ReplyMarkupInline
-          v-if="message.reply_markup && message.reply_markup.length > 0"
-          :buttons="message.reply_markup"
+          class="size-3 shrink-0 text-[var(--color-brand)]"
+          aria-label="Прочитано"
         />
-        <span
-          v-if="message.time || message.isRead"
-          class="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-[var(--zinc-400)]"
-        >
-          <span v-if="message.time">{{ message.time }}</span>
-          <Check
-            v-if="message.isRead"
-            class="size-3 shrink-0 text-[var(--color-brand)]"
-            aria-label="Прочитано"
-          />
-        </span>
-      </template>
+      </span>
     </template>
     <template v-else>
       <button

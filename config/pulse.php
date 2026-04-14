@@ -76,4 +76,17 @@ return [
         'callback_confirmation' => (string) env('VK_CALLBACK_CONFIRMATION', ''),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Telegram inbound media groups (albums)
+    |--------------------------------------------------------------------------
+    |
+    | Multiple webhook updates share media_group_id. We buffer fragments until
+    | the buffer is quiet for quiet_ms, then persist one message.
+    |
+    */
+    'telegram_media_group_quiet_ms' => (int) env('PULSE_TELEGRAM_MEDIA_GROUP_QUIET_MS', 450),
+
+    'telegram_media_group_schedule_ms' => (int) env('PULSE_TELEGRAM_MEDIA_GROUP_SCHEDULE_MS', 700),
+
 ];

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeft, UserPlus, X, Loader2, RotateCw } from 'lucide-vue-next'
+import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy } from 'lucide-vue-next'
 import { Teleport, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as chatApi from '../../api/chatRepository'
@@ -12,6 +12,10 @@ import { useChatStore } from '../../stores/chatStore'
 
 const props = defineProps<{
   meta: ChatThreadMeta
+}>()
+
+const emit = defineEmits<{
+  selectForCopy: []
 }>()
 
 const router = useRouter()
@@ -153,6 +157,15 @@ function pickDepartment(id: number): void {
       </div>
     </div>
     <div class="flex gap-1">
+      <button
+        v-if="meta.status === 'open'"
+        type="button"
+        class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
+        aria-label="Выбрать сообщения для копирования"
+        @click="emit('selectForCopy')"
+      >
+        <Copy class="size-3" aria-hidden="true" />
+      </button>
       <button
         v-if="meta.status === 'open'"
         type="button"

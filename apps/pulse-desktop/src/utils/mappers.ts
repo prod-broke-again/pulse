@@ -64,6 +64,7 @@ export function mapRealtimePayloadToMessageItem(p: NewChatMessagePayload): Messa
     from,
     text: p.text,
     time,
+    createdAtIso: new Date().toISOString(),
     attachments: [],
   }
 }
@@ -79,6 +80,7 @@ export function mapApiMessage(msg: ApiMessage): MessageItem {
     from: senderType,
     text: msg.text,
     time,
+    createdAtIso: msg.created_at ?? null,
     attachments: msg.attachments ?? [],
     reply_markup: msg.reply_markup ?? undefined,
     reply_to: msg.reply_to ?? undefined,

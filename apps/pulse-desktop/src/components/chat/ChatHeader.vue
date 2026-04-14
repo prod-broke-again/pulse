@@ -4,6 +4,7 @@ import {
   UserPlus,
   ArrowRightLeft,
   CircleCheck,
+  Copy,
   EllipsisVertical,
   Hash,
   Building2,
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   (e: 'close-chat'): void
   (e: 'change-department', departmentId: number): void
   (e: 'sync-history'): void
+  (e: 'select-messages-for-copy'): void
 }>()
 
 const showMenu = ref(false)
@@ -319,6 +321,14 @@ function channelLabel(ch: Conversation['channel']): string {
           class="dropdown-menu absolute right-0 top-full z-30 mt-1 min-w-[180px] overflow-hidden rounded-[var(--radius-md)] border py-1 shadow-lg"
           style="background: var(--bg-inbox); border-color: var(--border-light)"
         >
+          <button
+            type="button"
+            class="dropdown-item"
+            @click="showMenu = false; emit('select-messages-for-copy')"
+          >
+            <Copy class="h-4 w-4 shrink-0" />
+            Выбрать для копирования
+          </button>
           <button
             type="button"
             class="dropdown-item"

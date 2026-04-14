@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { nextTick, onBeforeUpdate, onUpdated, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onBeforeUpdate, onUpdated, ref, watch } from 'vue'
 import type { ChatMessage } from '../../types/chat'
+import { useAuthStore } from '../../stores/authStore'
 import { useChatStore } from '../../stores/chatStore'
+import { useUiStore } from '../../stores/uiStore'
+import { formatChatMessagesTelegramStyle } from '../../utils/telegramCopyFormat'
 import MessageBubble from './MessageBubble.vue'
 
 const NEAR_BOTTOM_PX = 140
@@ -12,7 +15,129 @@ const props = defineProps<{
 }>()
 
 const chat = useChatStore()
+const auth = useAuthStore()
 const { isTyping } = storeToRefs(chat)
+
+const selectionMode = ref(false)
+const selectedIds = ref<string[]>([])
+const selectAnchorId = ref<string | null>(null)
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+
+function exitSelectionMode(): void {
+  selectionMode.value = false
+  selectedIds.value = []
+  selectAnchorId.value = null
+}
+
+function enterSelectionMode(): void {
+  selectionMode.value = true
+  selectedIds.value = []
+  selectAnchorId.value = null
+}
+
+function isSelected(m: ChatMessage): boolean {
+  return selectedIds.value.includes(String(m.id))
+}
+
+function toggleSelect(m: ChatMessage, shiftKey: boolean): void {
+  if (m.kind === 'system') return
+  const id = String(m.id)
+  if (shiftKey && selectAnchorId.value !== null) {
+    const ids = props.messages.map((x) => String(x.id))
+    const ia = ids.indexOf(selectAnchorId.value)
+    const ib = ids.indexOf(id)
+    if (ia < 0 || ib < 0) return
+    const lo = Math.min(ia, ib)
+    const hi = Math.max(ia, ib)
+    const range: string[] = []
+    for (let i = lo; i <= hi; i++) {
+      const row = props.messages[i]
+      if (row && row.kind !== 'system') {
+        range.push(String(row.id))
+      }
+    }
+    selectedIds.value = [...new Set([...selectedIds.value, ...range])]
+    return
+  }
+  selectAnchorId.value = id
+  const s = new Set(selectedIds.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selectedIds.value = [...s]
+}
+
+function onRowClick(m: ChatMessage, e: MouseEvent): void {
+  if (!selectionMode.value) return
+  const t = e.target as HTMLElement
+  if (t.closest('a') || t.closest('button')) return
+  if (m.kind === 'system') return
+  toggleSelect(m, e.shiftKey)
+}
+
+function onPointerDownRow(m: ChatMessage, _e: PointerEvent): void {
+  if (m.kind === 'system' || selectionMode.value) return
+  if (longPressTimer != null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+  const id = String(m.id)
+  longPressTimer = window.setTimeout(() => {
+    longPressTimer = null
+    enterSelectionMode()
+    selectedIds.value = [id]
+    selectAnchorId.value = id
+  }, 650)
+}
+
+function onPointerUpRow(): void {
+  if (longPressTimer != null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+async function copySelectedMobile(): Promise<void> {
+  if (selectedIds.value.length === 0) return
+  const meta = chat.threadMeta
+  const peer = meta?.userName?.trim() || 'Клиент'
+  const mod = auth.user?.name?.trim() || 'Модератор'
+  const text = formatChatMessagesTelegramStyle(props.messages, new Set(selectedIds.value), peer, mod)
+  try {
+    await navigator.clipboard.writeText(text)
+    useUiStore().pushToast('Скопировано', 'success')
+    exitSelectionMode()
+  } catch {
+    useUiStore().pushToast('Не удалось скопировать', 'error')
+  }
+}
+
+function onGlobalCopy(e: ClipboardEvent): void {
+  if (!selectionMode.value || selectedIds.value.length === 0) return
+  e.preventDefault()
+  const meta = chat.threadMeta
+  const peer = meta?.userName?.trim() || 'Клиент'
+  const mod = auth.user?.name?.trim() || 'Модератор'
+  const text = formatChatMessagesTelegramStyle(props.messages, new Set(selectedIds.value), peer, mod)
+  e.clipboardData?.setData('text/plain', text)
+  useUiStore().pushToast('Скопировано', 'success')
+  exitSelectionMode()
+}
+
+watch(selectionMode, (on) => {
+  if (on) {
+    document.addEventListener('copy', onGlobalCopy)
+  } else {
+    document.removeEventListener('copy', onGlobalCopy)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('copy', onGlobalCopy)
+  if (longPressTimer != null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+})
 
 function onReplyToMessage(messageId: string) {
   const n = Number(messageId)
@@ -117,6 +242,7 @@ onUpdated(() => {
 watch(
   () => chat.activeChatId,
   () => {
+    exitSelectionMode()
     pendingBelowCount.value = 0
     isNearBottom.value = true
     lastTimelineFirstId.value = null
@@ -161,32 +287,67 @@ function scrollToMessageById(messageId: number) {
   })
 }
 
-defineExpose({ scrollToEnd, scrollToMessageById })
+defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelectionMode })
 </script>
 
 <template>
-  <div class="relative min-h-0 flex-1">
+  <div class="relative flex min-h-0 flex-1 flex-col">
     <div
       ref="root"
-      class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[var(--zinc-50)] px-4 py-4 [-webkit-overflow-scrolling:touch] dark:bg-[var(--zinc-900)]"
+      class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[var(--zinc-50)] px-4 py-4 [-webkit-overflow-scrolling:touch] dark:bg-[var(--zinc-900)]"
       @scroll.passive="onScroll"
     >
       <div class="py-2 text-center text-[11px] font-medium text-[var(--zinc-400)]">
         Сегодня
       </div>
-      <MessageBubble
+      <div
         v-for="m in messages"
         :key="m.id"
-        :message="m"
-        :highlighted="highlightMessageId === String(m.id)"
-        @reply="onReplyToMessage"
-        @jump-reply="onJumpReply"
-      />
+        :class="[
+          'flex w-full',
+          m.kind === 'outgoing' ? 'justify-end' : m.kind === 'system' ? 'justify-center' : 'justify-start',
+          selectionMode && isSelected(m) ? 'rounded-2xl ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--zinc-50)] dark:ring-offset-[var(--zinc-900)]' : '',
+        ]"
+        @pointerdown="onPointerDownRow(m, $event)"
+        @pointerup="onPointerUpRow"
+        @pointercancel="onPointerUpRow"
+        @pointerleave="onPointerUpRow"
+        @click="onRowClick(m, $event)"
+      >
+        <MessageBubble
+          :message="m"
+          :highlighted="highlightMessageId === String(m.id)"
+          @reply="onReplyToMessage"
+          @jump-reply="onJumpReply"
+        />
+      </div>
       <div v-if="isTyping" class="flex gap-1 self-start px-4 py-2.5" aria-live="polite">
         <span class="typing-dot size-1.5 rounded-full bg-[var(--zinc-400)]" />
         <span class="typing-dot size-1.5 rounded-full bg-[var(--zinc-400)]" />
         <span class="typing-dot size-1.5 rounded-full bg-[var(--zinc-400)]" />
       </div>
+    </div>
+
+    <div
+      v-if="selectionMode"
+      class="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-gray-line)] bg-white px-3 py-2.5 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-850)]"
+    >
+      <span class="mr-auto text-[10px] text-[var(--zinc-500)]">Выбор · долгое нажатие для старта</span>
+      <button
+        type="button"
+        class="rounded-lg border border-[var(--color-gray-line)] px-3 py-1.5 text-xs font-medium text-[var(--zinc-600)] dark:border-[var(--zinc-600)] dark:text-[var(--zinc-300)]"
+        @click="exitSelectionMode"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        :disabled="selectedIds.length === 0"
+        @click="copySelectedMobile"
+      >
+        Копировать ({{ selectedIds.length }})
+      </button>
     </div>
 
     <button

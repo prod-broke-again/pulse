@@ -6,6 +6,7 @@ namespace App\Application\Communication\Action;
 
 use App\Application\Communication\Webhook\InboundAttachmentExtractor;
 use App\Application\Communication\Webhook\InboundChatUpsert;
+use App\Application\Communication\Webhook\TelegramMediaGroupInboundBuffer;
 use App\Application\Communication\Webhook\TelegramUserMetadataEnricher;
 use App\Application\Communication\Webhook\VkUserMetadataEnricher;
 use App\Application\Communication\Webhook\WebhookPayloadExtractor;
@@ -32,6 +33,7 @@ final readonly class ProcessInboundWebhook
         private TelegramUserMetadataEnricher $telegramUserMetadataEnricher,
         private InboundChatUpsert $inboundChatUpsert,
         private MessageRepositoryInterface $messageRepository,
+        private TelegramMediaGroupInboundBuffer $telegramMediaGroupInboundBuffer,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -82,6 +84,30 @@ final readonly class ProcessInboundWebhook
         if ($replyToExternalId !== null && $replyToExternalId !== '') {
             $replied = $this->messageRepository->findByChatAndExternalMessageId($chat->id, $replyToExternalId);
             $replyToInternalId = $replied?->id;
+        }
+
+        $mediaGroupId = $source->type === SourceType::Tg
+            ? $this->webhookPayloadExtractor->extractTelegramMediaGroupId($payload)
+            : null;
+        if ($mediaGroupId !== null && $mediaGroupId !== '') {
+            $resolvedForDownloads = $this->onlyAttachmentsWithUrl($attachments);
+            if ($resolvedForDownloads === []) {
+                return;
+            }
+            $rawCaption = $this->webhookPayloadExtractor->extractRawTelegramMessageText($payload);
+            $this->telegramMediaGroupInboundBuffer->appendAndSchedule(
+                $sourceId,
+                $chat->id,
+                $mediaGroupId,
+                [
+                    'attachments' => $resolvedForDownloads,
+                    'raw_caption' => $rawCaption,
+                    'reply_to_message_id' => $replyToInternalId,
+                    'telegram_message_id' => $externalMessageId,
+                ],
+            );
+
+            return;
         }
 
         $message = $this->createMessage->run(

@@ -86,7 +86,14 @@ export type ApiMessage = {
     text: string;
     payload: Record<string, unknown>;
     reply_to?: { id: number | null; text: string; sender_type: string } | null;
-    attachments?: Array<{ id: number; name: string; url: string; mime_type?: string; kind?: string | null }>;
+    attachments?: Array<{
+        id: number;
+        name: string;
+        url: string;
+        mime_type?: string;
+        kind?: string | null;
+        size?: number;
+    }>;
     is_read: boolean;
     created_at: string;
     updated_at: string;

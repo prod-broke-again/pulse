@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Loader2, Check, CheckCheck, Reply } from 'lucide-vue-next';
 import type { ApiMessage } from '@/lib/api';
+import MessageAttachmentsGallery from '@/components/chat/MessageAttachmentsGallery.vue';
 
 const props = defineProps<{
     message: ApiMessage;
@@ -28,13 +29,18 @@ const attachments = computed(() => {
     return unique;
 });
 
-function isImage(mime?: string): boolean {
-    return typeof mime === 'string' && mime.startsWith('image/');
-}
-
-function isAudio(mime?: string): boolean {
-    return typeof mime === 'string' && mime.startsWith('audio/');
-}
+const galleryFiles = computed(() => {
+    const mid = props.message.id;
+    const base =
+        typeof mid === 'number' && Number.isFinite(mid) ? mid : Number(String(mid).replace(/\D/g, '')) || 0;
+    return attachments.value.map((att, idx) => ({
+        id: typeof att.id === 'number' ? att.id : base * 1000 + idx + 1,
+        url: att.url ?? '',
+        name: att.name ?? 'file',
+        mime_type: att.mime_type ?? 'application/octet-stream',
+        size: typeof att.size === 'number' ? att.size : 0,
+    }));
+});
 
 const status = computed(() => {
     if (props.message.sender_type !== 'moderator') return null;
@@ -92,36 +98,11 @@ function onReplyClick() {
             {{ message.reply_to.text }}
         </p>
         <p class="whitespace-pre-wrap break-words">{{ message.text }}</p>
-        <div v-if="attachments.length" class="mt-2 space-y-2">
-            <div
-                v-for="att in attachments"
-                :key="att.id"
-                class="rounded-md border border-border/60 p-2"
-            >
-                <img
-                    v-if="isImage(att.mime_type)"
-                    :src="att.url"
-                    :alt="att.name"
-                    class="max-h-64 w-full rounded object-cover"
-                    loading="lazy"
-                />
-                <audio
-                    v-else-if="isAudio(att.mime_type)"
-                    :src="att.url"
-                    controls
-                    class="w-full"
-                />
-                <a
-                    v-else
-                    :href="att.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-xs underline"
-                >
-                    {{ att.name }}
-                </a>
-            </div>
-        </div>
+        <MessageAttachmentsGallery
+            v-if="attachments.length"
+            :files="galleryFiles"
+            :variant="isModerator ? 'moderator' : 'default'"
+        />
         <div class="mt-1 flex items-center justify-end gap-1">
             <span class="text-xs opacity-80">
                 {{ new Date(message.created_at).toLocaleString() }}
