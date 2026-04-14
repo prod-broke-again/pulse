@@ -127,10 +127,33 @@ export function useChatMessages(options: UseChatMessagesOptions) {
         fetchMessages(cid, oldestMessageId.value);
     }
 
-    function sendMessage(text: string, attachments: unknown[] = []): Promise<void> {
+    function sendMessage(
+        text: string,
+        attachments: unknown[] = [],
+        options?: { replyToMessageId?: number | null },
+    ): Promise<void> {
         const cid = chatId.value;
         const uid = currentUserId.value;
         if (!cid || !text.trim()) return Promise.resolve();
+
+        const replyToId =
+            options?.replyToMessageId != null && options.replyToMessageId > 0
+                ? options.replyToMessageId
+                : null;
+        const replyToPreview =
+            replyToId != null
+                ? (() => {
+                      const parent = messages.value.find(
+                          (m) => Number(m.id) === replyToId || String(m.id) === String(replyToId),
+                      );
+                      if (!parent) return null;
+                      return {
+                          id: replyToId,
+                          text: (parent.text ?? '').slice(0, 500),
+                          sender_type: parent.sender_type ?? 'client',
+                      };
+                  })()
+                : null;
 
         const clientMessageId = crypto.randomUUID?.() ?? `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const tempId = `temp-${clientMessageId}`;
@@ -146,16 +169,26 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             client_message_id: clientMessageId,
+            ...(replyToPreview ? { reply_to: replyToPreview } : {}),
         };
 
         sendLoading.value = true;
         sendError.value = null;
         messages.value = [...messages.value, optimistic];
 
+        const body: Record<string, unknown> = {
+            text: text.trim(),
+            attachments,
+            client_message_id: clientMessageId,
+        };
+        if (replyToId != null) {
+            body.reply_to_message_id = replyToId;
+        }
+
         return api
             .post<{ data: ApiMessage & { client_message_id?: string } }>(
                 `/chats/${cid}/send`,
-                { text: text.trim(), attachments, client_message_id: clientMessageId },
+                body,
             )
             .then((res) => {
                 const data = res.data;
@@ -183,6 +216,17 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             (m) => Number(m.id) === Number(existingId) || String(m.id) === String(existingId),
         );
         if (alreadyExists) return;
+        const att = Array.isArray(payload.attachments) ? payload.attachments : [];
+        const mappedAttachments = att
+            .filter((a): a is Record<string, unknown> => a !== null && typeof a === 'object')
+            .map((a) => ({
+                id: Number(a.id ?? 0),
+                name: String(a.name ?? ''),
+                url: String(a.url ?? ''),
+                mime_type: typeof a.mime_type === 'string' ? a.mime_type : undefined,
+                kind: typeof a.kind === 'string' ? a.kind : null,
+            }));
+
         messages.value = [
             ...messages.value,
             {
@@ -192,7 +236,8 @@ export function useChatMessages(options: UseChatMessagesOptions) {
                 sender_type: payload.sender_type || 'client',
                 text: payload.text,
                 payload: {},
-                attachments: [],
+                reply_to: payload.reply_to ?? null,
+                attachments: mappedAttachments,
                 is_read: false,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),

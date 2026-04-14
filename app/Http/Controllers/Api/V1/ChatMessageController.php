@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Application\Communication\Action\DeliverOutboundMessageToMessenger;
 use App\Application\Communication\Action\SendMessage;
 use App\Application\Integration\ResolveMessengerProvider;
 use App\Domains\Communication\ValueObject\SenderType;
@@ -108,6 +109,8 @@ final class ChatMessageController extends Controller
             ));
         }
 
+        $deferMessengerDelivery = $attachmentPaths !== [];
+
         $domainMessage = $sendMessage->run(
             chatId: $chat->id,
             text: $text,
@@ -117,6 +120,7 @@ final class ChatMessageController extends Controller
             payload: [],
             replyToMessageId: $replyToMessageId,
             replyMarkup: $replyMarkup,
+            deliverToMessenger: ! $deferMessengerDelivery,
         );
 
         $messageModel = MessageModel::find($domainMessage->id);
@@ -142,6 +146,10 @@ final class ChatMessageController extends Controller
             $messageModel->update([
                 'payload' => array_merge($messageModel->payload ?? [], ['attachments' => $mediaItems]),
             ]);
+        }
+
+        if ($messageModel !== null && $deferMessengerDelivery) {
+            app(DeliverOutboundMessageToMessenger::class)->run($messageModel, $messenger, $chat);
         }
 
         if ($clientMessageId !== null) {

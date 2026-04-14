@@ -78,6 +78,7 @@ final class ChatResource extends JsonResource
             'assignee' => $this->whenLoaded('assignee', fn () => $this->assignee ? [
                 'id' => $this->assignee->id,
                 'name' => $this->assignee->name,
+                'avatar_url' => $this->assignee->avatar_url,
             ] : null),
             'latest_message' => $this->whenLoaded('latestMessage', fn () => $this->latestMessage ? [
                 'id' => $this->latestMessage->id,

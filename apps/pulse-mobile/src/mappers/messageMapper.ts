@@ -46,6 +46,7 @@ export function mapRealtimePayloadToChatMessage(p: NewChatMessagePayload): ChatM
     kind,
     text: p.text,
     time,
+    ...(p.reply_to ? { reply_to: p.reply_to } : {}),
     ...(kind === 'incoming' ? { isRead: false } : {}),
   }
 }
@@ -77,6 +78,7 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
     text: showAttachmentOnly ? '' : text,
     time,
     attachment,
+    ...(row.reply_to ? { reply_to: row.reply_to } : {}),
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     ...(kind === 'incoming' && row.is_read === true ? { isRead: true } : {}),
   }

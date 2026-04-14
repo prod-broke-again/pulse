@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Application\Communication\Action\AssignChatToModerator;
 use App\Application\Communication\Action\ChangeChatDepartment;
+use App\Application\Integration\Action\SyncChatHistoryFromProvider;
 use App\Application\Communication\Query\ListChatsQuery;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
@@ -106,6 +107,17 @@ final class ChatController extends Controller
 
         return response()->json([
             'data' => new ChatResource($chat),
+        ]);
+    }
+
+    public function syncHistory(ChatModel $chat, SyncChatHistoryFromProvider $sync): JsonResponse
+    {
+        Gate::authorize('update', $chat);
+
+        $data = $sync->run($chat);
+
+        return response()->json([
+            'data' => $data,
         ]);
     }
 

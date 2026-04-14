@@ -69,6 +69,8 @@ export type NewChatMessagePayload = {
     text: string;
     sender_type: string;
     sender_id: number | null;
+    attachments?: Array<Record<string, unknown>>;
+    reply_to?: { id: number; text: string; sender_type: string } | null;
 };
 
 export type MessageReadPayload = {
@@ -97,6 +99,8 @@ export type ChatChannelCallbacks = {
 
 export type ModeratorChannelCallbacks = {
     onAssigned?: () => void;
+    /** New message in a chat assigned to this moderator (inbox bump). */
+    onNewMessage?: (payload: NewChatMessagePayload) => void;
 };
 
 let currentChatChannelRef: unknown = null;
@@ -162,6 +166,9 @@ export function subscribeToModerator(
     });
     ch.listen('ChatAssigned', () => {
         callbacks.onAssigned?.();
+    });
+    ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => {
+        callbacks.onNewMessage?.(e);
     });
 }
 

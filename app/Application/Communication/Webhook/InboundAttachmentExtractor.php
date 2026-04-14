@@ -13,7 +13,7 @@ final class InboundAttachmentExtractor
 {
     /**
      * @param  array<string, mixed>  $payload
-     * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
+     * @return list<array{url?: string, telegram_file_id?: string, file_name: string, mime_type: string, kind?: string}>
      */
     public function extract(array $payload): array
     {
@@ -28,7 +28,7 @@ final class InboundAttachmentExtractor
 
     /**
      * @param  array<string, mixed>  $message
-     * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
+     * @return list<array{url?: string, telegram_file_id?: string, file_name: string, mime_type: string, kind?: string}>
      */
     private function extractTelegramAttachments(array $message): array
     {
@@ -36,31 +36,59 @@ final class InboundAttachmentExtractor
 
         if (isset($message['photo']) && is_array($message['photo'])) {
             $photo = end($message['photo']);
-            if (is_array($photo) && isset($photo['file_url'])) {
+            if (is_array($photo)) {
+                if (isset($photo['file_url']) && is_string($photo['file_url']) && $photo['file_url'] !== '') {
+                    $attachments[] = [
+                        'url' => $photo['file_url'],
+                        'file_name' => ($photo['file_unique_id'] ?? 'photo').'.jpg',
+                        'mime_type' => 'image/jpeg',
+                        'kind' => 'photo',
+                    ];
+                } elseif (isset($photo['file_id']) && is_string($photo['file_id']) && $photo['file_id'] !== '') {
+                    $attachments[] = [
+                        'telegram_file_id' => $photo['file_id'],
+                        'file_name' => ($photo['file_unique_id'] ?? 'photo').'.jpg',
+                        'mime_type' => 'image/jpeg',
+                        'kind' => 'photo',
+                    ];
+                }
+            }
+        }
+
+        if (isset($message['document']) && is_array($message['document'])) {
+            $doc = $message['document'];
+            if (isset($doc['file_url']) && is_string($doc['file_url']) && $doc['file_url'] !== '') {
                 $attachments[] = [
-                    'url' => $photo['file_url'],
-                    'file_name' => ($photo['file_unique_id'] ?? 'photo').'.jpg',
-                    'mime_type' => 'image/jpeg',
-                    'kind' => 'photo',
+                    'url' => $doc['file_url'],
+                    'file_name' => $doc['file_name'] ?? 'document',
+                    'mime_type' => $doc['mime_type'] ?? 'application/octet-stream',
+                    'kind' => 'document',
+                ];
+            } elseif (isset($doc['file_id']) && is_string($doc['file_id']) && $doc['file_id'] !== '') {
+                $attachments[] = [
+                    'telegram_file_id' => $doc['file_id'],
+                    'file_name' => $doc['file_name'] ?? 'document',
+                    'mime_type' => $doc['mime_type'] ?? 'application/octet-stream',
+                    'kind' => 'document',
                 ];
             }
         }
 
-        if (isset($message['document']['file_url'])) {
-            $doc = $message['document'];
-            $attachments[] = [
-                'url' => $doc['file_url'],
-                'file_name' => $doc['file_name'] ?? 'document',
-                'mime_type' => $doc['mime_type'] ?? 'application/octet-stream',
-                'kind' => 'document',
-            ];
-        }
-
         foreach (['audio', 'voice'] as $type) {
-            if (isset($message[$type]['file_url'])) {
-                $item = $message[$type];
+            if (! isset($message[$type]) || ! is_array($message[$type])) {
+                continue;
+            }
+            $item = $message[$type];
+            if (isset($item['file_url']) && is_string($item['file_url']) && $item['file_url'] !== '') {
                 $attachments[] = [
                     'url' => $item['file_url'],
+                    'file_name' => $item['file_name'] ?? $type.'.ogg',
+                    'mime_type' => $item['mime_type'] ?? 'audio/ogg',
+                    'kind' => $type === 'voice' ? 'voice' : 'audio',
+                ];
+            } elseif (isset($item['file_id']) && is_string($item['file_id']) && $item['file_id'] !== '') {
+                $attachments[] = [
+                    'telegram_file_id' => $item['file_id'],
                     'file_name' => $item['file_name'] ?? $type.'.ogg',
                     'mime_type' => $item['mime_type'] ?? 'audio/ogg',
                     'kind' => $type === 'voice' ? 'voice' : 'audio',
@@ -160,11 +188,13 @@ final class InboundAttachmentExtractor
 
         foreach ($attachments as $attachment) {
             $url = trim((string) ($attachment['url'] ?? ''));
-            if ($url === '') {
+            $fileId = trim((string) ($attachment['telegram_file_id'] ?? ''));
+            if ($url === '' && $fileId === '') {
                 continue;
             }
 
-            $signature = mb_strtolower($url.'|'.($attachment['kind'] ?? '').'|'.($attachment['file_name'] ?? ''));
+            $signatureKey = $url !== '' ? $url : 'tg:'.$fileId;
+            $signature = mb_strtolower($signatureKey.'|'.($attachment['kind'] ?? '').'|'.($attachment['file_name'] ?? ''));
             if (isset($seen[$signature])) {
                 continue;
             }
@@ -177,7 +207,7 @@ final class InboundAttachmentExtractor
     }
 
     /**
-     * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
+     * @param  list<array{url?: string, telegram_file_id?: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      */
     public function buildAttachmentPlaceholderText(array $attachments): string
     {

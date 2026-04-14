@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/chats/{chat}/department', [ChatController::class, 'changeDepartment'])->name('api.v1.chats.department');
         Route::post('/chats/{chat}/close', [ChatController::class, 'close'])->name('api.v1.chats.close');
         Route::post('/chats/{chat}/typing', [ChatController::class, 'typing'])->name('api.v1.chats.typing');
+        Route::post('/chats/{chat}/sync-history', [ChatController::class, 'syncHistory'])->name('api.v1.chats.sync-history');
         Route::get('/chats/{chat}/ai/summary', [ChatAiController::class, 'summary'])->name('api.v1.chats.ai.summary');
         Route::get('/chats/{chat}/ai/suggestions', [ChatAiController::class, 'suggestions'])->name('api.v1.chats.ai.suggestions');
 

@@ -75,3 +75,6 @@ if (typeof window !== 'undefined' && window.visualViewport) {
 }
 
 app.mount('#app')
+
+/** Ensure inbox realtime (moderator channel) subscribes even before first inbox visit. */
+useInboxStore()

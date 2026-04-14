@@ -30,6 +30,8 @@ export const useChatStore = defineStore('chat', () => {
   const activeChatId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
   const composerText = ref('')
+  /** Pulse message id to reply to (POST reply_to_message_id). */
+  const replyToMessageId = ref<number | null>(null)
   const isTyping = ref(false)
   const aiContent = ref<AiPanelContent | null>(null)
   const loadingOlder = ref(false)
@@ -150,6 +152,7 @@ export const useChatStore = defineStore('chat', () => {
     loadingOlder.value = true
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
+    replyToMessageId.value = null
     cannedQuickReplies.value = []
     quickLinkPresets.value = []
 
@@ -257,6 +260,14 @@ export const useChatStore = defineStore('chat', () => {
     composerText.value = value
   }
 
+  function setReplyTarget(messageId: number) {
+    replyToMessageId.value = messageId > 0 ? messageId : null
+  }
+
+  function clearReplyTarget() {
+    replyToMessageId.value = null
+  }
+
   const canSend = computed(
     () =>
       composerText.value.trim().length > 0 || pendingReplyMarkup.value.length > 0,
@@ -278,6 +289,7 @@ export const useChatStore = defineStore('chat', () => {
     const text = composerText.value.trim()
     const chatId = activeChatId.value
     const markupSnapshot = [...pendingReplyMarkup.value]
+    const replyId = replyToMessageId.value
     if ((!text && markupSnapshot.length === 0) || !chatId) return
     const id = parseApiChatId(chatId)
     if (id == null) return
@@ -286,6 +298,26 @@ export const useChatStore = defineStore('chat', () => {
     const now = new Date()
     const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
     const tempId = `temp-${clientMessageId}`
+    const replyPreview =
+      replyId != null && replyId > 0
+        ? messages.value.find((m) => Number(m.id) === replyId)
+        : undefined
+    const optimisticReplyTo =
+      replyId != null && replyId > 0
+        ? replyPreview?.reply_to ??
+          (replyPreview
+            ? {
+                id: replyId,
+                text: (replyPreview.text ?? '').slice(0, 500),
+                sender_type:
+                  replyPreview.kind === 'outgoing'
+                    ? 'moderator'
+                    : replyPreview.kind === 'system'
+                      ? 'system'
+                      : 'client',
+              }
+            : { id: replyId, text: '', sender_type: 'client' })
+        : undefined
     messages.value = [
       ...messages.value,
       {
@@ -294,6 +326,7 @@ export const useChatStore = defineStore('chat', () => {
         text: text || '\u00a0',
         time,
         clientMessageId,
+        ...(optimisticReplyTo ? { reply_to: optimisticReplyTo } : {}),
         ...(markupSnapshot.length > 0 ? { reply_markup: markupSnapshot } : {}),
       },
     ]
@@ -307,12 +340,16 @@ export const useChatStore = defineStore('chat', () => {
       if (markupSnapshot.length > 0) {
         payload.reply_markup = markupSnapshot
       }
+      if (replyId != null && replyId > 0) {
+        payload.reply_to_message_id = replyId
+      }
       const data = await msgApi.sendMessage(id, payload)
       const mapped = mapApiMessageToChatMessage(data)
       messages.value = messages.value.map((m) =>
         m.clientMessageId === clientMessageId ? mapped : m,
       )
       pendingReplyMarkup.value = []
+      replyToMessageId.value = null
       useUiStore().pushToast('Сообщение отправлено', 'success')
       await markAsRead(id)
     } catch {
@@ -451,6 +488,7 @@ export const useChatStore = defineStore('chat', () => {
     oldestMessageId.value = null
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
+    replyToMessageId.value = null
     cannedQuickReplies.value = []
     quickLinkPresets.value = []
   }
@@ -472,6 +510,7 @@ export const useChatStore = defineStore('chat', () => {
     activeChatId,
     messages,
     composerText,
+    replyToMessageId,
     isTyping,
     aiContent,
     loadingOlder,
@@ -484,6 +523,8 @@ export const useChatStore = defineStore('chat', () => {
     fetchThread,
     loadOlderMessages,
     setComposerText,
+    setReplyTarget,
+    clearReplyTarget,
     canSend,
     sendMessage,
     addReplyMarkupPreset,

@@ -31,6 +31,8 @@
         "closeChat": "Закрыть чат",
         "newMessage": "Новое сообщение",
         "typeMessage": "Введите сообщение...",
+        "replyingTo": "Ответ на",
+        "cancelReply": "Отменить ответ",
         "typing": "{name} печатает...",
         "clientTyping": "Клиент",
         "loadOlder": "Загрузить предыдущие",

@@ -6,11 +6,15 @@ namespace App\Application\Communication\Action;
 
 use App\Application\Communication\Webhook\InboundAttachmentExtractor;
 use App\Application\Communication\Webhook\InboundChatUpsert;
+use App\Application\Communication\Webhook\TelegramUserMetadataEnricher;
 use App\Application\Communication\Webhook\VkUserMetadataEnricher;
 use App\Application\Communication\Webhook\WebhookPayloadExtractor;
+use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
+use App\Domains\Integration\ValueObject\SourceType;
+use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Jobs\DownloadInboundAttachmentJob;
 use App\Services\MaybeSendOfflineAutoReply;
@@ -24,7 +28,9 @@ final readonly class ProcessInboundWebhook
         private InboundAttachmentExtractor $inboundAttachmentExtractor,
         private WebhookPayloadExtractor $webhookPayloadExtractor,
         private VkUserMetadataEnricher $vkUserMetadataEnricher,
+        private TelegramUserMetadataEnricher $telegramUserMetadataEnricher,
         private InboundChatUpsert $inboundChatUpsert,
+        private MessageRepositoryInterface $messageRepository,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -53,6 +59,12 @@ final readonly class ProcessInboundWebhook
             $payload,
             $userMetadata,
         );
+        $userMetadata = $this->telegramUserMetadataEnricher->enrich(
+            $source->type,
+            $source->settings,
+            $payload,
+            $userMetadata,
+        );
         $externalMessageId = $this->webhookPayloadExtractor->extractExternalMessageId($payload);
 
         $chat = $this->inboundChatUpsert->resolve(
@@ -62,6 +74,15 @@ final readonly class ProcessInboundWebhook
             $userMetadata,
         );
 
+        $attachments = $this->resolveTelegramFileUrls($attachments, $source->type, $source->settings);
+
+        $replyToExternalId = $this->webhookPayloadExtractor->extractReplyToExternalMessageId($payload);
+        $replyToInternalId = null;
+        if ($replyToExternalId !== null && $replyToExternalId !== '') {
+            $replied = $this->messageRepository->findByChatAndExternalMessageId($chat->id, $replyToExternalId);
+            $replyToInternalId = $replied?->id;
+        }
+
         $message = $this->createMessage->run(
             chatId: $chat->id,
             text: $text,
@@ -69,6 +90,7 @@ final readonly class ProcessInboundWebhook
             senderId: null,
             payload: $payload,
             externalMessageId: $externalMessageId,
+            replyToMessageId: $replyToInternalId,
         );
 
         $this->dispatchAttachmentDownloads($attachments, $message->id);
@@ -77,6 +99,73 @@ final readonly class ProcessInboundWebhook
         if ($chatModel !== null) {
             $this->maybeSendOfflineAutoReply->run($chatModel);
         }
+    }
+
+    /**
+     * @param  list<array{url?: string, telegram_file_id?: string, file_name: string, mime_type: string, kind?: string}>  $attachments
+     * @param  array<string, mixed>  $settings
+     * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
+     */
+    private function resolveTelegramFileUrls(array $attachments, SourceType $sourceType, array $settings): array
+    {
+        if ($sourceType !== SourceType::Tg) {
+            return $this->onlyAttachmentsWithUrl($attachments);
+        }
+
+        $token = isset($settings['bot_token']) && is_string($settings['bot_token'])
+            ? trim($settings['bot_token'])
+            : '';
+        if ($token === '') {
+            return $this->onlyAttachmentsWithUrl($attachments);
+        }
+
+        $client = new TelegramApiClient($token);
+        $resolved = [];
+        foreach ($attachments as $attachment) {
+            $url = isset($attachment['url']) && is_string($attachment['url']) ? trim($attachment['url']) : '';
+            if ($url === '' && ! empty($attachment['telegram_file_id']) && is_string($attachment['telegram_file_id'])) {
+                $resolvedUrl = $client->getFileDownloadUrl($attachment['telegram_file_id']);
+                if ($resolvedUrl !== null && $resolvedUrl !== '') {
+                    $url = $resolvedUrl;
+                }
+            }
+            if ($url === '') {
+                continue;
+            }
+
+            $resolved[] = [
+                'url' => $url,
+                'file_name' => $attachment['file_name'],
+                'mime_type' => $attachment['mime_type'],
+                'kind' => $attachment['kind'] ?? null,
+            ];
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param  list<array{url?: string, telegram_file_id?: string, file_name: string, mime_type: string, kind?: string}>  $attachments
+     * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
+     */
+    private function onlyAttachmentsWithUrl(array $attachments): array
+    {
+        $out = [];
+        foreach ($attachments as $attachment) {
+            $url = isset($attachment['url']) && is_string($attachment['url']) ? trim($attachment['url']) : '';
+            if ($url === '') {
+                continue;
+            }
+
+            $out[] = [
+                'url' => $url,
+                'file_name' => $attachment['file_name'],
+                'mime_type' => $attachment['mime_type'],
+                'kind' => $attachment['kind'] ?? null,
+            ];
+        }
+
+        return $out;
     }
 
     /**

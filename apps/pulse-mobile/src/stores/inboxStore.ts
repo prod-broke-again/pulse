@@ -1,8 +1,24 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import * as chatApi from '../api/chatRepository'
+import { getEcho, subscribeModeratorChannel } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
+import { useAuthStore } from './authStore'
 import type { BottomNavId, ChatPreviewItem, FilterId, InboxTab } from '../types/chat'
+
+let moderatorUnsub: (() => void) | null = null
+
+function setupModeratorRealtime(scheduleRefresh: () => void): void {
+  moderatorUnsub?.()
+  moderatorUnsub = null
+  const auth = useAuthStore()
+  const uid = auth.user?.id
+  if (!uid) return
+  getEcho()
+  moderatorUnsub = subscribeModeratorChannel(uid, {
+    onNewMessage: () => scheduleRefresh(),
+  })
+}
 
 function deriveApiStatus(filters: Set<FilterId>): 'open' | 'closed' | 'all' {
   const hasOpen = filters.has('open')
@@ -158,6 +174,19 @@ export const useInboxStore = defineStore('inbox', () => {
       void loadInbox()
     }, debounceMs)
   }
+
+  watch(
+    () => useAuthStore().user?.id,
+    (uid) => {
+      if (uid) {
+        setupModeratorRealtime(() => scheduleInboxRefreshFromRealtime())
+      } else {
+        moderatorUnsub?.()
+        moderatorUnsub = null
+      }
+    },
+    { immediate: true },
+  )
 
   return {
     chats,

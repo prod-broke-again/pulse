@@ -40,6 +40,8 @@ export interface ChatMessage {
   text: string
   time?: string
   attachment?: MessageAttachment
+  /** Quoted message (API + realtime). */
+  reply_to?: { id: number; text: string; sender_type: string }
   /** Inline URL buttons (moderator presets), shown under bubble. */
   reply_markup?: ReplyMarkupButton[]
   /** Client messages marked read by staff (API + MessageRead broadcast). */

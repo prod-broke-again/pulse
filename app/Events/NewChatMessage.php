@@ -17,21 +17,34 @@ final class NewChatMessage implements ShouldBroadcastNow
     use InteractsWithSockets;
     use SerializesModels;
 
+    /**
+     * @param  list<array<string, mixed>>  $attachments
+     * @param  array{id: int, text: string, sender_type: string}|null  $replyTo
+     */
     public function __construct(
         public int $chatId,
         public int $messageId,
         public string $text,
         public string $senderType = 'client',
         public ?int $senderId = null,
+        public array $attachments = [],
+        public ?array $replyTo = null,
+        public ?int $assignedModeratorUserId = null,
     ) {}
 
     /** @return array<int, Channel|PrivateChannel> */
     public function broadcastOn(): array
     {
-        return [
-            new PrivateChannel('chat.' . $this->chatId),
-            new Channel('widget-chat.' . $this->chatId),
+        $channels = [
+            new PrivateChannel('chat.'.$this->chatId),
+            new Channel('widget-chat.'.$this->chatId),
         ];
+
+        if ($this->assignedModeratorUserId !== null) {
+            $channels[] = new PrivateChannel('moderator.'.$this->assignedModeratorUserId);
+        }
+
+        return $channels;
     }
 
     /** @return array<string, mixed> */
@@ -43,6 +56,8 @@ final class NewChatMessage implements ShouldBroadcastNow
             'text' => $this->text,
             'sender_type' => $this->senderType,
             'sender_id' => $this->senderId,
+            'attachments' => $this->attachments,
+            'reply_to' => $this->replyTo,
         ];
     }
 }

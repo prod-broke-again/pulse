@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ChevronLeft, UserPlus, X, Loader2 } from 'lucide-vue-next'
+import { ChevronLeft, UserPlus, X, Loader2, RotateCw } from 'lucide-vue-next'
 import { Teleport, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as chatApi from '../../api/chatRepository'
+import { parseApiChatId } from '../../lib/chatIds'
 import type { ChatThreadMeta, ChannelSource } from '../../types/chat'
+import { useUiStore } from '../../stores/uiStore'
 import ChannelGlyph from '../common/ChannelGlyph.vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useChatStore } from '../../stores/chatStore'
@@ -26,6 +28,7 @@ const showAssignButton = computed(() => {
 
 const showCloseButton = computed(() => props.meta.status === 'open')
 const headerAction = ref<'assign' | 'close' | null>(null)
+const syncLoading = ref(false)
 
 const deptSheetOpen = ref(false)
 const departmentsLoading = ref(false)
@@ -61,6 +64,22 @@ async function onCloseChat() {
     await chat.closeThread()
   } finally {
     headerAction.value = null
+  }
+}
+
+async function onSyncHistory(): Promise<void> {
+  const id = parseApiChatId(props.meta.id)
+  if (id == null || syncLoading.value) return
+  syncLoading.value = true
+  const ui = useUiStore()
+  try {
+    await chatApi.syncChatHistory(id)
+    await chat.fetchThread(props.meta.id)
+    ui.pushToast('История синхронизирована', 'success')
+  } catch {
+    ui.pushToast('Не удалось синхронизировать', 'error')
+  } finally {
+    syncLoading.value = false
   }
 }
 
@@ -134,6 +153,21 @@ function pickDepartment(id: number): void {
       </div>
     </div>
     <div class="flex gap-1">
+      <button
+        v-if="meta.status === 'open'"
+        type="button"
+        class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
+        :disabled="syncLoading"
+        aria-label="Синхронизировать историю с мессенджером"
+        @click="onSyncHistory()"
+      >
+        <Loader2
+          v-if="syncLoading"
+          class="size-3 motion-safe:animate-spin text-[var(--color-brand)]"
+          aria-hidden="true"
+        />
+        <RotateCw v-else class="size-3" aria-hidden="true" />
+      </button>
       <button
         v-if="showAssignButton"
         type="button"

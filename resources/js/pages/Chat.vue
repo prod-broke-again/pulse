@@ -13,7 +13,7 @@ import ChatMessageItem from '@/components/chat/ChatMessageItem.vue';
 import { Checkbox } from '@/components/ui/checkbox';
 import Button from '@/components/ui/button/Button.vue';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, XCircle, Send, Loader2, Bell } from 'lucide-vue-next';
+import { Search, UserPlus, XCircle, Send, Loader2, Bell, X } from 'lucide-vue-next';
 import { useWebPush } from '@/composables/useWebPush';
 
 const page = usePage();
@@ -43,6 +43,7 @@ const chatsError = ref<string | null>(null);
 const selectedChatId = ref<number | null>(null);
 const selectedChat = ref<ApiChat | null>(null);
 const newMessageText = ref('');
+const replyToMessageId = ref<number | null>(null);
 const cannedResponses = ref<ApiCannedResponse[]>([]);
 const assigningInProgress = ref(false);
 
@@ -165,6 +166,7 @@ function selectChat(chat: ApiChat) {
     selectedChatId.value = chat.id;
     selectedChat.value = chat;
     newMessageText.value = '';
+    replyToMessageId.value = null;
     router.get('/chat', { chat: chat.id }, { preserveState: true });
     if (chat.source_id) fetchCannedResponses(chat.source_id);
     fetchMessages(chat.id);
@@ -196,11 +198,29 @@ function closeChat() {
     }).catch(() => {});
 }
 
+const replyToPreview = computed(() => {
+    const rid = replyToMessageId.value;
+    if (rid == null || rid <= 0) return null;
+    const m = messages.value.find((x) => Number(x.id) === rid);
+    if (!m) return null;
+    return { id: rid, text: (m.text ?? '').slice(0, 280) };
+});
+
+function onReplyToMessage(messageId: number) {
+    replyToMessageId.value = messageId;
+}
+
+function clearReplyTarget() {
+    replyToMessageId.value = null;
+}
+
 function sendMessage() {
     const text = newMessageText.value.trim();
     if (!selectedChatId.value || !text) return;
-    sendMessageAction(text, []).then(() => {
+    const rId = replyToMessageId.value;
+    sendMessageAction(text, [], { replyToMessageId: rId }).then(() => {
         newMessageText.value = '';
+        replyToMessageId.value = null;
     });
 }
 
@@ -276,7 +296,10 @@ onMounted(() => {
     const e = echo.value;
     const uid = authUser.value?.id;
     if (e && uid) {
-        subscribeToModerator(e, uid, { onAssigned: fetchChats });
+        subscribeToModerator(e, uid, {
+            onAssigned: fetchChats,
+            onNewMessage: () => debouncedFetchChats(),
+        });
     }
     if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
         const handler = (event: MessageEvent) => {
@@ -533,6 +556,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                         v-for="msg in messages"
                                         :key="String(msg.id)"
                                         :message="msg"
+                                        @reply="onReplyToMessage"
                                     />
                                 </div>
                             </template>
@@ -554,6 +578,25 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
 
                         <!-- Input -->
                         <div class="border-sidebar-border/70 border-t p-3 dark:border-sidebar-border">
+                            <div
+                                v-if="replyToPreview"
+                                class="mb-2 flex items-start gap-2 rounded-md border border-border/80 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                            >
+                                <div class="min-w-0 flex-1">
+                                    <span class="font-medium text-foreground">{{ t('chat.replyingTo') }}</span>
+                                    <p class="line-clamp-2 whitespace-pre-wrap break-words">
+                                        {{ replyToPreview.text }}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    :aria-label="t('chat.cancelReply')"
+                                    @click="clearReplyTarget"
+                                >
+                                    <X class="size-4" />
+                                </button>
+                            </div>
                             <form
                                 class="flex gap-2"
                                 @submit.prevent="sendMessage"

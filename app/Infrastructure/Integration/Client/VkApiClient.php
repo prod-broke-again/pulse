@@ -77,4 +77,18 @@ final class VkApiClient
 
         return array_filter($profile, static fn ($value) => $value !== null && $value !== '');
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getHistory(int $peerId, int $count = 200, int $offset = 0): array
+    {
+        $response = $this->vk->messages()->getHistory($this->accessToken, [
+            'peer_id' => $peerId,
+            'count' => min(max($count, 1), 200),
+            'offset' => max($offset, 0),
+        ]);
+
+        return is_array($response) ? $response : [];
+    }
 }

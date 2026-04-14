@@ -55,9 +55,11 @@ final readonly class WebhookPayloadExtractor
      */
     public function extractText(array $payload, array $attachments): string
     {
+        $message = $payload['message'] ?? null;
         $text = $payload['text']
-            ?? $payload['message']['text']
+            ?? (is_array($message) ? ($message['text'] ?? $message['caption'] ?? null) : null)
             ?? ($payload['object']['message']['text'] ?? null)
+            ?? ($payload['object']['message']['caption'] ?? null)
             ?? ($payload['object']['text'] ?? null)
             ?? $payload['body']
             ?? '';
@@ -67,6 +69,29 @@ final readonly class WebhookPayloadExtractor
         }
 
         return $this->inboundAttachmentExtractor->buildAttachmentPlaceholderText($attachments);
+    }
+
+    /**
+     * External id of the message this update replies to (Telegram/VK-style), if present.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function extractReplyToExternalMessageId(array $payload): ?string
+    {
+        $reply = null;
+        if (isset($payload['message']['reply_to_message']) && is_array($payload['message']['reply_to_message'])) {
+            $reply = $payload['message']['reply_to_message'];
+        }
+        if (is_array($reply) && isset($reply['message_id'])) {
+            return (string) $reply['message_id'];
+        }
+
+        $vkReply = $payload['object']['message']['reply_message'] ?? null;
+        if (is_array($vkReply) && isset($vkReply['id'])) {
+            return (string) $vkReply['id'];
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $payload */

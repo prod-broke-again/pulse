@@ -21,7 +21,7 @@ final class MaxMessengerProvider implements MessengerProviderInterface
 
     public function sendMessage(string $externalUserId, string $text, array $options = []): void
     {
-        unset($options['message_id']);
+        unset($options['message_id'], $options['local_attachment_paths'], $options['reply_to_external_message_id']);
 
         /** @var list<array{text: string, url: string}>|null $replyMarkup */
         $replyMarkup = null;

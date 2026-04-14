@@ -247,12 +247,18 @@ final class WidgetApiController extends Controller
         $chat->touch();
         $chat->save();
 
+        $message->loadMissing('replyTo');
+        $extras = \App\Support\NewChatMessageBroadcastExtras::fromMessage($message);
+
         event(new \App\Events\NewChatMessage(
             chatId: $chat->id,
             messageId: $message->id,
             text: $message->text,
             senderType: $message->sender_type,
             senderId: $message->sender_id,
+            attachments: $extras['attachments'],
+            replyTo: $extras['reply_to'],
+            assignedModeratorUserId: $chat->assigned_to,
         ));
 
         $clientMessageCount = MessageModel::where('chat_id', $chat->id)

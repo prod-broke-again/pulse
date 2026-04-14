@@ -14,6 +14,8 @@ use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
 use App\Events\ChatAssigned as ChatAssignedEvent;
 use App\Events\NewChatMessage as NewChatMessageEvent;
+use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Support\NewChatMessageBroadcastExtras;
 use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class SendMessage
@@ -35,6 +37,7 @@ final readonly class SendMessage
         ?int $replyToMessageId = null,
         /** @var list<array{text: string, url: string}>|null */
         ?array $replyMarkup = null,
+        bool $deliverToMessenger = true,
     ): Message {
         $chat = $this->chatRepository->findById($chatId);
         if ($chat === null) {
@@ -71,19 +74,35 @@ final readonly class SendMessage
 
         $persisted = $this->messageRepository->persist($message);
 
+        $model = MessageModel::query()->with('replyTo')->find($persisted->id);
+        $extras = $model !== null
+            ? NewChatMessageBroadcastExtras::fromMessage($model)
+            : ['attachments' => [], 'reply_to' => null];
+
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
             messageId: $persisted->id,
             text: $text,
             senderType: $senderType->value,
             senderId: $senderId,
+            attachments: $extras['attachments'],
+            replyTo: $extras['reply_to'],
+            assignedModeratorUserId: $chat->assignedTo,
         ));
 
         $source = $this->sourceRepository->findById($chat->sourceId);
-        if ($source !== null) {
+        if ($source !== null && $deliverToMessenger) {
             $options = ['message_id' => $persisted->id];
             if ($persisted->replyMarkup !== null && $persisted->replyMarkup !== []) {
                 $options['reply_markup'] = $persisted->replyMarkup;
+            }
+            if ($persisted->replyToId !== null) {
+                $replySource = MessageModel::query()->find($persisted->replyToId);
+                if ($replySource !== null
+                    && $replySource->external_message_id !== null
+                    && $replySource->external_message_id !== '') {
+                    $options['reply_to_external_message_id'] = $replySource->external_message_id;
+                }
             }
             $messenger->sendMessage($chat->externalUserId, $text, $options);
         }

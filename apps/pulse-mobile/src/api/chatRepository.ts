@@ -63,3 +63,8 @@ export async function changeChatDepartment(chatId: number, departmentId: number)
   const res = await http.patch<{ data: ApiChatRow }>(`/chats/${chatId}/department`, { department_id: departmentId })
   return res.data.data
 }
+
+export async function syncChatHistory(chatId: number): Promise<Record<string, unknown>> {
+  const res = await http.post<{ data: Record<string, unknown> }>(`/chats/${chatId}/sync-history`)
+  return res.data.data
+}

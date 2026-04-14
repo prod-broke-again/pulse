@@ -6,7 +6,7 @@ import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
 const chat = useChatStore()
-const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies, quickLinkPresets } =
+const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies, quickLinkPresets, replyToMessageId } =
   storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
 const actionsDetails = ref<HTMLDetailsElement | null>(null)
@@ -73,6 +73,29 @@ function onSend() {
       </button>
     </div>
     <div class="px-3 pt-2.5">
+      <div
+        v-if="replyToMessageId != null"
+        class="mb-2 flex items-start gap-2 rounded-xl border border-[var(--color-brand-200)]/40 bg-[var(--color-brand-bg)] px-3 py-2 text-xs dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)]"
+      >
+        <div class="min-w-0 flex-1">
+          <div class="mb-0.5 font-semibold text-[var(--color-brand)] dark:text-[var(--color-brand-200)]">
+            Ответ на сообщение
+          </div>
+          <p class="line-clamp-2 text-[var(--zinc-600)] dark:text-[var(--zinc-300)]">
+            {{
+              chat.messages.find((m) => Number(m.id) === replyToMessageId)?.text?.slice(0, 240) || '…'
+            }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--zinc-500)] transition-colors hover:bg-[var(--zinc-200)] dark:hover:bg-[var(--zinc-700)]"
+          aria-label="Отменить ответ"
+          @click="chat.clearReplyTarget()"
+        >
+          <X class="size-4" />
+        </button>
+      </div>
       <div
         v-if="pendingReplyMarkup.length > 0"
         class="mb-2 flex flex-wrap gap-2"

@@ -31,6 +31,8 @@
         "closeChat": "Close chat",
         "newMessage": "New message",
         "typeMessage": "Type a message...",
+        "replyingTo": "Replying to",
+        "cancelReply": "Cancel reply",
         "typing": "{name} is typing...",
         "clientTyping": "Client",
         "loadOlder": "Load older messages",

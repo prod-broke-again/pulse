@@ -9,6 +9,8 @@ export type NewChatMessagePayload = {
   text: string
   sender_type: string
   sender_id: number | null
+  attachments?: Array<Record<string, unknown>>
+  reply_to?: { id: number; text: string; sender_type: string } | null
 }
 
 export type MessageReadPayload = {
@@ -25,6 +27,10 @@ export type ChatChannelHandlers = {
   onNewMessage?: (payload: NewChatMessagePayload) => void
   onMessageRead?: (payload: MessageReadPayload) => void
   onTyping?: (payload: TypingPayload) => void
+}
+
+export type ModeratorChannelHandlers = {
+  onNewMessage?: (payload: NewChatMessagePayload) => void
 }
 
 export function getEcho(): Echo<'pusher'> | null {
@@ -73,6 +79,24 @@ export function subscribeChatChannel(chatId: number, handlers: ChatChannelHandle
 
   return () => {
     client.leave(`chat.${chatId}`)
+  }
+}
+
+/** Subscribe to private moderator channel (inbox refresh when assigned chats get messages). */
+export function subscribeModeratorChannel(
+  userId: number,
+  handlers: ModeratorChannelHandlers,
+): () => void {
+  const client = getEcho()
+  if (!client) {
+    return () => {}
+  }
+
+  const ch = client.private(`moderator.${userId}`)
+  ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => handlers.onNewMessage?.(e))
+
+  return () => {
+    client.leave(`moderator.${userId}`)
   }
 }
 

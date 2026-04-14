@@ -10,6 +10,7 @@ use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Support\NewChatMessageBroadcastExtras;
 use App\Jobs\GenerateChatTopicJob;
 use Illuminate\Contracts\Events\Dispatcher;
 
@@ -28,6 +29,7 @@ final readonly class CreateMessage
         ?int $senderId = null,
         array $payload = [],
         ?string $externalMessageId = null,
+        ?int $replyToMessageId = null,
     ): Message {
         $chat = $this->chatRepository->findById($chatId);
         if ($chat === null) {
@@ -51,9 +53,15 @@ final readonly class CreateMessage
             payload: $payload,
             replyMarkup: null,
             isRead: false,
+            replyToId: $replyToMessageId,
         );
 
         $persisted = $this->messageRepository->persist($message);
+
+        $model = MessageModel::query()->with('replyTo')->find($persisted->id);
+        $extras = $model !== null
+            ? NewChatMessageBroadcastExtras::fromMessage($model)
+            : ['attachments' => [], 'reply_to' => null];
 
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
@@ -61,6 +69,9 @@ final readonly class CreateMessage
             text: $text,
             senderType: $senderType->value,
             senderId: $senderId,
+            attachments: $extras['attachments'],
+            replyTo: $extras['reply_to'],
+            assignedModeratorUserId: $chat->assignedTo,
         ));
 
         if ($senderType === SenderType::Client) {

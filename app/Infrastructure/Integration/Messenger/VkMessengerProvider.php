@@ -19,7 +19,7 @@ final class VkMessengerProvider implements MessengerProviderInterface
     public function sendMessage(string $externalUserId, string $text, array $options = []): void
     {
         $params = $options;
-        unset($params['message_id']);
+        unset($params['message_id'], $params['local_attachment_paths'], $params['reply_to_external_message_id']);
 
         if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
             $params['keyboard'] = $this->vkOpenLinkKeyboardJson($params['reply_markup']);

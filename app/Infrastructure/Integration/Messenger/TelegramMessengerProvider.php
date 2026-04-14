@@ -28,16 +28,28 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
 
         RateLimiter::hit($key, self::SEND_RATE_DECAY_SECONDS);
 
-        /**
-         * Pulse stores moderator inline URL buttons as:
-         * `[{ "text": "...", "url": "https://..." }, ...]`
-         * {@see TelegramApiClient} maps this to phptg/bot-api {@see \Phptg\BotApi\Type\InlineKeyboardMarkup}.
-         *
-         * @see https://core.telegram.org/bots/api#inlinekeyboardmarkup
-         */
         $params = $options;
-        // Internal correlation id for Pulse; not part of Telegram Bot API sendMessage.
         unset($params['message_id']);
+
+        $localPaths = [];
+        if (isset($params['local_attachment_paths']) && is_array($params['local_attachment_paths'])) {
+            $localPaths = array_values(array_filter(
+                $params['local_attachment_paths'],
+                static fn ($p): bool => is_string($p) && $p !== '',
+            ));
+        }
+        unset($params['local_attachment_paths']);
+
+        if (isset($params['reply_to_external_message_id'])) {
+            $params['reply_to_message_id'] = (int) $params['reply_to_external_message_id'];
+            unset($params['reply_to_external_message_id']);
+        }
+
+        if ($localPaths !== []) {
+            $this->client->sendWithLocalFiles($externalUserId, $text, $localPaths, $params);
+
+            return;
+        }
 
         $this->client->sendMessage($externalUserId, $text, $params);
     }
