@@ -169,6 +169,7 @@ const lastTimelineLen = ref(0)
 const highlightMessageId = ref<string | null>(null)
 let highlightTimer: number | null = null
 const jumpTargetId = ref<number | null>(null)
+const pendingJumpToBottomUntil = ref(0)
 
 function scrollToEnd(behavior: ScrollBehavior = 'auto') {
   const el = root.value
@@ -201,14 +202,19 @@ function onScroll(e: Event) {
 }
 
 function onClickScrollDown() {
+  pendingJumpToBottomUntil.value = Date.now() + 550
   followTail.value = true
-  scrollToEnd('smooth')
+  scrollToEnd('auto')
   pendingBelowCount.value = 0
   void nextTick(() => {
-    updateNearBottomFromScroll()
-    if (isNearBottom.value) {
-      chat.onThreadScrolledNearBottom()
-    }
+    scrollToEnd('auto')
+    requestAnimationFrame(() => {
+      scrollToEnd('auto')
+      updateNearBottomFromScroll()
+      if (isNearBottom.value) {
+        chat.onThreadScrolledNearBottom()
+      }
+    })
   })
 }
 
@@ -227,6 +233,16 @@ onUpdated(() => {
   if (jumpTargetId.value != null) {
     const firstId = props.messages[0]?.id ?? null
     const len = props.messages.length
+    lastTimelineFirstId.value = firstId
+    lastTimelineLen.value = len
+    updateNearBottomFromScroll()
+    return
+  }
+  if (Date.now() < pendingJumpToBottomUntil.value) {
+    const firstId = props.messages[0]?.id ?? null
+    const len = props.messages.length
+    el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    pendingBelowCount.value = 0
     lastTimelineFirstId.value = firstId
     lastTimelineLen.value = len
     updateNearBottomFromScroll()
@@ -267,6 +283,7 @@ watch(
     pendingBelowCount.value = 0
     isNearBottom.value = true
     followTail.value = true
+    pendingJumpToBottomUntil.value = 0
     lastTimelineFirstId.value = null
     lastTimelineLen.value = 0
   },
@@ -426,7 +443,8 @@ defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelecti
       </svg>
       <span
         v-if="pendingBelowCount > 0"
-        class="absolute -right-1 -top-1 flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
+        class="absolute -right-1 -top-1 flex h-5 min-h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold tabular-nums leading-none text-white"
+        style="line-height: 1"
       >
         {{ pendingBelowCount > 99 ? '99+' : pendingBelowCount }}
       </span>

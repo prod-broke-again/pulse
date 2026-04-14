@@ -60,6 +60,8 @@ const highlightMessageId = ref<number | null>(null)
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
 /** Пока не завершён программный jump к сообщению — не трогаем scroll в onUpdated / watchers. */
 const jumpTargetId = ref<number | null>(null)
+/** После клика «к последним» — несколько циклов onUpdated прижимают низ, не восстанавливая якорь (иначе ломается smooth/auto скролл). */
+const pendingJumpToBottomUntil = ref(0)
 
 const selectionMode = ref(false)
 const selectedIds = ref<number[]>([])
@@ -264,14 +266,19 @@ function onScroll(_e: Event): void {
 function onClickScrollDown(e: MouseEvent): void {
   e.preventDefault()
   e.stopPropagation()
+  pendingJumpToBottomUntil.value = Date.now() + 550
   stickToBottom.value = true
-  scrollToBottom('smooth')
+  scrollToBottom('auto')
   pendingBelowCount.value = 0
   void nextTick(() => {
-    updateNearBottomFromScroll()
-    if (props.chatId != null && isNearBottom.value) {
-      emit('near-bottom')
-    }
+    scrollToBottom('auto')
+    requestAnimationFrame(() => {
+      scrollToBottom('auto')
+      updateNearBottomFromScroll()
+      if (props.chatId != null && isNearBottom.value) {
+        emit('near-bottom')
+      }
+    })
   })
 }
 
@@ -290,6 +297,17 @@ onUpdated(() => {
   if (jumpTargetId.value != null) {
     const firstId = props.timeline[0]?.id ?? null
     const len = props.timeline.length
+    lastTimelineFirstId.value = firstId
+    lastTimelineLen.value = len
+    updateNearBottomFromScroll()
+    return
+  }
+  if (Date.now() < pendingJumpToBottomUntil.value) {
+    const firstId = props.timeline[0]?.id ?? null
+    const len = props.timeline.length
+    el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    pendingBelowCount.value = 0
+    stickToBottom.value = true
     lastTimelineFirstId.value = firstId
     lastTimelineLen.value = len
     updateNearBottomFromScroll()
@@ -331,6 +349,7 @@ watch(
     pendingBelowCount.value = 0
     isNearBottom.value = true
     stickToBottom.value = true
+    pendingJumpToBottomUntil.value = 0
     lastTimelineFirstId.value = null
     lastTimelineLen.value = 0
   },
@@ -722,8 +741,8 @@ defineExpose({
       <ChevronDown class="h-5 w-5" />
       <span
         v-if="pendingBelowCount > 0"
-        class="absolute -right-1 -top-1 flex min-w-[1.25rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none"
-        style="background: #ef4444; color: #fff"
+        class="absolute -right-1 -top-1 flex h-5 min-h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums leading-none"
+        style="background: #ef4444; color: #fff; line-height: 1"
       >
         {{ pendingBelowCount > 99 ? '99+' : pendingBelowCount }}
       </span>
