@@ -53,6 +53,8 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
       ? metadata.avatar_url.trim()
       : null
 
+  const unreadCount = typeof chat.unread_count === 'number' ? Math.max(0, chat.unread_count) : 0
+
   return {
     id: chat.id,
     initials,
@@ -62,7 +64,8 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
     message: chat.latest_message?.text ?? '',
     time: latestTime,
     active: chat.id === activeId,
-    unread: (typeof chat.unread_count === 'number' ? chat.unread_count : 0) > 0,
+    unreadCount,
+    unread: unreadCount > 0,
     sourceId: chat.source_id,
     assignedTo: chat.assigned_to,
     assignee: chat.assignee ?? null,

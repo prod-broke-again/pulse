@@ -21,7 +21,10 @@ import { fetchMessageContext } from '../../api/messages'
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue'
 import { formatMessagesTelegramStyle } from '../../utils/telegramCopyFormat'
 
+/** FAB / «рядом с низом» — широкий порог. */
 const NEAR_BOTTOM_PX = 140
+/** Следовать за новыми сообщениями и snap в onUpdated — только если реально у нижней границы. */
+const STRICT_BOTTOM_PX = 24
 
 const props = defineProps<{
   timeline: MessageItem[]
@@ -55,6 +58,8 @@ const lastTimelineFirstId = ref<number | null>(null)
 const lastTimelineLen = ref(0)
 const highlightMessageId = ref<number | null>(null)
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
+/** Пока не завершён программный jump к сообщению — не трогаем scroll в onUpdated / watchers. */
+const jumpTargetId = ref<number | null>(null)
 
 const selectionMode = ref(false)
 const selectedIds = ref<number[]>([])
@@ -193,6 +198,9 @@ function attachThreadResizeObserver(): void {
     return
   }
   threadResizeObserver = new ResizeObserver(() => {
+    if (jumpTargetId.value != null) {
+      return
+    }
     if (!stickToBottom.value) {
       return
     }
@@ -239,13 +247,11 @@ function updateNearBottomFromScroll(): void {
   }
   const d = el.scrollHeight - el.scrollTop - el.clientHeight
   isNearBottom.value = d < NEAR_BOTTOM_PX
+  stickToBottom.value = d < STRICT_BOTTOM_PX
 }
 
-function onScroll(e: Event): void {
-  const el = e.target as HTMLElement
-  const d = el.scrollHeight - el.scrollTop - el.clientHeight
-  isNearBottom.value = d < NEAR_BOTTOM_PX
-  stickToBottom.value = d < NEAR_BOTTOM_PX
+function onScroll(_e: Event): void {
+  updateNearBottomFromScroll()
   if (props.chatId == null) {
     return
   }
@@ -281,11 +287,19 @@ onUpdated(() => {
   if (!el || props.timeline.length === 0) {
     return
   }
+  if (jumpTargetId.value != null) {
+    const firstId = props.timeline[0]?.id ?? null
+    const len = props.timeline.length
+    lastTimelineFirstId.value = firstId
+    lastTimelineLen.value = len
+    updateNearBottomFromScroll()
+    return
+  }
   const dist = savedDistanceFromBottom.value
   const firstId = props.timeline[0]?.id ?? null
   const len = props.timeline.length
 
-  if (dist < NEAR_BOTTOM_PX) {
+  if (dist < STRICT_BOTTOM_PX) {
     el.scrollTop = el.scrollHeight - el.clientHeight
     pendingBelowCount.value = 0
     stickToBottom.value = true
@@ -357,6 +371,9 @@ watch(
       return
     }
 
+    if (jumpTargetId.value != null) {
+      return
+    }
     if (stickToBottom.value && cur.len > (prev?.len ?? 0)) {
       scrollToBottom('auto')
       requestAnimationFrame(() => scrollToBottom('auto'))
@@ -375,7 +392,25 @@ watch(
   { flush: 'post', immediate: true },
 )
 
-function scrollToMessageById(id: number): void {
+function tryScrollMessageIntoViewCentered(id: number): boolean {
+  const root = scrollRoot.value
+  if (!root) {
+    return false
+  }
+  const el = root.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
+  if (!el) {
+    return false
+  }
+  const rootRect = root.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  const delta
+    = (elRect.top - rootRect.top) - (root.clientHeight / 2) + (elRect.height / 2)
+  root.scrollTop += delta
+  return true
+}
+
+async function scrollToMessageById(id: number): Promise<void> {
+  jumpTargetId.value = id
   highlightMessageId.value = id
   if (highlightTimer != null) {
     clearTimeout(highlightTimer)
@@ -384,11 +419,28 @@ function scrollToMessageById(id: number): void {
     highlightMessageId.value = null
     highlightTimer = null
   }, 1500)
-  void nextTick(() => {
-    const root = scrollRoot.value
-    const el = root?.querySelector(`[data-message-id="${id}"]`)
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+  await nextTick()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
   })
+
+  let ok = tryScrollMessageIntoViewCentered(id)
+  if (!ok) {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+    ok = tryScrollMessageIntoViewCentered(id)
+  }
+  if (!ok) {
+    await nextTick()
+    tryScrollMessageIntoViewCentered(id)
+  }
+
+  jumpTargetId.value = null
+  updateNearBottomFromScroll()
 }
 
 async function jumpToReply(replyToId: number | null | undefined): Promise<void> {
@@ -396,16 +448,15 @@ async function jumpToReply(replyToId: number | null | undefined): Promise<void> 
     return
   }
   if (props.timeline.some((m) => m.id === replyToId)) {
-    await nextTick()
-    scrollToMessageById(replyToId)
+    await scrollToMessageById(replyToId)
     return
   }
   try {
     const rows = await fetchMessageContext(replyToId)
+    jumpTargetId.value = replyToId
     emit('merge-context', rows)
     await nextTick()
-    await nextTick()
-    scrollToMessageById(replyToId)
+    await scrollToMessageById(replyToId)
   } catch {
     emit('toast', 'Сообщение слишком далеко в истории или недоступно.')
   }

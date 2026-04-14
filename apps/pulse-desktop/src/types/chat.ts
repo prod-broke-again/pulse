@@ -8,6 +8,8 @@ export interface Conversation {
   department: string
   message: string
   time: string
+  /** Количество непрочитанных сообщений клиента для текущего модератора (с сервера). */
+  unreadCount?: number
   unread?: boolean
   active?: boolean
   sourceId?: number

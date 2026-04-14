@@ -9,6 +9,7 @@ import { formatChatMessagesTelegramStyle } from '../../utils/telegramCopyFormat'
 import MessageBubble from './MessageBubble.vue'
 
 const NEAR_BOTTOM_PX = 140
+const STRICT_BOTTOM_PX = 24
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -147,21 +148,27 @@ function onReplyToMessage(messageId: string) {
 }
 
 async function onJumpReply(messageId: number) {
+  jumpTargetId.value = messageId
   const ok = await chat.ensureReplyMessageLoaded(messageId)
   if (ok) {
     await nextTick()
-    scrollToMessageById(messageId)
+    await scrollToMessageById(messageId)
+  } else {
+    jumpTargetId.value = null
   }
 }
 
 const root = ref<HTMLElement | null>(null)
 const pendingBelowCount = ref(0)
 const isNearBottom = ref(true)
+/** Следовать за хвостом при новых сообщениях / typing — только у самого низа. */
+const followTail = ref(true)
 const savedDistanceFromBottom = ref(0)
 const lastTimelineFirstId = ref<string | null>(null)
 const lastTimelineLen = ref(0)
 const highlightMessageId = ref<string | null>(null)
 let highlightTimer: number | null = null
+const jumpTargetId = ref<number | null>(null)
 
 function scrollToEnd(behavior: ScrollBehavior = 'auto') {
   const el = root.value
@@ -178,6 +185,7 @@ function updateNearBottomFromScroll(): void {
   }
   const d = el.scrollHeight - el.scrollTop - el.clientHeight
   isNearBottom.value = d < NEAR_BOTTOM_PX
+  followTail.value = d < STRICT_BOTTOM_PX
 }
 
 function onScroll(e: Event) {
@@ -193,10 +201,15 @@ function onScroll(e: Event) {
 }
 
 function onClickScrollDown() {
+  followTail.value = true
   scrollToEnd('smooth')
   pendingBelowCount.value = 0
-  isNearBottom.value = true
-  chat.onThreadScrolledNearBottom()
+  void nextTick(() => {
+    updateNearBottomFromScroll()
+    if (isNearBottom.value) {
+      chat.onThreadScrolledNearBottom()
+    }
+  })
 }
 
 onBeforeUpdate(() => {
@@ -211,11 +224,19 @@ onUpdated(() => {
   if (!el || props.messages.length === 0) {
     return
   }
+  if (jumpTargetId.value != null) {
+    const firstId = props.messages[0]?.id ?? null
+    const len = props.messages.length
+    lastTimelineFirstId.value = firstId
+    lastTimelineLen.value = len
+    updateNearBottomFromScroll()
+    return
+  }
   const dist = savedDistanceFromBottom.value
   const firstId = props.messages[0]?.id ?? null
   const len = props.messages.length
 
-  if (dist < NEAR_BOTTOM_PX) {
+  if (dist < STRICT_BOTTOM_PX) {
     el.scrollTop = el.scrollHeight - el.clientHeight
     pendingBelowCount.value = 0
   } else {
@@ -245,6 +266,7 @@ watch(
     exitSelectionMode()
     pendingBelowCount.value = 0
     isNearBottom.value = true
+    followTail.value = true
     lastTimelineFirstId.value = null
     lastTimelineLen.value = 0
   },
@@ -257,7 +279,10 @@ watch(
       return
     }
     await nextTick()
-    if (isNearBottom.value) {
+    if (jumpTargetId.value != null) {
+      return
+    }
+    if (followTail.value) {
       scrollToEnd('auto')
     }
   },
@@ -265,13 +290,35 @@ watch(
 
 watch(isTyping, async () => {
   await nextTick()
-  if (isNearBottom.value) {
+  if (jumpTargetId.value != null) {
+    return
+  }
+  if (followTail.value) {
     scrollToEnd('auto')
   }
 })
 
-function scrollToMessageById(messageId: number) {
+function tryScrollMessageIntoViewCentered(messageId: number): boolean {
+  const r = root.value
+  if (!r) {
+    return false
+  }
   const idStr = String(messageId)
+  const el = r.querySelector(`[data-message-id="${idStr}"]`) as HTMLElement | null
+  if (!el) {
+    return false
+  }
+  const rootRect = r.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  const delta
+    = (elRect.top - rootRect.top) - (r.clientHeight / 2) + (elRect.height / 2)
+  r.scrollTop += delta
+  return true
+}
+
+async function scrollToMessageById(messageId: number): Promise<void> {
+  const idStr = String(messageId)
+  jumpTargetId.value = messageId
   highlightMessageId.value = idStr
   if (highlightTimer != null) {
     window.clearTimeout(highlightTimer)
@@ -280,11 +327,28 @@ function scrollToMessageById(messageId: number) {
     highlightMessageId.value = null
     highlightTimer = null
   }, 1500)
-  void nextTick(() => {
-    const r = root.value
-    const el = r?.querySelector(`[data-message-id="${idStr}"]`)
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+  await nextTick()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
   })
+
+  let ok = tryScrollMessageIntoViewCentered(messageId)
+  if (!ok) {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+    ok = tryScrollMessageIntoViewCentered(messageId)
+  }
+  if (!ok) {
+    await nextTick()
+    tryScrollMessageIntoViewCentered(messageId)
+  }
+
+  jumpTargetId.value = null
+  updateNearBottomFromScroll()
 }
 
 defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelectionMode })

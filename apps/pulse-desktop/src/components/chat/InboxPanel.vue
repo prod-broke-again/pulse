@@ -121,6 +121,20 @@ function pickClose(): void {
   emit('close-chat', id)
   closeMenu()
 }
+
+/** Базовый паттерн счетчика: фикс. высота + min-width + padding, единая типографика для всех чисел. */
+function unreadBadgeClass(count: number): string {
+  if (count <= 0) {
+    return ''
+  }
+  if (count <= 9) {
+    return 'h-5 min-w-5 px-1'
+  }
+  if (count <= 99) {
+    return 'h-5 min-w-5 px-1.5'
+  }
+  return 'h-5 min-w-[1.7rem] px-1.5'
+}
 </script>
 
 <template>
@@ -247,7 +261,7 @@ function pickClose(): void {
         :key="chat.id"
         class="group chat-item-m flex cursor-pointer gap-3 rounded-[var(--radius-md)] border border-transparent px-2.5 py-3 transition-colors"
         :class="chat.id === selectedChatId ? 'chat-item-active' : ''"
-        :data-unread="chat.unread ? '1' : '0'"
+        :data-unread="(chat.unreadCount ?? 0) > 0 ? '1' : '0'"
         @click="emit('select-chat', chat.id)"
         @contextmenu="openMenuAt(chat.id, $event)"
       >
@@ -268,7 +282,18 @@ function pickClose(): void {
         <div class="min-w-0 flex-1">
           <div class="mb-0.5 flex items-center justify-between gap-2">
             <span class="truncate text-[13.5px] font-semibold" style="color: var(--text-primary)">{{ chat.name }}</span>
-            <span class="shrink-0 text-[11px]" style="color: var(--text-muted)">{{ chat.time }}</span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span
+                v-if="(chat.unreadCount ?? 0) > 0"
+                class="inline-grid shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums tracking-tight text-white shadow-sm ring-1 ring-inset ring-white/20 [line-height:1]"
+                :class="unreadBadgeClass(chat.unreadCount ?? 0)"
+                style="background: var(--color-brand-200)"
+                :title="`Непрочитанных сообщений: ${chat.unreadCount}`"
+              >
+                {{ (chat.unreadCount ?? 0) > 99 ? '99+' : chat.unreadCount }}
+              </span>
+              <span class="shrink-0 text-[11px] tabular-nums leading-none" style="color: var(--text-muted)">{{ chat.time }}</span>
+            </div>
           </div>
           <p class="truncate text-[12.5px] leading-snug" style="color: var(--text-secondary)">
             {{ chat.message }}
@@ -297,11 +322,6 @@ function pickClose(): void {
             >
               Без звука
             </span>
-            <span
-              v-if="chat.unread"
-              class="h-2 w-2 shrink-0 rounded-full"
-              style="background: var(--status-unread)"
-            />
           </div>
         </div>
         <button
