@@ -6,7 +6,7 @@ namespace App\Infrastructure\Integration\Client;
 
 use Phptg\BotApi\FailResult;
 use Phptg\BotApi\TelegramBotApi;
-use Phptg\BotApi\Transport\NativeTransport;
+use Phptg\BotApi\Transport\CurlTransport;
 use Phptg\BotApi\Transport\TransportInterface;
 use Phptg\BotApi\Type\InlineKeyboardButton;
 use Phptg\BotApi\Type\InlineKeyboardMarkup;
@@ -24,7 +24,8 @@ final class TelegramApiClient
     ) {
         $this->api = new TelegramBotApi(
             $this->botToken,
-            transport: $transport ?? new NativeTransport,
+            // Curl transport is more resilient than PHP streams in production networking conditions.
+            transport: $transport ?? new CurlTransport,
         );
     }
 

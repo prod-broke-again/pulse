@@ -43,4 +43,18 @@ final class BroadcastSanctumAuthTest extends TestCase
 
         $response->assertUnauthorized();
     }
+
+    public function test_broadcasting_auth_accepts_web_session_for_private_moderator_channel(): void
+    {
+        $user = User::factory()->create();
+        $user->assignRole('moderator');
+
+        $response = $this->actingAs($user)
+            ->postJson('/broadcasting/auth', [
+                'socket_id' => '123.456',
+                'channel_name' => 'private-moderator.'.$user->id,
+            ]);
+
+        $response->assertOk();
+    }
 }
