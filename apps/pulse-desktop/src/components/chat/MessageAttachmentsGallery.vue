@@ -116,6 +116,8 @@ const currentImage = computed(() => imageFiles.value[lightboxIndex.value] ?? nul
           :alt="img.name"
           class="max-h-52 w-full object-cover"
           loading="lazy"
+          decoding="async"
+          fetchpriority="low"
         />
       </button>
     </div>

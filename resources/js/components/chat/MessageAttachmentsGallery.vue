@@ -115,7 +115,14 @@ const currentImage = computed(() => imageFiles.value[lightboxIndex.value] ?? nul
                 class="relative block overflow-hidden rounded-md border-0 bg-muted/40 p-0 text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-primary"
                 @click.stop="openLightbox(idx)"
             >
-                <img :src="img.url" :alt="img.name" class="max-h-52 w-full object-cover" loading="lazy" />
+                <img
+                    :src="img.url"
+                    :alt="img.name"
+                    class="max-h-52 w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                />
             </button>
         </div>
 

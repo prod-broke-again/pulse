@@ -89,4 +89,7 @@ return [
 
     'telegram_media_group_schedule_ms' => (int) env('PULSE_TELEGRAM_MEDIA_GROUP_SCHEDULE_MS', 700),
 
+    /** Max attachments merged from one inbound media_group (Telegram album limit is 10). */
+    'telegram_media_group_max_items' => (int) env('PULSE_TELEGRAM_MEDIA_GROUP_MAX_ITEMS', 10),
+
 ];

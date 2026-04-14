@@ -1,20 +1,34 @@
 import type { MessageItem } from '../types/chat'
 
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0')
+function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
+  return parts.find((p) => p.type === type)?.value ?? ''
 }
 
-/** `[18.03.2026 22:32]` */
+/**
+ * `[18.03.2026 22:32]` in the moderator machine local timezone (explicit IANA from the browser).
+ * ISO strings from the API are instants (UTC); this formats them for copy/paste like Telegram desktop.
+ */
 export function formatRuDateTimeBracket(iso: string | null): string {
-  if (!iso) {
-    const d = new Date()
-    return `[${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}]`
-  }
-  const d = new Date(iso)
+  const d = iso != null && iso !== '' ? new Date(iso) : new Date()
   if (Number.isNaN(d.getTime())) {
     return '[]'
   }
-  return `[${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}]`
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const day = part(parts, 'day')
+  const month = part(parts, 'month')
+  const year = part(parts, 'year')
+  const hour = part(parts, 'hour')
+  const minute = part(parts, 'minute')
+  return `[${day}.${month}.${year} ${hour}:${minute}]`
 }
 
 function formatAttachmentSummary(m: MessageItem): string {

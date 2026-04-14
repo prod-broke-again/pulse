@@ -11,6 +11,7 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Services\MaybeSendOfflineAutoReply;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -41,44 +42,74 @@ final class ProcessTelegramMediaGroupJob implements ShouldQueue
         MaybeSendOfflineAutoReply $maybeSendOfflineAutoReply,
     ): void {
         $bufKey = TelegramMediaGroupInboundBuffer::bufferKey($this->sourceId, $this->chatId, $this->groupId);
-        $lockKey = TelegramMediaGroupInboundBuffer::lockKey($this->sourceId, $this->chatId, $this->groupId);
+        $appendLockKey = TelegramMediaGroupInboundBuffer::lockKey($this->sourceId, $this->chatId, $this->groupId);
+        $flushLockKey = TelegramMediaGroupInboundBuffer::flushLockKey($this->sourceId, $this->chatId, $this->groupId);
         $quietMs = (int) config('pulse.telegram_media_group_quiet_ms', 450);
         if ($quietMs < 0) {
             $quietMs = 0;
         }
 
-        $lock = Cache::lock($lockKey, 30);
-        if (! $lock->get()) {
-            $this->release(0.5);
-
-            return;
-        }
-
+        $flushLock = Cache::lock($flushLockKey, 120);
         try {
-            /** @var array{fragments?: list<array<string, mixed>>, updated_at?: float}|null $buf */
-            $buf = Cache::get($bufKey);
-            if ($buf === null || ! isset($buf['fragments']) || $buf['fragments'] === []) {
-                return;
-            }
-
-            $updatedAt = (float) ($buf['updated_at'] ?? 0.0);
-            $ageMs = (int) ((microtime(true) - $updatedAt) * 1000);
-            if ($ageMs < $quietMs) {
-                $wait = max(0.15, ($quietMs - $ageMs) / 1000);
-                $this->release($wait);
+            try {
+                $flushLock->block(30);
+            } catch (LockTimeoutException) {
+                $this->release(1.0);
 
                 return;
             }
 
-            $buf = Cache::pull($bufKey);
-            if ($buf === null || ! isset($buf['fragments']) || $buf['fragments'] === []) {
+            $rescheduleSeconds = null;
+            /** @var array{fragments?: list<array<string, mixed>>, updated_at?: float}|null $pulledBuf */
+            $pulledBuf = null;
+
+            try {
+                Cache::lock($appendLockKey, 45)->block(15, function () use ($bufKey, $quietMs, &$rescheduleSeconds, &$pulledBuf): void {
+                    /** @var array{fragments?: list<array<string, mixed>>, updated_at?: float}|null $buf */
+                    $buf = Cache::get($bufKey);
+                    if ($buf === null || ! isset($buf['fragments']) || $buf['fragments'] === []) {
+                        return;
+                    }
+
+                    $updatedAt = (float) ($buf['updated_at'] ?? 0.0);
+                    $ageMs = (int) ((microtime(true) - $updatedAt) * 1000);
+                    if ($ageMs < $quietMs) {
+                        $rescheduleSeconds = max(0.15, ($quietMs - $ageMs) / 1000);
+
+                        return;
+                    }
+
+                    $pulledBuf = Cache::pull($bufKey);
+                });
+            } catch (LockTimeoutException) {
+                $this->release(0.5);
+
                 return;
             }
 
-            $fragments = $buf['fragments'];
+            if ($rescheduleSeconds !== null) {
+                $this->release($rescheduleSeconds);
+
+                return;
+            }
+
+            if ($pulledBuf === null || ! isset($pulledBuf['fragments']) || $pulledBuf['fragments'] === []) {
+                return;
+            }
+
+            $fragments = $pulledBuf['fragments'];
             $mergedAttachments = $this->mergeAttachments($fragments);
             if ($mergedAttachments === []) {
                 return;
+            }
+
+            $maxItems = (int) config('pulse.telegram_media_group_max_items', 10);
+            if ($maxItems < 1) {
+                $maxItems = 10;
+            }
+            $totalMerged = count($mergedAttachments);
+            if ($totalMerged > $maxItems) {
+                $mergedAttachments = array_slice($mergedAttachments, 0, $maxItems);
             }
             $rawCaption = '';
             foreach ($fragments as $fragment) {
@@ -119,6 +150,10 @@ final class ProcessTelegramMediaGroupJob implements ShouldQueue
                 'telegram_message_ids' => $telegramMessageIds,
                 'media_group_fragment_count' => count($fragments),
             ];
+            if ($totalMerged > $maxItems) {
+                $payload['inbound_attachments_truncated'] = true;
+                $payload['inbound_attachments_total'] = $totalMerged;
+            }
 
             $message = $createMessage->run(
                 chatId: $this->chatId,
@@ -153,7 +188,7 @@ final class ProcessTelegramMediaGroupJob implements ShouldQueue
             ]);
             throw $e;
         } finally {
-            $lock->release();
+            $flushLock->release();
         }
     }
 

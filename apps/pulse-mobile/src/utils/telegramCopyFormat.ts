@@ -1,17 +1,31 @@
 import type { ChatMessage, MessageMediaItem } from '../types/chat'
 
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0')
+function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
+  return parts.find((p) => p.type === type)?.value ?? ''
 }
 
+/** `[dd.mm.yyyy HH:mm]` in device local timezone (Capacitor / WebView). */
 export function formatRuDateTimeBracket(iso: string | undefined): string {
-  const src = iso ?? new Date().toISOString()
-  const d = new Date(src)
+  const d = iso != null && iso !== '' ? new Date(iso) : new Date()
   if (Number.isNaN(d.getTime())) {
-    const x = new Date()
-    return `[${pad2(x.getDate())}.${pad2(x.getMonth() + 1)}.${x.getFullYear()} ${pad2(x.getHours())}:${pad2(x.getMinutes())}]`
+    return '[]'
   }
-  return `[${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}]`
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const day = part(parts, 'day')
+  const month = part(parts, 'month')
+  const year = part(parts, 'year')
+  const hour = part(parts, 'hour')
+  const minute = part(parts, 'minute')
+  return `[${day}.${month}.${year} ${hour}:${minute}]`
 }
 
 function mediaSummary(items: MessageMediaItem[] | undefined): string {

@@ -1,16 +1,31 @@
 import type { ApiMessage } from '@/lib/api';
 
-function pad2(n: number): string {
-    return n.toString().padStart(2, '0');
+function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
+    return parts.find((p) => p.type === type)?.value ?? '';
 }
 
+/** `[dd.mm.yyyy HH:mm]` in the browser's local timezone. */
 export function formatRuDateTimeBracket(iso: string): string {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) {
-        const x = new Date();
-        return `[${pad2(x.getDate())}.${pad2(x.getMonth() + 1)}.${x.getFullYear()} ${pad2(x.getHours())}:${pad2(x.getMinutes())}]`;
+        return '[]';
     }
-    return `[${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}]`;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).formatToParts(d);
+    const day = part(parts, 'day');
+    const month = part(parts, 'month');
+    const year = part(parts, 'year');
+    const hour = part(parts, 'hour');
+    const minute = part(parts, 'minute');
+    return `[${day}.${month}.${year} ${hour}:${minute}]`;
 }
 
 function attachmentSummary(m: ApiMessage): string {

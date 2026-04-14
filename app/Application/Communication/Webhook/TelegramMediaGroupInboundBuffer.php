@@ -17,9 +17,16 @@ final class TelegramMediaGroupInboundBuffer
         return 'tg_mg_in:'.$sourceId.':'.$chatId.':'.$groupId;
     }
 
+    /** Serialize append (get/merge/put) with the buffer read/pull in {@see ProcessTelegramMediaGroupJob}. */
     public static function lockKey(int $sourceId, int $chatId, string $groupId): string
     {
         return 'tg_mg_in_lock:'.$sourceId.':'.$chatId.':'.$groupId;
+    }
+
+    /** Serialize flush across queue workers (quiet check + pull + persist for one group). */
+    public static function flushLockKey(int $sourceId, int $chatId, string $groupId): string
+    {
+        return 'tg_mg_flush:'.$sourceId.':'.$chatId.':'.$groupId;
     }
 
     /**
