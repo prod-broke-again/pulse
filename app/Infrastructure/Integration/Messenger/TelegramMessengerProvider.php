@@ -71,6 +71,9 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
     /** @param array<string, mixed> $payload */
     public function validateWebhook(array $payload): bool
     {
-        return isset($payload['message']) || isset($payload['callback_query']);
+        return isset($payload['message'])
+            || isset($payload['callback_query'])
+            || isset($payload['edited_message'])
+            || isset($payload['channel_post']);
     }
 }

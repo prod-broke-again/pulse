@@ -18,7 +18,7 @@ final class InboundAttachmentExtractor
     public function extract(array $payload): array
     {
         $attachments = [];
-        $message = $payload['message'] ?? $payload;
+        $message = $payload['message'] ?? $payload['edited_message'] ?? $payload['channel_post'] ?? $payload;
 
         $attachments = array_merge($attachments, $this->extractTelegramAttachments($message));
         $attachments = array_merge($attachments, $this->extractVkAttachments($payload));
@@ -92,6 +92,81 @@ final class InboundAttachmentExtractor
                     'file_name' => $item['file_name'] ?? $type.'.ogg',
                     'mime_type' => $item['mime_type'] ?? 'audio/ogg',
                     'kind' => $type === 'voice' ? 'voice' : 'audio',
+                ];
+            }
+        }
+
+        if (isset($message['sticker']) && is_array($message['sticker'])) {
+            $sticker = $message['sticker'];
+            $unique = isset($sticker['file_unique_id']) && is_string($sticker['file_unique_id'])
+                ? $sticker['file_unique_id']
+                : 'sticker';
+            $isVideo = ($sticker['is_video'] ?? false) === true;
+            $isAnimated = ($sticker['is_animated'] ?? false) === true;
+            if ($isVideo) {
+                $ext = '.webm';
+                $mime = 'video/webm';
+            } elseif ($isAnimated) {
+                $ext = '.tgs';
+                $mime = 'application/x-tgs';
+            } else {
+                $ext = '.webp';
+                $mime = 'image/webp';
+            }
+            $fileName = 'sticker_'.$unique.$ext;
+            if (isset($sticker['file_url']) && is_string($sticker['file_url']) && $sticker['file_url'] !== '') {
+                $attachments[] = [
+                    'url' => $sticker['file_url'],
+                    'file_name' => $fileName,
+                    'mime_type' => $mime,
+                    'kind' => 'sticker',
+                ];
+            } elseif (isset($sticker['file_id']) && is_string($sticker['file_id']) && $sticker['file_id'] !== '') {
+                $attachments[] = [
+                    'telegram_file_id' => $sticker['file_id'],
+                    'file_name' => $fileName,
+                    'mime_type' => $mime,
+                    'kind' => 'sticker',
+                ];
+            }
+        }
+
+        foreach (['video', 'video_note', 'animation'] as $key) {
+            if (! isset($message[$key]) || ! is_array($message[$key])) {
+                continue;
+            }
+            $item = $message[$key];
+            $kind = $key === 'animation' ? 'animation' : $key;
+            $defaultName = match ($key) {
+                'video' => 'video',
+                'video_note' => 'video_note',
+                default => 'animation',
+            };
+            $defaultMime = match ($key) {
+                'animation' => 'video/mp4',
+                'video_note' => 'video/mp4',
+                default => 'video/mp4',
+            };
+            $uniqueId = isset($item['file_unique_id']) && is_string($item['file_unique_id'])
+                ? $item['file_unique_id']
+                : $defaultName;
+            $fileName = $item['file_name'] ?? ($defaultName.'_'.$uniqueId.'.mp4');
+            $mimeType = isset($item['mime_type']) && is_string($item['mime_type']) && $item['mime_type'] !== ''
+                ? $item['mime_type']
+                : $defaultMime;
+            if (isset($item['file_url']) && is_string($item['file_url']) && $item['file_url'] !== '') {
+                $attachments[] = [
+                    'url' => $item['file_url'],
+                    'file_name' => $fileName,
+                    'mime_type' => $mimeType,
+                    'kind' => $kind,
+                ];
+            } elseif (isset($item['file_id']) && is_string($item['file_id']) && $item['file_id'] !== '') {
+                $attachments[] = [
+                    'telegram_file_id' => $item['file_id'],
+                    'file_name' => $fileName,
+                    'mime_type' => $mimeType,
+                    'kind' => $kind,
                 ];
             }
         }
@@ -232,6 +307,9 @@ final class InboundAttachmentExtractor
             'photo' => '[Фото]',
             'audio' => '[Аудио]',
             'document' => '[Документ]',
+            'video' => '[Видео]',
+            'video_note' => '[Видеосообщение]',
+            'animation' => '[GIF]',
             default => '[Вложение]',
         };
     }

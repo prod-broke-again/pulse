@@ -55,7 +55,7 @@ final readonly class WebhookPayloadExtractor
      */
     public function extractText(array $payload, array $attachments): string
     {
-        $message = $payload['message'] ?? null;
+        $message = $payload['message'] ?? $payload['edited_message'] ?? $payload['channel_post'] ?? null;
         $text = $payload['text']
             ?? (is_array($message) ? ($message['text'] ?? $message['caption'] ?? null) : null)
             ?? ($payload['object']['message']['text'] ?? null)

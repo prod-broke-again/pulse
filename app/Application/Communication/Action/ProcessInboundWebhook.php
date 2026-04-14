@@ -18,6 +18,7 @@ use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Jobs\DownloadInboundAttachmentJob;
 use App\Services\MaybeSendOfflineAutoReply;
+use Illuminate\Support\Facades\Log;
 
 final readonly class ProcessInboundWebhook
 {
@@ -74,7 +75,7 @@ final readonly class ProcessInboundWebhook
             $userMetadata,
         );
 
-        $attachments = $this->resolveTelegramFileUrls($attachments, $source->type, $source->settings);
+        $attachments = $this->resolveTelegramFileUrls($attachments, $source->type, $source->settings, $sourceId);
 
         $replyToExternalId = $this->webhookPayloadExtractor->extractReplyToExternalMessageId($payload);
         $replyToInternalId = null;
@@ -106,7 +107,7 @@ final readonly class ProcessInboundWebhook
      * @param  array<string, mixed>  $settings
      * @return list<array{url: string, file_name: string, mime_type: string, kind?: string}>
      */
-    private function resolveTelegramFileUrls(array $attachments, SourceType $sourceType, array $settings): array
+    private function resolveTelegramFileUrls(array $attachments, SourceType $sourceType, array $settings, int $sourceId): array
     {
         if ($sourceType !== SourceType::Tg) {
             return $this->onlyAttachmentsWithUrl($attachments);
@@ -116,6 +117,18 @@ final readonly class ProcessInboundWebhook
             ? trim($settings['bot_token'])
             : '';
         if ($token === '') {
+            foreach ($attachments as $attachment) {
+                $hasFileId = ! empty($attachment['telegram_file_id']) && is_string($attachment['telegram_file_id']);
+                $hasUrl = isset($attachment['url']) && is_string($attachment['url']) && trim($attachment['url']) !== '';
+                if ($hasFileId && ! $hasUrl) {
+                    Log::warning('Telegram inbound attachment skipped: bot_token missing in source settings', [
+                        'source_id' => $sourceId,
+                        'telegram_file_id' => $attachment['telegram_file_id'],
+                        'kind' => $attachment['kind'] ?? null,
+                    ]);
+                }
+            }
+
             return $this->onlyAttachmentsWithUrl($attachments);
         }
 
@@ -127,6 +140,12 @@ final readonly class ProcessInboundWebhook
                 $resolvedUrl = $client->getFileDownloadUrl($attachment['telegram_file_id']);
                 if ($resolvedUrl !== null && $resolvedUrl !== '') {
                     $url = $resolvedUrl;
+                } else {
+                    Log::warning('Telegram getFile did not return download URL for file_id', [
+                        'source_id' => $sourceId,
+                        'telegram_file_id' => $attachment['telegram_file_id'],
+                        'kind' => $attachment['kind'] ?? null,
+                    ]);
                 }
             }
             if ($url === '') {
