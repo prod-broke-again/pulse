@@ -182,6 +182,17 @@ function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
   el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior })
 }
 
+/** После смены чата / первой отрисовки догоняем итоговый scrollHeight (вложения, шрифты). */
+function scrollToBottomSettled(): void {
+  scrollToBottom('auto')
+  requestAnimationFrame(() => {
+    scrollToBottom('auto')
+    requestAnimationFrame(() => {
+      scrollToBottom('auto')
+    })
+  })
+}
+
 function updateNearBottomFromScroll(): void {
   const el = scrollRoot.value
   if (!el) {
@@ -263,17 +274,43 @@ watch(
   },
 )
 
+type ThreadSnapshot = {
+  chatId: number | null | undefined
+  len: number
+  lastId: number | null
+}
+
 watch(
-  () => props.timeline.length,
-  async () => {
-    if (props.timeline.length === 0) {
+  () => {
+    const len = props.timeline.length
+    const last = len > 0 ? props.timeline[len - 1] : undefined
+    const snap: ThreadSnapshot = {
+      chatId: props.chatId,
+      len,
+      lastId: last ? last.id : null,
+    }
+    return snap
+  },
+  async (cur, prev) => {
+    if (cur.len === 0) {
       return
     }
     await nextTick()
-    if (isNearBottom.value) {
+    const chatChanged = !prev || cur.chatId !== prev.chatId
+    const becameVisible = (prev?.len ?? 0) === 0 && cur.len > 0
+
+    if (chatChanged || becameVisible) {
+      isNearBottom.value = true
+      scrollToBottomSettled()
+      return
+    }
+
+    if (isNearBottom.value && cur.len > (prev?.len ?? 0)) {
       scrollToBottom('auto')
+      requestAnimationFrame(() => scrollToBottom('auto'))
     }
   },
+  { flush: 'post' },
 )
 
 function scrollToMessageById(id: number): void {
@@ -350,7 +387,8 @@ defineExpose({
     <div
       v-else
       ref="scrollRoot"
-      class="thread-messages custom-scroll"
+      class="thread-messages custom-scroll h-full min-h-0 flex-1 overflow-y-auto"
+      :class="{ 'thread-messages--fab-pad': timeline.length > 0 && !isNearBottom }"
       @scroll.passive="onScroll"
     >
       <div v-if="canLoadMore" class="thread-load-more">
@@ -559,8 +597,8 @@ defineExpose({
     <button
       v-if="timeline.length > 0 && !isNearBottom"
       type="button"
-      class="absolute right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
-      :class="selectionMode ? 'bottom-28' : 'bottom-24'"
+      class="no-drag-region absolute right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
+      :class="selectionMode ? 'bottom-14' : 'bottom-5'"
       style="background: var(--color-brand-200); color: white; box-shadow: var(--shadow-md)"
       title="К последним сообщениям"
       aria-label="К последним сообщениям"
@@ -616,5 +654,10 @@ defineExpose({
 .msg--selected .msg-bubble {
   outline: 2px solid var(--color-brand-200);
   outline-offset: 2px;
+}
+
+/* extra bottom space so FAB does not cover bubbles when scrolled up */
+.thread-messages.thread-messages--fab-pad {
+  padding-bottom: 76px;
 }
 </style>
