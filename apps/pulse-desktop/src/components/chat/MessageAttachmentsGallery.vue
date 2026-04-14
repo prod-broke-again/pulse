@@ -124,31 +124,35 @@ const currentImage = computed(() => imageFiles.value[lightboxIndex.value] ?? nul
         v-for="(img, idx) in imageFiles"
         :key="`f-${img.url}-${idx}`"
         type="button"
-        class="relative block overflow-hidden rounded-[var(--radius-sm)] border-0 bg-black/5 p-0 text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        class="relative block w-full border-0 bg-black/5 p-0 text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         @click.stop="openLightbox(idx)"
       >
-        <Transition name="fade-attach" appear>
-          <img
-            :src="img.url"
-            :alt="img.name"
-            class="max-h-52 w-full object-cover"
-            loading="lazy"
-            decoding="async"
-            fetchpriority="low"
-          />
-        </Transition>
+        <div class="chat-media-thumb">
+          <Transition name="fade-attach" appear>
+            <img
+              :src="img.url"
+              :alt="img.name"
+              class="chat-media-thumb__img"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
+            />
+          </Transition>
+        </div>
       </button>
       <div
         v-for="(s, i) in pendingImageSlots"
         :key="`p-img-${i}-${s.type}`"
-        class="overflow-hidden rounded-[var(--radius-sm)] bg-black/[0.06] dark:bg-white/[0.06]"
+        class="bg-black/[0.06] dark:bg-white/[0.06]"
         aria-hidden="true"
       >
-        <Transition name="fade-attach" appear>
-          <div
-            class="min-h-[120px] w-full max-h-52 animate-pulse bg-gradient-to-br from-zinc-300/70 to-zinc-400/40 dark:from-zinc-600/50 dark:to-zinc-700/30"
-          />
-        </Transition>
+        <div class="chat-media-thumb">
+          <Transition name="fade-attach" appear>
+            <div
+              class="chat-media-thumb__skeleton animate-pulse bg-gradient-to-br from-zinc-300/70 to-zinc-400/40 dark:from-zinc-600/50 dark:to-zinc-700/30"
+            />
+          </Transition>
+        </div>
       </div>
     </div>
 
@@ -270,6 +274,32 @@ const currentImage = computed(() => imageFiles.value[lightboxIndex.value] ?? nul
 </template>
 
 <style scoped>
+/* Fixed geometry before decode — same box for <img> and skeleton (no CLS). */
+.chat-media-thumb {
+  position: relative;
+  width: 100%;
+  max-height: 13rem; /* max-h-52 */
+  aspect-ratio: 4 / 3;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.chat-media-thumb__img {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.chat-media-thumb__skeleton {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+}
+
 .fade-attach-enter-active,
 .fade-attach-leave-active {
   transition: opacity 0.28s ease;

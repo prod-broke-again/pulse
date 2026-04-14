@@ -43,6 +43,10 @@ const emit = defineEmits<{
 }>()
 
 const scrollRoot = ref<HTMLElement | null>(null)
+/** Inner column that grows with messages/media — observed for height changes. */
+const threadContentRef = ref<HTMLElement | null>(null)
+/** User wants to stay pinned to bottom; ResizeObserver only auto-scrolls when this is true. */
+const stickToBottom = ref(true)
 const pendingBelowCount = ref(0)
 const isNearBottom = ref(true)
 /** Distance from bottom before each DOM update — used to preserve reading position when height grows. */
@@ -170,8 +174,41 @@ watch(selectionMode, (on) => {
   }
 })
 
+let threadResizeObserver: ResizeObserver | null = null
+
+function detachThreadResizeObserver(): void {
+  if (threadResizeObserver) {
+    threadResizeObserver.disconnect()
+    threadResizeObserver = null
+  }
+}
+
+function attachThreadResizeObserver(): void {
+  detachThreadResizeObserver()
+  if (typeof ResizeObserver === 'undefined') {
+    return
+  }
+  const content = threadContentRef.value
+  if (!content) {
+    return
+  }
+  threadResizeObserver = new ResizeObserver(() => {
+    if (!stickToBottom.value) {
+      return
+    }
+    scrollToBottom('auto')
+    updateNearBottomFromScroll()
+    if (props.chatId != null && isNearBottom.value) {
+      pendingBelowCount.value = 0
+      emit('near-bottom')
+    }
+  })
+  threadResizeObserver.observe(content)
+}
+
 onBeforeUnmount(() => {
   document.removeEventListener('copy', onGlobalCopy)
+  detachThreadResizeObserver()
 })
 
 function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
@@ -179,17 +216,19 @@ function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
   if (!el) {
     return
   }
-  el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior })
+  const maxTop = Math.max(0, el.scrollHeight - el.clientHeight)
+  if (behavior === 'auto') {
+    el.scrollTop = maxTop
+  } else {
+    el.scrollTo({ top: el.scrollHeight, behavior })
+  }
 }
 
-/** После смены чата / первой отрисовки догоняем итоговый scrollHeight (вложения, шрифты). */
+/** После смены чата / первой отрисовки — один кадр + ResizeObserver добивает поздний layout. */
 function scrollToBottomSettled(): void {
   scrollToBottom('auto')
   requestAnimationFrame(() => {
     scrollToBottom('auto')
-    requestAnimationFrame(() => {
-      scrollToBottom('auto')
-    })
   })
 }
 
@@ -204,7 +243,9 @@ function updateNearBottomFromScroll(): void {
 
 function onScroll(e: Event): void {
   const el = e.target as HTMLElement
-  updateNearBottomFromScroll()
+  const d = el.scrollHeight - el.scrollTop - el.clientHeight
+  isNearBottom.value = d < NEAR_BOTTOM_PX
+  stickToBottom.value = d < NEAR_BOTTOM_PX
   if (props.chatId == null) {
     return
   }
@@ -214,13 +255,18 @@ function onScroll(e: Event): void {
   }
 }
 
-function onClickScrollDown(): void {
+function onClickScrollDown(e: MouseEvent): void {
+  e.preventDefault()
+  e.stopPropagation()
+  stickToBottom.value = true
   scrollToBottom('smooth')
   pendingBelowCount.value = 0
-  isNearBottom.value = true
-  if (props.chatId != null) {
-    emit('near-bottom')
-  }
+  void nextTick(() => {
+    updateNearBottomFromScroll()
+    if (props.chatId != null && isNearBottom.value) {
+      emit('near-bottom')
+    }
+  })
 }
 
 onBeforeUpdate(() => {
@@ -242,6 +288,7 @@ onUpdated(() => {
   if (dist < NEAR_BOTTOM_PX) {
     el.scrollTop = el.scrollHeight - el.clientHeight
     pendingBelowCount.value = 0
+    stickToBottom.value = true
   } else {
     el.scrollTop = el.scrollHeight - el.clientHeight - dist
     if (
@@ -269,6 +316,7 @@ watch(
     exitSelectionMode()
     pendingBelowCount.value = 0
     isNearBottom.value = true
+    stickToBottom.value = true
     lastTimelineFirstId.value = null
     lastTimelineLen.value = 0
   },
@@ -301,16 +349,30 @@ watch(
 
     if (chatChanged || becameVisible) {
       isNearBottom.value = true
+      stickToBottom.value = true
       scrollToBottomSettled()
+      void nextTick(() => {
+        attachThreadResizeObserver()
+      })
       return
     }
 
-    if (isNearBottom.value && cur.len > (prev?.len ?? 0)) {
+    if (stickToBottom.value && cur.len > (prev?.len ?? 0)) {
       scrollToBottom('auto')
       requestAnimationFrame(() => scrollToBottom('auto'))
     }
   },
   { flush: 'post' },
+)
+
+watch(
+  threadContentRef,
+  () => {
+    void nextTick(() => {
+      attachThreadResizeObserver()
+    })
+  },
+  { flush: 'post', immediate: true },
 )
 
 function scrollToMessageById(id: number): void {
@@ -391,6 +453,7 @@ defineExpose({
       :class="{ 'thread-messages--fab-pad': timeline.length > 0 && !isNearBottom }"
       @scroll.passive="onScroll"
     >
+      <div ref="threadContentRef" class="thread-messages-inner min-w-0">
       <div v-if="canLoadMore" class="thread-load-more">
         <button
           type="button"
@@ -569,6 +632,7 @@ defineExpose({
       >
         Клиент печатает…
       </p>
+      </div>
     </div>
 
     <div
@@ -597,7 +661,7 @@ defineExpose({
     <button
       v-if="timeline.length > 0 && !isNearBottom"
       type="button"
-      class="no-drag-region absolute right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
+      class="chat-fab-scroll no-drag-region pointer-events-auto absolute right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition hover:scale-105"
       :class="selectionMode ? 'bottom-14' : 'bottom-5'"
       style="background: var(--color-brand-200); color: white; box-shadow: var(--shadow-md)"
       title="К последним сообщениям"
@@ -659,5 +723,10 @@ defineExpose({
 /* extra bottom space so FAB does not cover bubbles when scrolled up */
 .thread-messages.thread-messages--fab-pad {
   padding-bottom: 76px;
+}
+
+/* FAB must not participate in overflow anchoring */
+.chat-fab-scroll {
+  overflow-anchor: none;
 }
 </style>
