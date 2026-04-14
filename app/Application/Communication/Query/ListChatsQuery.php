@@ -8,6 +8,7 @@ use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final readonly class ListChatsQuery
 {
@@ -68,7 +69,7 @@ final readonly class ListChatsQuery
                 'department',
                 'assignee',
                 'latestMessage',
-                'userReadStates' => function (Builder $q) use ($user): void {
+                'userReadStates' => function (HasMany $q) use ($user): void {
                     $q->where('user_id', $user->id);
                 },
             ])
