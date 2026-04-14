@@ -83,10 +83,11 @@ final class SendFcmPushNotificationJob implements ShouldQueue
                 'Content-Type' => 'application/json',
             ])->post('https://fcm.googleapis.com/fcm/send', [
                 'to' => $token,
-                'notification' => [
+                'notification' => array_filter([
                     'title' => $built['title'],
                     'body' => $built['body'],
-                ],
+                    'image' => $built['image'] ?? null,
+                ], fn ($v) => $v !== null && $v !== ''),
                 'data' => $built['data'],
             ]);
         } catch (\Throwable $e) {

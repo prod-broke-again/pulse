@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import type { NotificationSoundPrefs } from '../lib/notificationSoundPresets'
 import { disconnectEcho } from '../lib/realtime'
 import { http } from '../lib/http'
 import { resolveOAuthRedirectUri } from '../lib/oauthConfig'
@@ -14,6 +15,7 @@ export type PulseUser = {
   roles: string[]
   source_ids: number[]
   department_ids: number[]
+  notification_sound_prefs?: NotificationSoundPrefs | null
 }
 
 export const useAuthStore = defineStore('auth', () => {

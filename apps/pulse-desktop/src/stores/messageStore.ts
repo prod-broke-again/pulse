@@ -5,7 +5,10 @@ import type { ApiMessage } from '../types/dto/chat.types'
 import { isMutedUntilActive } from '../lib/chatMute'
 import {
   desktopSoundEnabled,
-  playIncomingTone,
+  effectivePrefs,
+  playIncomingToneFromPrefs,
+  resolveNotificationScenario,
+  shouldDedupeIncomingNotify,
   showDesktopMessageNotification,
 } from '../lib/desktopNotifications'
 import { markChatRead as apiMarkChatRead } from '../api/chats'
@@ -30,9 +33,19 @@ function nextPendingMessageId(): number {
   return pendingIdSeq
 }
 
+function guestAvatarFromMetadata(
+  meta: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!meta) {
+    return undefined
+  }
+  const v = meta.avatar_url ?? meta.photo_url ?? meta.avatar
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined
+}
+
 async function notifyIncomingDesktop(
   chatId: number,
-  payload: { sender_type: string; text: string },
+  payload: { sender_type: string; text: string; messageId: number },
 ): Promise<void> {
   if (payload.sender_type !== 'client') {
     return
@@ -47,19 +60,44 @@ async function notifyIncomingDesktop(
   if (inThisChat) {
     return
   }
+  if (shouldDedupeIncomingNotify(chatId, payload.messageId)) {
+    return
+  }
+  const auth = useAuthStore()
+  const prefs = effectivePrefs(auth.user?.notification_sound_prefs)
+  if (!desktopSoundEnabled()) {
+    return
+  }
+  const scenario = resolveNotificationScenario({ isUrgent: row?.is_urgent === true })
+  if (!prefs.mute) {
+    playIncomingToneFromPrefs(prefs, scenario)
+  }
   const meta = (row?.user_metadata ?? {}) as Record<string, unknown>
   const name =
     (typeof meta.first_name === 'string' && meta.first_name) ||
     (typeof meta.username === 'string' && meta.username) ||
     row?.external_user_id ||
     'Чат'
-  if (desktopSoundEnabled()) {
-    playIncomingTone(true)
-  }
+  const icon = guestAvatarFromMetadata(meta)
   await showDesktopMessageNotification({
     title: String(name),
     body: (payload.text ?? '').slice(0, 500) || 'Новое сообщение',
     tag: `pulse-chat-${chatId}`,
+    icon: icon ?? null,
+  })
+}
+
+/** Inbox-wide listener (moderator channel) + same logic as thread listener. */
+export async function notifyIncomingForModeratorInbox(payload: {
+  chatId: number
+  messageId: number
+  text: string
+  sender_type: string
+}): Promise<void> {
+  await notifyIncomingDesktop(payload.chatId, {
+    sender_type: payload.sender_type,
+    text: payload.text,
+    messageId: payload.messageId,
   })
 }
 
@@ -208,6 +246,7 @@ export const useMessageStore = defineStore('message', () => {
           void notifyIncomingDesktop(chatId, {
             sender_type: payload.sender_type,
             text: payload.text ?? '',
+            messageId: payload.messageId,
           })
           chat.bumpChatFromRealtime(payload)
         })()

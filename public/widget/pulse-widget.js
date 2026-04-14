@@ -85,6 +85,26 @@
     const chatTokenKey = `pulse_widget_chat_token_${sourceIdentifier}`;
     const chatIdKey = `pulse_widget_chat_id_${sourceIdentifier}`;
     const guestDataKey = `pulse_widget_guest_${sourceIdentifier}`;
+    const widgetSoundKey = `pulse_widget_sound_${sourceIdentifier}`;
+
+    function getWidgetSoundSettings() {
+        try {
+            const raw = localStorage.getItem(widgetSoundKey);
+            if (!raw) return { enabled: true, volume: 1 };
+            const o = JSON.parse(raw);
+            return {
+                enabled: o.enabled !== false,
+                volume: typeof o.volume === 'number' ? Math.min(1, Math.max(0, o.volume)) : 1,
+            };
+        } catch (e) {
+            return { enabled: true, volume: 1 };
+        }
+    }
+    function saveWidgetSoundSettings(s) {
+        try {
+            localStorage.setItem(widgetSoundKey, JSON.stringify(s));
+        } catch (e) {}
+    }
 
     let visitorId = localStorage.getItem(storageKey);
     if (!visitorId) {
@@ -134,6 +154,8 @@
       .pw-sub { font-size: 13px; opacity: 0.9; margin-top: 4px; font-weight: 400; }
       .pw-close { border: none; background: rgba(255,255,255,0.15); border-radius: 50%; width: 32px; height: 32px; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.2s; }
       .pw-close:hover { background: rgba(255,255,255,0.25); transform: rotate(90deg); }
+      .pw-sound { border: none; background: rgba(255,255,255,0.15); border-radius: 50%; width: 32px; height: 32px; color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+      .pw-sound:hover { background: rgba(255,255,255,0.25); }
       
       .pw-msgs { flex: 1; overflow-y: auto; padding: 20px; background: #f8fafc; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
       .pw-msgs::-webkit-scrollbar { width: 6px; }
@@ -192,9 +214,12 @@
             <div class="pw-title">${config.title}</div>
             <div class="pw-sub">${config.subtitle}</div>
           </div>
+          <div style="display:flex;align-items:flex-start;gap:8px;">
+          <button class="pw-sound" type="button" aria-label="Sound" title="Звук уведомлений">🔔</button>
           <button class="pw-close" type="button" aria-label="Close">
             ${closeIcon}
           </button>
+          </div>
         </header>
         <div class="pw-msgs"></div>
         <div class="pw-form-container">
@@ -216,6 +241,7 @@
     const fab = shadowRoot.querySelector('.pw-fab');
     const panel = shadowRoot.querySelector('.pw-panel');
     const closeBtn = shadowRoot.querySelector('.pw-close');
+    const soundBtn = shadowRoot.querySelector('.pw-sound');
     const msgs = shadowRoot.querySelector('.pw-msgs');
     const status = shadowRoot.querySelector('.pw-status');
     const typingEl = shadowRoot.querySelector('.pw-typing');
@@ -250,22 +276,36 @@
         }
     }
 
+    var widgetNotifyAudio = null;
     function playNotificationSound() {
+        var s = getWidgetSoundSettings();
+        if (!s.enabled) return;
         try {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            if (!Ctx) return;
-            const ctx = new Ctx();
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.connect(g);
-            g.connect(ctx.destination);
-            osc.frequency.value = 800;
-            osc.type = 'sine';
-            g.gain.setValueAtTime(0.2, ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.12);
+            var url = apiBase + '/sounds/notifications/notification_simple-01.wav';
+            if (!widgetNotifyAudio) {
+                widgetNotifyAudio = new Audio(url);
+            }
+            widgetNotifyAudio.volume = s.volume;
+            widgetNotifyAudio.currentTime = 0;
+            widgetNotifyAudio.play().catch(function () {});
         } catch (e) {}
+    }
+
+    function syncSoundButton() {
+        if (!soundBtn) return;
+        var s = getWidgetSoundSettings();
+        soundBtn.textContent = s.enabled ? '🔔' : '🔕';
+        soundBtn.title = s.enabled ? 'Звук включён (нажмите, чтобы выключить)' : 'Звук выключен';
+    }
+    syncSoundButton();
+    if (soundBtn) {
+        soundBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            var s = getWidgetSoundSettings();
+            s.enabled = !s.enabled;
+            saveWidgetSoundSettings(s);
+            syncSoundButton();
+        });
     }
 
     function updateTitle() {

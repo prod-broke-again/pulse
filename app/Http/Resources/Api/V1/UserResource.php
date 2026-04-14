@@ -21,6 +21,7 @@ final class UserResource extends JsonResource
             'roles' => $this->getRoleNames()->values(),
             'source_ids' => $this->sources()->pluck('id')->values(),
             'department_ids' => $this->departments()->pluck('departments.id')->values(),
+            'notification_sound_prefs' => app(\App\Services\NotificationSoundPreferencesService::class)->forUser($this->resource),
         ];
     }
 }

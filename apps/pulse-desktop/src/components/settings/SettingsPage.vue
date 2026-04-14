@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Camera, LogOut, RefreshCw } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Camera, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/authStore'
 import { uploadAvatar } from '../../api/auth'
+import { patchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
 import { redirectToIdP } from '../../lib/redirectToIdP'
 import { achppIdBaseUrl, achppOAuthClientId, resolveOAuthRedirectUri } from '../../lib/oauthConfig'
+import {
+  PRESET_LABELS,
+  type NotificationPresetId,
+  type NotificationSoundPrefs,
+  mergeNotificationSoundPrefs,
+} from '../../lib/notificationSoundPresets'
+import { playIncomingToneFromPrefs, setLocalCustomSoundDataUrl, getLocalCustomSoundDataUrl } from '../../lib/desktopNotifications'
+import { fetchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
 
 defineProps<{
   isDark: boolean
@@ -95,6 +104,129 @@ async function startSyncFromId(): Promise<void> {
   } finally {
     idSyncBusy.value = false
   }
+}
+
+const isStaff = computed(
+  () =>
+    !!user.value?.roles?.some((r) => r === 'admin' || r === 'moderator'),
+)
+
+const localPrefs = ref(mergeNotificationSoundPrefs(null))
+const soundSaveBusy = ref(false)
+const hasCustomSound = ref(!!getLocalCustomSoundDataUrl())
+const customSoundInput = ref<HTMLInputElement | null>(null)
+
+watch(
+  () => user.value?.notification_sound_prefs,
+  (p) => {
+    localPrefs.value = mergeNotificationSoundPrefs(p ?? null)
+  },
+  { immediate: true, deep: true },
+)
+
+onMounted(async () => {
+  if (!user.value || !isStaff.value) {
+    return
+  }
+  try {
+    const data = await fetchNotificationSoundPreferences()
+    localPrefs.value = mergeNotificationSoundPrefs(data.notification_sound_prefs)
+    authStore.applyNotificationSoundPrefs(data.notification_sound_prefs)
+  } catch {
+    /* offline / old API */
+  }
+})
+
+const presetIds = computed(() => Object.keys(PRESET_LABELS) as NotificationPresetId[])
+
+let volumeDebounce: ReturnType<typeof setTimeout> | null = null
+function scheduleVolumeSave(): void {
+  if (volumeDebounce != null) {
+    clearTimeout(volumeDebounce)
+  }
+  volumeDebounce = window.setTimeout(() => {
+    volumeDebounce = null
+    void persistSoundPrefs({ volume: localPrefs.value.volume })
+  }, 400)
+}
+
+async function persistSoundPrefs(
+  partial: Partial<{
+    mute: boolean
+    volume: number
+    presets: Partial<NotificationSoundPrefs['presets']>
+  }>,
+): Promise<void> {
+  if (!isStaff.value) {
+    return
+  }
+  soundSaveBusy.value = true
+  try {
+    const data = await patchNotificationSoundPreferences(partial)
+    authStore.applyUserProfile(data.user)
+    localPrefs.value = mergeNotificationSoundPrefs(data.notification_sound_prefs)
+  } catch {
+    /* ignore */
+  } finally {
+    soundSaveBusy.value = false
+  }
+}
+
+function onMuteToggle(): void {
+  const next = !localPrefs.value.mute
+  localPrefs.value = { ...localPrefs.value, mute: next }
+  void persistSoundPrefs({ mute: next })
+}
+
+function onVolumeInput(e: Event): void {
+  const t = e.target as HTMLInputElement
+  const v = Number(t.value) / 100
+  localPrefs.value = { ...localPrefs.value, volume: v }
+  scheduleVolumeSave()
+}
+
+function onPresetChange(
+  key: keyof NotificationSoundPrefs['presets'],
+  ev: Event,
+): void {
+  const id = (ev.target as HTMLSelectElement).value as NotificationPresetId
+  localPrefs.value.presets[key] = id
+  void persistSoundPrefs({ presets: { [key]: id } })
+}
+
+function testPlayScenario(which: 'in_app' | 'background' | 'important'): void {
+  const p = localPrefs.value
+  playIncomingToneFromPrefs(p, which === 'important' ? 'important' : which)
+}
+
+function triggerCustomSoundPick(): void {
+  customSoundInput.value?.click()
+}
+
+async function onCustomSoundFile(ev: Event): Promise<void> {
+  const t = ev.target as HTMLInputElement
+  const file = t.files?.[0]
+  t.value = ''
+  if (!file) {
+    return
+  }
+  if (file.size > 1_500_000) {
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    const dataUrl = typeof reader.result === 'string' ? reader.result : null
+    if (dataUrl) {
+      setLocalCustomSoundDataUrl(dataUrl)
+      hasCustomSound.value = true
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+function clearCustomSound(): void {
+  setLocalCustomSoundDataUrl(null)
+  hasCustomSound.value = false
 }
 </script>
 
@@ -224,7 +356,7 @@ async function startSyncFromId(): Promise<void> {
           </button>
         </div>
 
-        <div class="flex items-center justify-between">
+        <div v-if="!isStaff" class="flex items-center justify-between">
           <div>
             <h4 class="font-bold" style="color: var(--text-primary)">
               Звуковые уведомления
@@ -247,10 +379,132 @@ async function startSyncFromId(): Promise<void> {
             />
           </button>
         </div>
+
+        <div v-else class="space-y-5 rounded-[var(--radius-md)] border p-5" style="border-color: var(--border-light); background: var(--bg-inbox)">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <h4 class="font-bold" style="color: var(--text-primary)">
+                Звук уведомлений
+              </h4>
+              <p class="text-xs" style="color: var(--text-secondary)">
+                Синхронизируется с аккаунтом; свой файл — только на этом устройстве
+              </p>
+            </div>
+            <button
+              type="button"
+              class="relative h-7 w-12 shrink-0 rounded-full border-2 transition disabled:opacity-50"
+              :disabled="soundSaveBusy"
+              :style="!localPrefs.mute
+                ? { borderColor: 'var(--color-brand)', background: 'var(--color-brand)' }
+                : { borderColor: 'var(--border-light)', background: 'var(--bg-inbox)' }"
+              @click="onMuteToggle"
+            >
+              <span
+                class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+                :class="!localPrefs.mute ? 'translate-x-5' : ''"
+              />
+            </button>
+          </div>
+
+          <div>
+            <label class="mb-1 block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">Громкость</label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              :value="Math.round(localPrefs.volume * 100)"
+              class="w-full accent-[var(--color-brand)]"
+              :disabled="soundSaveBusy || localPrefs.mute"
+              @input="onVolumeInput"
+            >
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div v-for="key in (['in_app', 'background', 'important', 'in_chat'] as const)" :key="key">
+              <label class="mb-1 block text-xs font-semibold capitalize" style="color: var(--text-secondary)">
+                {{ key === 'in_app' ? 'В приложении (список чатов)' : key === 'background' ? 'Фон / не в фокусе' : key === 'important' ? 'Важное (срочный чат)' : 'В открытом чате' }}
+              </label>
+              <select
+                class="h-10 w-full rounded-[var(--radius-md)] border px-2 text-sm font-medium outline-none"
+                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
+                :value="localPrefs.presets[key]"
+                :disabled="soundSaveBusy"
+                @change="onPresetChange(key, $event)"
+              >
+                <option v-for="pid in presetIds" :key="pid" :value="pid">
+                  {{ PRESET_LABELS[pid] }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold" style="color: var(--text-secondary)">Проверка:</span>
+            <button
+              type="button"
+              class="rounded-md border px-2 py-1 text-xs font-semibold"
+              style="border-color: var(--border-light); color: var(--text-primary)"
+              @click="testPlayScenario('in_app')"
+            >
+              В приложении
+            </button>
+            <button
+              type="button"
+              class="rounded-md border px-2 py-1 text-xs font-semibold"
+              style="border-color: var(--border-light); color: var(--text-primary)"
+              @click="testPlayScenario('background')"
+            >
+              Фон
+            </button>
+            <button
+              type="button"
+              class="rounded-md border px-2 py-1 text-xs font-semibold"
+              style="border-color: var(--border-light); color: var(--text-primary)"
+              @click="testPlayScenario('important')"
+            >
+              Важное
+            </button>
+          </div>
+
+          <div class="border-t pt-4" style="border-color: var(--border-light)">
+            <p class="mb-2 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Свой звук (локально)
+            </p>
+            <p class="mb-2 text-xs" style="color: var(--text-muted)">
+              До ~1.5 МБ, .wav / .mp3. На другом устройстве будет пресет с сервера, пока не загрузите файл там.
+            </p>
+            <input
+              ref="customSoundInput"
+              type="file"
+              accept="audio/*,.wav,.mp3"
+              class="hidden"
+              @change="onCustomSoundFile"
+            >
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold"
+                style="border-color: var(--border-light); color: var(--text-primary)"
+                @click="triggerCustomSoundPick"
+              >
+                <Volume2 class="h-3.5 w-3.5" />
+                Загрузить файл
+              </button>
+              <button
+                v-if="hasCustomSound"
+                type="button"
+                class="rounded-md border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-500"
+                @click="clearCustomSound"
+              >
+                Сбросить
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <p class="text-xs" style="color: var(--text-secondary)">
-        Тема и звук сохраняются на этом устройстве автоматически.
+        Тема сохраняется на этом устройстве. Настройки звука модератора — в аккаунте на сервере.
       </p>
 
       <div class="flex items-center gap-4 pt-6">

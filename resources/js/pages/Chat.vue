@@ -1,23 +1,34 @@
 <script setup lang="ts">
 import { Head, usePage, router } from '@inertiajs/vue3';
+import { useDebounceFn } from '@vueuse/core';
+import { Search, UserPlus, XCircle, Send, Loader2, Bell, X, Copy } from 'lucide-vue-next';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useDebounceFn } from '@vueuse/core';
-import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
-import { api, type ApiChat, type ApiCannedResponse, type ApiMessage } from '@/lib/api';
-import { getEcho, leaveChat, leaveModerator, subscribeToModerator } from '@/composables/useEcho';
-import { useChatMessages } from '@/composables/useChatMessages';
-import { useModeratorPresence } from '@/composables/useModeratorPresence';
 import ChatMessageItem from '@/components/chat/ChatMessageItem.vue';
-import { Checkbox } from '@/components/ui/checkbox';
 import Button from '@/components/ui/button/Button.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, XCircle, Send, Loader2, Bell, X, Copy } from 'lucide-vue-next';
+import { useChatMessages } from '@/composables/useChatMessages';
+import {
+    getEcho,
+    leaveChat,
+    leaveModerator,
+    subscribeToModerator,
+    type NewChatMessagePayload,
+} from '@/composables/useEcho';
+import { useModeratorPresence } from '@/composables/useModeratorPresence';
 import { useWebPush } from '@/composables/useWebPush';
+import type { NotificationSoundPrefs } from '@/constants/notificationSounds';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { api, type ApiChat, type ApiCannedResponse, type ApiMessage } from '@/lib/api';
+import { getAudioService } from '@/services/AudioService';
+import type { BreadcrumbItem } from '@/types';
 import { formatApiMessagesTelegramStyle } from '@/utils/telegramCopyFormat';
 
 const page = usePage();
+const notificationSoundPrefs = computed(
+    () => (page.props.notificationSoundPrefs as NotificationSoundPrefs | null | undefined) ?? null,
+);
 const authUser = computed(() => (page.props.auth as { user?: { id: number } })?.user);
 const isModeratorStaff = computed(
     () => (page.props.auth as { isModeratorStaff?: boolean }).isModeratorStaff === true,
@@ -88,6 +99,7 @@ const {
     reverbConfig,
     getEcho,
     t,
+    notificationSoundPrefs,
     onAssigned: () => {
         fetchChats().then(() => {
             if (selectedChat.value) {
@@ -448,7 +460,30 @@ onMounted(() => {
     if (e && uid) {
         subscribeToModerator(e, uid, {
             onAssigned: fetchChats,
-            onNewMessage: () => debouncedFetchChats(),
+            onNewMessage: (payload: NewChatMessagePayload) => {
+                debouncedFetchChats();
+                if (payload.sender_type !== 'client') {
+                    return;
+                }
+                if (selectedChatId.value === payload.chatId) {
+                    return;
+                }
+                const row = chats.value.find((c) => c.id === payload.chatId);
+                if (row?.muted_until) {
+                    const t0 = Date.parse(row.muted_until);
+                    if (Number.isFinite(t0) && t0 > Date.now()) {
+                        return;
+                    }
+                }
+                const prefs = notificationSoundPrefs.value;
+                const urgent = row?.is_urgent === true;
+                const scenario = urgent
+                    ? 'important'
+                    : document.visibilityState === 'hidden'
+                      ? 'background'
+                      : 'in_app';
+                getAudioService().playFromNotificationPrefs(prefs, scenario);
+            },
         });
     }
     if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {

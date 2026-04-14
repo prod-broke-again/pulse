@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ChatMessageController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\ModeratorPresenceController;
+use App\Http\Controllers\Api\V1\NotificationSoundPreferencesController;
 use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use App\Http\Controllers\Api\V1\QuickLinkController;
 use App\Http\Controllers\Api\V1\SsoExchangeController;
@@ -85,6 +86,12 @@ Route::prefix('v1')->group(function (): void {
 
         // Web Push subscriptions
         Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('api.v1.push-subscriptions.store');
+
+        // Notification sound preferences (moderator staff, synced)
+        Route::get('/user/notification-sound-preferences', [NotificationSoundPreferencesController::class, 'show'])
+            ->name('api.v1.user.notification-sound-preferences.show');
+        Route::patch('/user/notification-sound-preferences', [NotificationSoundPreferencesController::class, 'update'])
+            ->name('api.v1.user.notification-sound-preferences.update');
 
         // Moderator presence (web / desktop / mobile)
         Route::prefix('moderator/presence')->group(function (): void {

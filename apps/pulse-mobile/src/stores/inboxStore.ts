@@ -1,24 +1,24 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import * as chatApi from '../api/chatRepository'
+import { isMutedUntilActive } from '../lib/chatMute'
+import { parseApiChatId } from '../lib/chatIds'
+import {
+  mergeNotificationSoundPrefs,
+} from '../lib/notificationSoundPresets'
+import {
+  playIncomingToneFromPrefs,
+  resolveNotificationScenario,
+  vibrateIncoming,
+} from '../lib/notificationFeedback'
 import { getEcho, subscribeModeratorChannel } from '../lib/realtime'
+import type { NewChatMessagePayload } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
 import { useAuthStore } from './authStore'
+import { useSettingsStore } from './settingsStore'
 import type { BottomNavId, ChatPreviewItem, FilterId, InboxTab } from '../types/chat'
 
 let moderatorUnsub: (() => void) | null = null
-
-function setupModeratorRealtime(scheduleRefresh: () => void): void {
-  moderatorUnsub?.()
-  moderatorUnsub = null
-  const auth = useAuthStore()
-  const uid = auth.user?.id
-  if (!uid) return
-  getEcho()
-  moderatorUnsub = subscribeModeratorChannel(uid, {
-    onNewMessage: () => scheduleRefresh(),
-  })
-}
 
 function deriveApiStatus(filters: Set<FilterId>): 'open' | 'closed' | 'all' {
   const hasOpen = filters.has('open')
@@ -175,11 +175,51 @@ export const useInboxStore = defineStore('inbox', () => {
     }, debounceMs)
   }
 
+  function setupModeratorRealtimeInbox(): void {
+    moderatorUnsub?.()
+    moderatorUnsub = null
+    const auth = useAuthStore()
+    const uid = auth.user?.id
+    if (!uid) {
+      return
+    }
+    getEcho()
+    moderatorUnsub = subscribeModeratorChannel(uid, {
+      onNewMessage: (payload: NewChatMessagePayload) => {
+        scheduleInboxRefreshFromRealtime()
+        if (payload.sender_type !== 'client') {
+          return
+        }
+        void import('./chatStore').then(({ useChatStore }) => {
+          const chatStore = useChatStore()
+          const viewing = chatStore.activeChatId ? parseApiChatId(chatStore.activeChatId) : null
+          if (viewing === payload.chatId) {
+            return
+          }
+          const preview = chats.value.find((c) => Number(c.id) === payload.chatId)
+          if (isMutedUntilActive(preview?.muted_until)) {
+            return
+          }
+          const settings = useSettingsStore()
+          if (!settings.sound) {
+            return
+          }
+          const prefs = mergeNotificationSoundPrefs(auth.user?.notification_sound_prefs ?? null)
+          if (!prefs.mute) {
+            const scenario = resolveNotificationScenario({ isUrgent: false })
+            playIncomingToneFromPrefs(prefs, scenario)
+          }
+          vibrateIncoming(settings.vibration)
+        })
+      },
+    })
+  }
+
   watch(
     () => useAuthStore().user?.id,
     (uid) => {
       if (uid) {
-        setupModeratorRealtime(() => scheduleInboxRefreshFromRealtime())
+        setupModeratorRealtimeInbox()
       } else {
         moderatorUnsub?.()
         moderatorUnsub = null

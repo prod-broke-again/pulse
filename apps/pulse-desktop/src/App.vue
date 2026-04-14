@@ -14,12 +14,13 @@ import QuickLinksManagePage from './components/pages/QuickLinksManagePage.vue'
 import AnalyticsOverviewPage from './components/pages/AnalyticsOverviewPage.vue'
 import { useAuthStore } from './stores/authStore'
 import { useChatStore } from './stores/chatStore'
-import { useMessageStore } from './stores/messageStore'
+import { useMessageStore, notifyIncomingForModeratorInbox } from './stores/messageStore'
 import { syncChatHistory } from './api/chats'
 import { mapChatToConversation, mapApiMessage } from './utils/mappers'
 import { completeOAuthFromCallbackUrl } from './lib/completeOAuthFromUrl'
 import { disconnectEcho, getEcho, subscribeModeratorChannel } from './lib/realtime'
 import { desktopSoundEnabled, setDesktopSoundEnabled } from './lib/desktopNotifications'
+import { patchNotificationSoundPreferences } from './api/notificationSoundPreferences'
 import {
   isModeratorStaffUser,
   startModeratorPresenceForDesktop,
@@ -101,6 +102,12 @@ function setupModeratorRealtime(): void {
   unsubscribeModeratorChannel = subscribeModeratorChannel(uid, {
     onNewMessage: (payload) => {
       chatStore.bumpChatFromRealtime(payload)
+      void notifyIncomingForModeratorInbox({
+        chatId: payload.chatId,
+        messageId: payload.messageId,
+        text: payload.text ?? '',
+        sender_type: payload.sender_type,
+      })
     },
   })
 }
@@ -137,6 +144,32 @@ function onBrowserOffline(): void {
 watch(soundEnabled, (v) => {
   setDesktopSoundEnabled(v)
 })
+
+watch(
+  () => authStore.user?.notification_sound_prefs,
+  (p) => {
+    if (p && typeof p.mute === 'boolean') {
+      soundEnabled.value = !p.mute
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+async function toggleSoundFromHeader(): Promise<void> {
+  const next = !soundEnabled.value
+  soundEnabled.value = next
+  setDesktopSoundEnabled(next)
+  if (!authStore.user || !isModeratorStaffUser(authStore.user)) {
+    return
+  }
+  try {
+    const data = await patchNotificationSoundPreferences({ mute: !next })
+    authStore.applyUserProfile(data.user)
+  } catch {
+    soundEnabled.value = !next
+    setDesktopSoundEnabled(!next)
+  }
+}
 
 onMounted(async () => {
   window.addEventListener('online', onBrowserOnline)
@@ -562,7 +595,7 @@ function showToast(message: string): void {
         :is-dark="isDark"
         :sound-enabled="soundEnabled"
         @toggle-theme="toggleTheme"
-        @toggle-sound="soundEnabled = !soundEnabled"
+        @toggle-sound="toggleSoundFromHeader"
       />
     </main>
 

@@ -4,8 +4,14 @@
  * Fails gracefully when autoplay is blocked (e.g. browser policy).
  */
 
+import {
+    type NotificationSoundPrefs,
+    type NotificationPresetId,
+    PRESET_PUBLIC_PATH,
+} from '@/constants/notificationSounds';
+
 const SOUNDS = {
-    newMessage: '/sounds/new-message.mp3',
+    newMessage: '/sounds/notifications/notification_simple-01.wav',
     systemNotification: '/sounds/system-notification.mp3',
 } as const;
 
@@ -14,6 +20,7 @@ let instance: AudioService | null = null;
 export class AudioService {
     private newMessageAudio: HTMLAudioElement | null = null;
     private systemNotificationAudio: HTMLAudioElement | null = null;
+    private readonly presetAudio = new Map<string, HTMLAudioElement>();
 
     private getOrCreateAudio(src: string): HTMLAudioElement {
         const key = src === SOUNDS.newMessage ? 'newMessageAudio' : 'systemNotificationAudio';
@@ -26,9 +33,10 @@ export class AudioService {
         return audio;
     }
 
-    private play(src: string): void {
+    private play(src: string, volume = 1): void {
         try {
             const audio = this.getOrCreateAudio(src);
+            audio.volume = volume;
             audio.currentTime = 0;
             audio.play().catch(() => {
                 // Autoplay blocked or other error - ignore (graceful degradation)
@@ -44,6 +52,43 @@ export class AudioService {
 
     playSystemNotificationSound(): void {
         this.play(SOUNDS.systemNotification);
+    }
+
+    /**
+     * Server-synced moderator presets (volume, mute, per-scenario preset ids).
+     */
+    playFromNotificationPrefs(
+        prefs: NotificationSoundPrefs | null | undefined,
+        scenario: 'in_app' | 'background' | 'important',
+    ): void {
+        if (!prefs || prefs.mute) {
+            return;
+        }
+        const key =
+            scenario === 'important'
+                ? prefs.presets.important
+                : scenario === 'background'
+                  ? prefs.presets.background
+                  : prefs.presets.in_app;
+        if (key === 'none') {
+            return;
+        }
+        const path = PRESET_PUBLIC_PATH[key as Exclude<NotificationPresetId, 'none'>];
+        if (!path) {
+            return;
+        }
+        try {
+            let audio = this.presetAudio.get(path);
+            if (!audio) {
+                audio = new Audio(path);
+                this.presetAudio.set(path, audio);
+            }
+            audio.volume = prefs.volume;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        } catch {
+            /* ignore */
+        }
     }
 }
 

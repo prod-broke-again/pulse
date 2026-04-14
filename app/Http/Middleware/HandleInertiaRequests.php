@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\NotificationSoundPreferencesService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -57,6 +58,11 @@ class HandleInertiaRequests extends Middleware
             ? (config('services.web_push.vapid_public_key') ?? null)
             : null;
 
+        $notificationSoundPrefs = null;
+        if ($request->user() && $request->user()->hasAnyRole(['admin', 'moderator'])) {
+            $notificationSoundPrefs = app(NotificationSoundPreferencesService::class)->forUser($request->user());
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -64,6 +70,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'isModeratorStaff' => $request->user() ? $request->user()->hasAnyRole(['admin', 'moderator']) : false,
             ],
+            'notificationSoundPrefs' => $notificationSoundPrefs,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'reverb' => $reverb,
             'vapidPublicKey' => $vapidPublicKey,

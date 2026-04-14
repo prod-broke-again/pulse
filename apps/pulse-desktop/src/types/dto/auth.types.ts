@@ -1,3 +1,5 @@
+import type { NotificationSoundPrefs } from '../../lib/notificationSoundPresets'
+
 export interface ApiUser {
   id: number
   name: string
@@ -7,6 +9,8 @@ export interface ApiUser {
   roles: string[]
   source_ids: number[]
   department_ids: number[]
+  /** С сервера; при отсутствии в кэше клиент подставляет дефолты. */
+  notification_sound_prefs?: NotificationSoundPrefs | null
 }
 
 export interface LoginResponse {

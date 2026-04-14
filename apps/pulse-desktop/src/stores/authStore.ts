@@ -6,6 +6,7 @@ import { loadCachedUser, saveCachedUser } from '../lib/authSessionCache'
 import { disconnectEcho } from '../lib/realtime'
 import { resolveOAuthRedirectUri } from '../lib/oauthConfig'
 import type { ApiUser } from '../types/dto/auth.types'
+import type { NotificationSoundPrefs } from '../lib/notificationSoundPresets'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<ApiUser | null>(null)
@@ -94,6 +95,18 @@ export const useAuthStore = defineStore('auth', () => {
     saveCachedUser(profile)
   }
 
+  function applyNotificationSoundPrefs(prefs: NotificationSoundPrefs): void {
+    if (!user.value) {
+      return
+    }
+    const next: ApiUser = {
+      ...user.value,
+      notification_sound_prefs: prefs,
+    }
+    user.value = next
+    saveCachedUser(next)
+  }
+
   return {
     user,
     lastError,
@@ -106,5 +119,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchMe,
     applyUserProfile,
+    applyNotificationSoundPrefs,
   }
 })

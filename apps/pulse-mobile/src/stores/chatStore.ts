@@ -8,7 +8,7 @@ import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
 import { maxNumericMessageIdFromList, parseApiChatId } from '../lib/chatIds'
 import { isMutedUntilActive } from '../lib/chatMute'
-import { playIncomingTone, vibrateIncoming } from '../lib/notificationFeedback'
+import { vibrateIncoming } from '../lib/notificationFeedback'
 import { subscribeChatChannel } from '../lib/realtime'
 import type { ChatMessageUpdatedPayload } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
@@ -449,8 +449,8 @@ export const useChatStore = defineStore('chat', () => {
           } catch {
             messages.value = appendRealtimeMessageIfNew(messages.value, payload)
           }
+          /** В открытом треде звук не играем (сообщение видно сразу). */
           if (payload.sender_type === 'client' && !isMutedUntilActive(threadMeta.value?.muted_until)) {
-            playIncomingTone(settings.sound)
             vibrateIncoming(settings.vibration)
           }
           useInboxStore().scheduleInboxRefreshFromRealtime()

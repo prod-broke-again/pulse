@@ -1,5 +1,4 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { api, type ApiMessage } from '@/lib/api';
 import {
     leaveChat,
     subscribeToChat,
@@ -9,6 +8,8 @@ import {
     type ChatTopicGeneratedPayload,
 } from '@/composables/useEcho';
 import type { ReverbConfig } from '@/composables/useEcho';
+import type { NotificationSoundPrefs } from '@/constants/notificationSounds';
+import { api, type ApiMessage } from '@/lib/api';
 import { getAudioService } from '@/services/AudioService';
 
 export type UseChatMessagesOptions = {
@@ -17,6 +18,7 @@ export type UseChatMessagesOptions = {
     reverbConfig: Ref<ReverbConfig | null | undefined>;
     getEcho: (config: ReverbConfig | null | undefined, userId: number | null) => unknown;
     t: (key: string, params?: Record<string, string>) => string;
+    notificationSoundPrefs?: Ref<NotificationSoundPrefs | null | undefined>;
     onAssigned?: () => void;
     onGuestUpdated?: (payload: ChatGuestUpdatedPayload) => void;
     onTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void;
@@ -32,6 +34,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
         onAssigned,
         onGuestUpdated,
         onTopicGenerated,
+        notificationSoundPrefs,
     } = options;
 
     const messages = ref<ApiMessage[]>([]) as Ref<ApiMessage[]>;
@@ -244,7 +247,13 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             } as ApiMessage,
         ];
         if (payload.sender_type !== 'moderator' && !document.hasFocus()) {
-            getAudioService().playNewMessageSound();
+            const prefs = notificationSoundPrefs?.value;
+            const scenario = document.visibilityState === 'hidden' ? 'background' : 'in_app';
+            if (prefs) {
+                getAudioService().playFromNotificationPrefs(prefs, scenario);
+            } else {
+                getAudioService().playNewMessageSound();
+            }
         }
     }
 

@@ -7,10 +7,13 @@ self.addEventListener('push', function (event) {
     } catch (_) {
         payload.body = event.data.text();
     }
+    var iconUrl = payload.icon || payload.data?.icon_url || '/favicon.ico';
+    var imageUrl = payload.image || payload.data?.image_url || undefined;
     const options = {
         body: payload.body || '',
-        icon: '/favicon.ico',
+        icon: iconUrl,
         badge: '/favicon.ico',
+        image: imageUrl,
         data: payload.data || { url: '/' },
         tag: payload.tag || (payload.data?.chat_id ? 'chat-' + payload.data.chat_id : undefined),
         renotify: true,

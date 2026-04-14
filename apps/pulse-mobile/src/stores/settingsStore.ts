@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { patchNotificationSoundPreferences } from '../api/notificationSoundPreferencesRepository'
 import { registerPushWithBackend, unregisterPushFromBackend } from '../lib/pushDevice'
+import { useAuthStore } from './authStore'
 import { useUiStore } from './uiStore'
 
 const SETTINGS_KEY = 'pulse:settingsV1'
@@ -102,8 +104,21 @@ export const useSettingsStore = defineStore('settings', () => {
     void setPush(!push.value)
   }
 
-  function toggleSound() {
-    sound.value = !sound.value
+  async function toggleSound() {
+    const next = !sound.value
+    sound.value = next
+    persist()
+    const auth = useAuthStore()
+    if (!auth.user?.roles?.some((r) => r === 'admin' || r === 'moderator')) {
+      return
+    }
+    try {
+      const data = await patchNotificationSoundPreferences({ mute: !next })
+      auth.$patch({ user: data.user })
+    } catch {
+      sound.value = !next
+      persist()
+    }
   }
 
   function toggleVibration() {
