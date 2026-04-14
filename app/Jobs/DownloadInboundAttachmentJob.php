@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Events\ChatMessageUpdated;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Support\NewChatMessageBroadcastExtras;
+use App\Support\PendingInboundAttachments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -138,8 +141,26 @@ final class DownloadInboundAttachmentJob implements ShouldQueue
                     'source_url' => $this->fileUrl,
                 ];
                 $payload['attachments'] = $existingAttachments;
+                $pending = is_array($payload['pending_attachments'] ?? null) ? $payload['pending_attachments'] : [];
+                $payload['pending_attachments'] = PendingInboundAttachments::removePendingForCompletedDownload(
+                    $pending,
+                    $this->fileUrl,
+                    $this->kind,
+                );
                 $message->update(['payload' => $payload]);
             });
+
+            $model = MessageModel::query()->with(['replyTo', 'chat'])->find($this->messageId);
+            if ($model !== null) {
+                $extras = NewChatMessageBroadcastExtras::fromMessage($model);
+                event(new ChatMessageUpdated(
+                    chatId: $model->chat_id,
+                    messageId: $model->id,
+                    attachments: $extras['attachments'],
+                    pendingAttachments: $extras['pending_attachments'],
+                    assignedModeratorUserId: $model->chat?->assigned_to,
+                ));
+            }
 
         } catch (\Throwable $e) {
             Log::error('DownloadInboundAttachmentJob: exception', [

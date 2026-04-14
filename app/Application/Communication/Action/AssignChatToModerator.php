@@ -83,7 +83,7 @@ final readonly class AssignChatToModerator
         $model = MessageModel::query()->with('replyTo')->find($persistedMessage->id);
         $extras = $model !== null
             ? NewChatMessageBroadcastExtras::fromMessage($model)
-            : ['attachments' => [], 'reply_to' => null];
+            : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
 
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
@@ -92,6 +92,7 @@ final readonly class AssignChatToModerator
             senderType: SenderType::System->value,
             senderId: null,
             attachments: $extras['attachments'],
+            pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $assignedToUserId,
         ));

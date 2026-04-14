@@ -40,5 +40,11 @@ export interface MessageItem {
     size: number
     url: string
   }>
+  /** Slots until inbound files are downloaded (payload.pending_attachments). */
+  pending_attachments?: Array<{
+    type: string
+    source_url?: string
+    kind?: string
+  }>
   reply_to?: { id: number | null; text: string; sender_type: string }
 }

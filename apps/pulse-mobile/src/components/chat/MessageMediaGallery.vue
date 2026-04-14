@@ -3,10 +3,15 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Download, FileText, X } from 'lucide-vue-next'
 import type { MessageMediaItem } from '../../types/chat'
 
-const props = defineProps<{
-  items: MessageMediaItem[]
-  variant?: 'incoming' | 'outgoing'
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: MessageMediaItem[]
+    /** Placeholders while inbound files download. */
+    pendingSlots?: Array<{ type: string }>
+    variant?: 'incoming' | 'outgoing'
+  }>(),
+  { pendingSlots: () => [], variant: 'incoming' },
+)
 
 const variant = computed(() => props.variant ?? 'incoming')
 
@@ -24,6 +29,13 @@ const otherItems = computed(() =>
       && !f.mime_type.startsWith('audio/'),
   ),
 )
+
+const pendingImageSlots = computed(() => props.pendingSlots.filter((s) => s.type === 'image'))
+const pendingVideoSlots = computed(() => props.pendingSlots.filter((s) => s.type === 'video'))
+const pendingAudioSlots = computed(() => props.pendingSlots.filter((s) => s.type === 'audio'))
+const pendingFileSlots = computed(() => props.pendingSlots.filter((s) => s.type === 'file'))
+
+const imageGridCellCount = computed(() => imageItems.value.length + pendingImageSlots.value.length)
 
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
@@ -101,10 +113,10 @@ const currentImage = computed(() => imageItems.value[lightboxIndex.value] ?? nul
 <template>
   <div>
     <div
-      v-if="imageItems.length > 0"
+      v-if="imageGridCellCount > 0"
       class="grid gap-1"
       :class="[
-        imageItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
+        imageGridCellCount === 1 ? 'grid-cols-1' : 'grid-cols-2',
         variant === 'incoming'
           ? 'rounded-[14px] bg-black/[0.04] p-1 dark:bg-white/[0.06]'
           : 'rounded-[14px] bg-white/15 p-1',
@@ -112,24 +124,57 @@ const currentImage = computed(() => imageItems.value[lightboxIndex.value] ?? nul
     >
       <button
         v-for="(img, idx) in imageItems"
-        :key="`${img.url}-${idx}`"
+        :key="`f-${img.url}-${idx}`"
         type="button"
         class="relative block overflow-hidden rounded-lg border-0 p-0 text-left"
         @click.stop="openLightbox(idx)"
       >
-        <img
-          :src="img.url"
-          :alt="img.name"
-          class="max-h-48 w-full object-cover"
-          loading="lazy"
-          decoding="async"
-          fetchpriority="low"
-        />
+        <Transition name="fade-attach" appear>
+          <img
+            :src="img.url"
+            :alt="img.name"
+            class="max-h-48 w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+          />
+        </Transition>
       </button>
+      <div
+        v-for="(s, i) in pendingImageSlots"
+        :key="`p-img-${i}`"
+        class="overflow-hidden rounded-lg"
+        aria-hidden="true"
+      >
+        <Transition name="fade-attach" appear>
+          <div
+            class="min-h-[100px] w-full max-h-48 animate-pulse bg-gradient-to-br from-zinc-300/80 to-zinc-400/45 dark:from-zinc-600/55 dark:to-zinc-700/35"
+          />
+        </Transition>
+      </div>
+    </div>
+
+    <div
+      v-for="(_s, i) in pendingVideoSlots"
+      :key="`p-vid-${i}`"
+      class="mt-2 overflow-hidden rounded-lg"
+      aria-hidden="true"
+    >
+      <Transition name="fade-attach" appear>
+        <div
+          class="aspect-video w-full max-w-sm animate-pulse bg-gradient-to-br from-zinc-300/80 to-zinc-400/45 dark:from-zinc-600/55 dark:to-zinc-700/35"
+        />
+      </Transition>
     </div>
 
     <div v-for="(a, idx) in audioItems" :key="`${a.url}-a-${idx}`" class="mt-2">
       <audio :src="a.url" controls class="w-full max-w-full" />
+    </div>
+
+    <div v-for="(_s, i) in pendingAudioSlots" :key="`p-aud-${i}`" class="mt-2" aria-hidden="true">
+      <Transition name="fade-attach" appear>
+        <div class="h-10 w-full animate-pulse rounded-md bg-zinc-300/65 dark:bg-zinc-600/45" />
+      </Transition>
     </div>
 
     <div
@@ -148,6 +193,26 @@ const currentImage = computed(() => imageItems.value[lightboxIndex.value] ?? nul
       <a :href="file.url" target="_blank" rel="noopener noreferrer" class="shrink-0 p-0.5" @click.stop>
         <Download class="size-3.5" />
       </a>
+    </div>
+
+    <div
+      v-for="(_s, i) in pendingFileSlots"
+      :key="`p-file-${i}`"
+      class="mt-2 flex items-center gap-2 rounded-[10px] px-3 py-2"
+      :class="
+        variant === 'incoming'
+          ? 'bg-black/[0.05] dark:bg-white/[0.06]'
+          : 'bg-white/15'
+      "
+      aria-hidden="true"
+    >
+      <Transition name="fade-attach" appear>
+        <div class="flex w-full items-center gap-2">
+          <div class="size-3.5 shrink-0 animate-pulse rounded-sm bg-zinc-300/80 dark:bg-zinc-600/55" />
+          <div class="h-3 min-w-0 flex-1 animate-pulse rounded bg-zinc-300/60 dark:bg-zinc-600/40" />
+          <div class="size-3.5 shrink-0 animate-pulse rounded bg-zinc-300/50 dark:bg-zinc-600/35" />
+        </div>
+      </Transition>
     </div>
 
     <Teleport to="body">
@@ -211,3 +276,14 @@ const currentImage = computed(() => imageItems.value[lightboxIndex.value] ?? nul
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-attach-enter-active,
+.fade-attach-leave-active {
+  transition: opacity 0.28s ease;
+}
+.fade-attach-enter-from,
+.fade-attach-leave-to {
+  opacity: 0;
+}
+</style>

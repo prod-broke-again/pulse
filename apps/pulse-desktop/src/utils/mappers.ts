@@ -2,6 +2,33 @@ import type { ApiChat, ApiMessage } from '../types/dto/chat.types'
 import type { Conversation, MessageItem } from '../types/chat'
 import type { NewChatMessagePayload } from '../lib/realtime'
 
+function mapWsAttachmentsToMessageItemAttachments(
+  raw: Array<Record<string, unknown>> | undefined,
+): MessageItem['attachments'] {
+  if (!raw?.length) {
+    return undefined
+  }
+  const out: NonNullable<MessageItem['attachments']> = []
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i]
+    const url = typeof row.url === 'string' ? row.url.trim() : ''
+    if (!url) {
+      continue
+    }
+    out.push({
+      id: typeof row.id === 'number' ? row.id : -(i + 1),
+      name: typeof row.name === 'string' && row.name !== '' ? row.name : 'file',
+      mime_type:
+        typeof row.mime_type === 'string' && row.mime_type !== ''
+          ? row.mime_type
+          : 'application/octet-stream',
+      size: typeof row.size === 'number' ? row.size : 0,
+      url,
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
+
 export function mapChatToConversation(chat: ApiChat, activeId: number | null): Conversation {
   const metadata = chat.user_metadata ?? {}
   const name = (metadata.first_name as string) || (metadata.username as string) || chat.external_user_id
@@ -59,13 +86,23 @@ export function mapRealtimePayloadToMessageItem(p: NewChatMessagePayload): Messa
   const d = new Date()
   const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
+  const pending = p.pending_attachments
+  const pendingNorm =
+    Array.isArray(pending) && pending.length > 0
+      ? pending.filter(
+          (x): x is { type: string; source_url?: string; kind?: string } =>
+            x !== null && typeof x === 'object' && typeof (x as { type?: unknown }).type === 'string',
+        )
+      : undefined
+
   return {
     id: p.messageId,
     from,
     text: p.text,
     time,
     createdAtIso: new Date().toISOString(),
-    attachments: [],
+    attachments: mapWsAttachmentsToMessageItemAttachments(p.attachments),
+    ...(pendingNorm ? { pending_attachments: pendingNorm } : {}),
   }
 }
 
@@ -75,6 +112,15 @@ export function mapApiMessage(msg: ApiMessage): MessageItem {
     ? new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
     : ''
 
+  const rawPending = msg.payload?.pending_attachments
+  const pendingNorm =
+    Array.isArray(rawPending) && rawPending.length > 0
+      ? rawPending.filter(
+          (x): x is { type: string; source_url?: string; kind?: string } =>
+            x !== null && typeof x === 'object' && typeof (x as { type?: unknown }).type === 'string',
+        )
+      : undefined
+
   return {
     id: msg.id,
     from: senderType,
@@ -82,6 +128,7 @@ export function mapApiMessage(msg: ApiMessage): MessageItem {
     time,
     createdAtIso: msg.created_at ?? null,
     attachments: msg.attachments ?? [],
+    ...(pendingNorm ? { pending_attachments: pendingNorm } : {}),
     reply_markup: msg.reply_markup ?? undefined,
     reply_to: msg.reply_to ?? undefined,
     is_read: msg.is_read,

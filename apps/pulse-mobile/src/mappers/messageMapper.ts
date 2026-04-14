@@ -1,4 +1,4 @@
-import type { NewChatMessagePayload } from '../lib/realtime'
+import type { ChatMessageUpdatedPayload, NewChatMessagePayload, PendingAttachmentMeta } from '../lib/realtime'
 import type { ApiMessageRow } from '../api/types'
 import type { ChatMessage, MessageKind, MessageMediaItem, ReplyMarkupButton } from '../types/chat'
 
@@ -55,6 +55,43 @@ function mapApiAttachmentsToMediaItems(
   return out.length > 0 ? out : undefined
 }
 
+function normalizePendingSlots(
+  raw: PendingAttachmentMeta[] | undefined,
+): ChatMessage['pendingMediaSlots'] {
+  if (!raw?.length) {
+    return undefined
+  }
+  const out: NonNullable<ChatMessage['pendingMediaSlots']> = []
+  for (const x of raw) {
+    if (x !== null && typeof x === 'object' && typeof x.type === 'string') {
+      out.push({
+        type: x.type,
+        ...(typeof x.source_url === 'string' ? { source_url: x.source_url } : {}),
+        ...(typeof x.kind === 'string' ? { kind: x.kind } : {}),
+      })
+    }
+  }
+  return out.length > 0 ? out : undefined
+}
+
+function pendingSlotsFromPayload(raw: unknown): ChatMessage['pendingMediaSlots'] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return undefined
+  }
+  const out: NonNullable<ChatMessage['pendingMediaSlots']> = []
+  for (const x of raw) {
+    if (x !== null && typeof x === 'object' && typeof (x as { type?: unknown }).type === 'string') {
+      const o = x as { type: string; source_url?: string; kind?: string }
+      out.push({
+        type: o.type,
+        ...(typeof o.source_url === 'string' ? { source_url: o.source_url } : {}),
+        ...(typeof o.kind === 'string' ? { kind: o.kind } : {}),
+      })
+    }
+  }
+  return out.length > 0 ? out : undefined
+}
+
 function mapRealtimeAttachmentsToMediaItems(
   raw: Array<Record<string, unknown>> | undefined,
 ): MessageMediaItem[] | undefined {
@@ -88,6 +125,7 @@ export function mapRealtimePayloadToChatMessage(p: NewChatMessagePayload): ChatM
   const time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 
   const mediaAttachments = mapRealtimeAttachmentsToMediaItems(p.attachments)
+  const pendingSlots = normalizePendingSlots(p.pending_attachments)
 
   return {
     id: String(p.messageId),
@@ -96,6 +134,7 @@ export function mapRealtimePayloadToChatMessage(p: NewChatMessagePayload): ChatM
     time,
     createdAtIso: new Date().toISOString(),
     ...(mediaAttachments ? { mediaAttachments } : {}),
+    ...(pendingSlots ? { pendingMediaSlots: pendingSlots } : {}),
     ...(p.reply_to ? { reply_to: p.reply_to } : {}),
     ...(kind === 'incoming' ? { isRead: false } : {}),
   }
@@ -108,6 +147,7 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
 
   const time = formatTime(row.created_at)
   const mediaAttachments = mapApiAttachmentsToMediaItems(row.attachments)
+  const pendingSlots = pendingSlotsFromPayload(row.payload?.pending_attachments)
   const text = row.text ?? ''
 
   const replyMarkup = normalizeReplyMarkup(row.reply_markup)
@@ -119,8 +159,30 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
     time,
     createdAtIso: row.created_at,
     ...(mediaAttachments ? { mediaAttachments } : {}),
+    ...(pendingSlots ? { pendingMediaSlots: pendingSlots } : {}),
     ...(row.reply_to ? { reply_to: row.reply_to } : {}),
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     ...(kind === 'incoming' && row.is_read === true ? { isRead: true } : {}),
   }
+}
+
+/** Patch attachments + pending slots after DownloadInboundAttachmentJob (WebSocket). */
+export function applyChatMessageUpdatedPayload(
+  current: ChatMessage[],
+  payload: ChatMessageUpdatedPayload,
+): ChatMessage[] {
+  const mid = String(payload.messageId)
+  const media = mapRealtimeAttachmentsToMediaItems(payload.attachments)
+  const pendingSlots = normalizePendingSlots(payload.pending_attachments)
+
+  return current.map((m) => {
+    if (m.id !== mid) {
+      return m
+    }
+    return {
+      ...m,
+      ...(media?.length ? { mediaAttachments: media } : { mediaAttachments: undefined }),
+      pendingMediaSlots: pendingSlots,
+    }
+  })
 }

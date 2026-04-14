@@ -257,6 +257,7 @@ final class WidgetApiController extends Controller
             senderType: $message->sender_type,
             senderId: $message->sender_id,
             attachments: $extras['attachments'],
+            pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $chat->assigned_to,
         ));

@@ -10,6 +10,7 @@ use App\Application\Communication\Webhook\TelegramMediaGroupInboundBuffer;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Services\MaybeSendOfflineAutoReply;
+use App\Support\PendingInboundAttachments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -154,6 +155,8 @@ final class ProcessTelegramMediaGroupJob implements ShouldQueue
                 $payload['inbound_attachments_truncated'] = true;
                 $payload['inbound_attachments_total'] = $totalMerged;
             }
+
+            $payload['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($mergedAttachments);
 
             $message = $createMessage->run(
                 chatId: $this->chatId,

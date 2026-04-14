@@ -19,6 +19,7 @@ use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Jobs\DownloadInboundAttachmentJob;
 use App\Services\MaybeSendOfflineAutoReply;
+use App\Support\PendingInboundAttachments;
 use Illuminate\Support\Facades\Log;
 
 final readonly class ProcessInboundWebhook
@@ -108,6 +109,10 @@ final readonly class ProcessInboundWebhook
             );
 
             return;
+        }
+
+        if ($attachments !== []) {
+            $payload['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($attachments);
         }
 
         $message = $this->createMessage->run(

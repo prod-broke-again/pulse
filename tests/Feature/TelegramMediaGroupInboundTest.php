@@ -90,6 +90,8 @@ final class TelegramMediaGroupInboundTest extends TestCase
         $payload = $message->payload ?? [];
         $this->assertSame('42', $payload['telegram_media_group_id'] ?? null);
         $this->assertSame(['101', '102'], $payload['telegram_message_ids'] ?? null);
+        $this->assertCount(2, $payload['pending_attachments'] ?? []);
+        $this->assertSame('image', $payload['pending_attachments'][0]['type'] ?? null);
     }
 
     public function test_media_group_external_id_is_idempotent(): void
@@ -205,5 +207,7 @@ final class TelegramMediaGroupInboundTest extends TestCase
         $this->assertSame('[Вложений: 3]', $message->text);
 
         Queue::assertPushedTimes(DownloadInboundAttachmentJob::class, 3);
+        $payload = $message->payload ?? [];
+        $this->assertCount(3, $payload['pending_attachments'] ?? []);
     }
 }

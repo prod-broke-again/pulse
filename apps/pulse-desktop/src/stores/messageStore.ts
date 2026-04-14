@@ -17,6 +17,7 @@ import {
   setCachedMessages,
 } from '../lib/localElectronStore'
 import { subscribeChatChannel } from '../lib/realtime'
+import type { ChatMessageUpdatedPayload } from '../lib/realtime'
 import { mapRealtimePayloadToMessageItem } from '../utils/mappers'
 import { useAuthStore } from './authStore'
 import { useChatStore } from './chatStore'
@@ -149,6 +150,7 @@ export const useMessageStore = defineStore('message', () => {
           return
         }
         const prevMax = maxMessageId()
+        const preview = mapRealtimePayloadToMessageItem(payload)
         void (async () => {
           try {
             const newer = await fetchMessages(chatId, { after_id: prevMax, limit: 30 })
@@ -160,7 +162,7 @@ export const useMessageStore = defineStore('message', () => {
               messages.value = Array.from(byId.values()).sort((a, b) => a.id - b.id)
               void persistThreadCache(chatId)
             } else {
-              const item = mapRealtimePayloadToMessageItem(payload)
+              const item = preview
               if (messages.value.some((m) => m.id === item.id)) {
                 return
               }
@@ -170,8 +172,10 @@ export const useMessageStore = defineStore('message', () => {
                 sender_id: payload.sender_id,
                 sender_type: item.from,
                 text: item.text,
-                payload: {},
-                attachments: [],
+                payload: item.pending_attachments?.length
+                  ? { pending_attachments: item.pending_attachments }
+                  : {},
+                attachments: item.attachments ?? [],
                 is_read: item.from !== 'client',
                 created_at: new Date().toISOString(),
                 updated_at: null,
@@ -180,7 +184,7 @@ export const useMessageStore = defineStore('message', () => {
               void persistThreadCache(chatId)
             }
           } catch {
-            const item = mapRealtimePayloadToMessageItem(payload)
+            const item = preview
             if (messages.value.some((m) => m.id === item.id)) {
               return
             }
@@ -190,8 +194,10 @@ export const useMessageStore = defineStore('message', () => {
               sender_id: payload.sender_id,
               sender_type: item.from,
               text: item.text,
-              payload: {},
-              attachments: [],
+              payload: item.pending_attachments?.length
+                ? { pending_attachments: item.pending_attachments }
+                : {},
+              attachments: item.attachments ?? [],
               is_read: item.from !== 'client',
               created_at: new Date().toISOString(),
               updated_at: null,
@@ -205,6 +211,50 @@ export const useMessageStore = defineStore('message', () => {
           })
           chat.bumpChatFromRealtime(payload)
         })()
+      },
+      onChatMessageUpdated: (p: ChatMessageUpdatedPayload) => {
+        if (p.chatId !== chatId) {
+          return
+        }
+        const raw = p.attachments ?? []
+        const attachments = raw
+          .map((row, i) => {
+            if (row === null || typeof row !== 'object') {
+              return null
+            }
+            const o = row as Record<string, unknown>
+            const url = typeof o.url === 'string' ? o.url.trim() : ''
+            if (!url) {
+              return null
+            }
+            return {
+              id: typeof o.id === 'number' ? o.id : -(i + 1),
+              name: typeof o.name === 'string' && o.name !== '' ? o.name : 'file',
+              mime_type:
+                typeof o.mime_type === 'string' && o.mime_type !== ''
+                  ? o.mime_type
+                  : 'application/octet-stream',
+              size: typeof o.size === 'number' ? o.size : 0,
+              url,
+            }
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null)
+
+        const pending = p.pending_attachments ?? []
+        messages.value = messages.value.map((m) => {
+          if (m.id !== p.messageId) {
+            return m
+          }
+          return {
+            ...m,
+            attachments,
+            payload: {
+              ...m.payload,
+              pending_attachments: pending,
+            },
+          }
+        })
+        void persistThreadCache(chatId)
       },
       onMessageRead: (payload) => {
         if (payload.chatId !== chatId || payload.messageIds.length === 0) {

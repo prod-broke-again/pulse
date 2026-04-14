@@ -10,8 +10,8 @@ use App\Domains\Communication\Repository\MessageRepositoryInterface;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
-use App\Support\NewChatMessageBroadcastExtras;
 use App\Jobs\GenerateChatTopicJob;
+use App\Support\NewChatMessageBroadcastExtras;
 use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class CreateMessage
@@ -61,7 +61,7 @@ final readonly class CreateMessage
         $model = MessageModel::query()->with('replyTo')->find($persisted->id);
         $extras = $model !== null
             ? NewChatMessageBroadcastExtras::fromMessage($model)
-            : ['attachments' => [], 'reply_to' => null];
+            : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
 
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
@@ -70,6 +70,7 @@ final readonly class CreateMessage
             senderType: $senderType->value,
             senderId: $senderId,
             attachments: $extras['attachments'],
+            pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $chat->assignedTo,
         ));

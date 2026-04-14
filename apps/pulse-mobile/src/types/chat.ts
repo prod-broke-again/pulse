@@ -56,6 +56,8 @@ export interface ChatMessage {
   attachment?: MessageAttachment
   /** When API returns attachments (images, audio, documents). */
   mediaAttachments?: MessageMediaItem[]
+  /** Placeholders while inbound files download (payload.pending_attachments). */
+  pendingMediaSlots?: Array<{ type: string; source_url?: string; kind?: string }>
   /** Quoted message (API + realtime). */
   reply_to?: { id: number | null; text: string; sender_type: string }
   /** Inline URL buttons (moderator presets), shown under bubble. */

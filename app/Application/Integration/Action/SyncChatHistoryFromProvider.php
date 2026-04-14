@@ -16,6 +16,7 @@ use App\Infrastructure\Integration\Client\VkApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Jobs\DownloadInboundAttachmentJob;
+use App\Support\PendingInboundAttachments;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -168,12 +169,17 @@ final readonly class SyncChatHistoryFromProvider
                 );
             }
 
+            $payloadForMessage = $syntheticPayload;
+            if ($normalized !== []) {
+                $payloadForMessage['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($normalized);
+            }
+
             $created = $this->createMessage->run(
                 chatId: $chat->id,
                 text: $text,
                 senderType: $senderType,
                 senderId: null,
-                payload: $syntheticPayload,
+                payload: $payloadForMessage,
                 externalMessageId: $externalId,
             );
 

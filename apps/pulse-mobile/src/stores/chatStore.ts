@@ -10,8 +10,9 @@ import { maxNumericMessageIdFromList, parseApiChatId } from '../lib/chatIds'
 import { isMutedUntilActive } from '../lib/chatMute'
 import { playIncomingTone, vibrateIncoming } from '../lib/notificationFeedback'
 import { subscribeChatChannel } from '../lib/realtime'
+import type { ChatMessageUpdatedPayload } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
-import { mapApiMessageToChatMessage } from '../mappers/messageMapper'
+import { applyChatMessageUpdatedPayload, mapApiMessageToChatMessage } from '../mappers/messageMapper'
 import { appendRealtimeMessageIfNew, mergeFetchedNewerRows } from './chat/realtimeMerge'
 import { useAuthStore } from './authStore'
 import { useChatUiStore } from './chatUiStore'
@@ -454,6 +455,12 @@ export const useChatStore = defineStore('chat', () => {
           }
           useInboxStore().scheduleInboxRefreshFromRealtime()
         })()
+      },
+      onChatMessageUpdated: (payload: ChatMessageUpdatedPayload) => {
+        if (payload.chatId !== id) {
+          return
+        }
+        messages.value = applyChatMessageUpdatedPayload(messages.value, payload)
       },
       onMessageRead: (payload) => {
         if (payload.chatId !== id || payload.messageIds.length === 0) return

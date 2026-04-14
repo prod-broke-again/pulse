@@ -13,7 +13,11 @@ use Illuminate\Support\Str;
 final class NewChatMessageBroadcastExtras
 {
     /**
-     * @return array{attachments: list<array<string, mixed>>, reply_to: ?array{id: int, text: string, sender_type: string}}
+     * @return array{
+     *     attachments: list<array<string, mixed>>,
+     *     reply_to: ?array{id: int, text: string, sender_type: string},
+     *     pending_attachments: list<array<string, mixed>>,
+     * }
      */
     public static function fromMessage(MessageModel $message): array
     {
@@ -33,6 +37,11 @@ final class NewChatMessageBroadcastExtras
             ])->values()->all();
         }
 
+        $pending = $message->payload['pending_attachments'] ?? [];
+        if (! is_array($pending)) {
+            $pending = [];
+        }
+
         $replyTo = null;
         if ($message->relationLoaded('replyTo') && $message->replyTo !== null) {
             $replyTo = [
@@ -45,6 +54,7 @@ final class NewChatMessageBroadcastExtras
         return [
             'attachments' => $attachments,
             'reply_to' => $replyTo,
+            'pending_attachments' => array_values($pending),
         ];
     }
 }

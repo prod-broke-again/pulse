@@ -47,7 +47,11 @@ function onReplyQuoteClick() {
 }
 
 const hasText = computed(() => !!(props.message.text ?? '').trim())
-const hasMedia = computed(() => (props.message.mediaAttachments?.length ?? 0) > 0)
+const hasMedia = computed(
+  () =>
+    (props.message.mediaAttachments?.length ?? 0) > 0
+    || (props.message.pendingMediaSlots?.length ?? 0) > 0,
+)
 </script>
 
 <template>
@@ -102,6 +106,7 @@ const hasMedia = computed(() => (props.message.mediaAttachments?.length ?? 0) > 
         v-if="hasMedia"
         class="mt-1.5"
         :items="message.mediaAttachments ?? []"
+        :pending-slots="message.pendingMediaSlots ?? []"
         variant="incoming"
       />
       <ReplyMarkupInline

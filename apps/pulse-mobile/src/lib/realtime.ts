@@ -3,6 +3,12 @@ import Pusher from 'pusher-js'
 
 let echo: Echo<'pusher'> | null = null
 
+export type PendingAttachmentMeta = {
+  type: string
+  source_url?: string
+  kind?: string
+}
+
 export type NewChatMessagePayload = {
   chatId: number
   messageId: number
@@ -10,7 +16,15 @@ export type NewChatMessagePayload = {
   sender_type: string
   sender_id: number | null
   attachments?: Array<Record<string, unknown>>
+  pending_attachments?: PendingAttachmentMeta[]
   reply_to?: { id: number; text: string; sender_type: string } | null
+}
+
+export type ChatMessageUpdatedPayload = {
+  chatId: number
+  messageId: number
+  attachments?: Array<Record<string, unknown>>
+  pending_attachments?: PendingAttachmentMeta[]
 }
 
 export type MessageReadPayload = {
@@ -53,6 +67,7 @@ function normalizeChatAssignedPayload(raw: unknown): ChatAssignedPayload | null 
 
 export type ChatChannelHandlers = {
   onNewMessage?: (payload: NewChatMessagePayload) => void
+  onChatMessageUpdated?: (payload: ChatMessageUpdatedPayload) => void
   onMessageRead?: (payload: MessageReadPayload) => void
   onTyping?: (payload: TypingPayload) => void
   onChatAssigned?: (payload: ChatAssignedPayload) => void
@@ -60,6 +75,7 @@ export type ChatChannelHandlers = {
 
 export type ModeratorChannelHandlers = {
   onNewMessage?: (payload: NewChatMessagePayload) => void
+  onChatMessageUpdated?: (payload: ChatMessageUpdatedPayload) => void
 }
 
 export function getEcho(): Echo<'pusher'> | null {
@@ -103,6 +119,9 @@ export function subscribeChatChannel(chatId: number, handlers: ChatChannelHandle
 
   const ch = client.private(`chat.${chatId}`)
   ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => handlers.onNewMessage?.(e))
+  ch.listen('.App\\Events\\ChatMessageUpdated', (e: ChatMessageUpdatedPayload) =>
+    handlers.onChatMessageUpdated?.(e),
+  )
   ch.listen('.App\\Events\\MessageRead', (e: MessageReadPayload) => handlers.onMessageRead?.(e))
   ch.listen('typing', (e: TypingPayload) => handlers.onTyping?.(e))
   ch.listen('.App\\Events\\ChatAssigned', (e: unknown) => {
@@ -135,6 +154,9 @@ export function subscribeModeratorChannel(
 
   const ch = client.private(`moderator.${userId}`)
   ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => handlers.onNewMessage?.(e))
+  ch.listen('.App\\Events\\ChatMessageUpdated', (e: ChatMessageUpdatedPayload) =>
+    handlers.onChatMessageUpdated?.(e),
+  )
 
   return () => {
     client.leave(`moderator.${userId}`)

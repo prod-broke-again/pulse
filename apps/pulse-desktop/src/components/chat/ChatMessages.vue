@@ -410,8 +410,12 @@ defineExpose({
             </button>
             <template v-if="item.text">{{ item.text }}</template>
             <MessageAttachmentsGallery
-              v-if="item.attachments && item.attachments.length > 0"
-              :files="item.attachments"
+              v-if="
+                (item.attachments && item.attachments.length > 0)
+                || (item.pending_attachments && item.pending_attachments.length > 0)
+              "
+              :files="item.attachments ?? []"
+              :pending-slots="item.pending_attachments ?? []"
             />
             <div v-if="item.reply_markup && item.reply_markup.length" class="mt-2 flex flex-wrap gap-1.5">
               <a
@@ -473,8 +477,12 @@ defineExpose({
             </button>
             <template v-if="item.text">{{ item.text }}</template>
             <MessageAttachmentsGallery
-              v-if="item.attachments && item.attachments.length > 0"
-              :files="item.attachments"
+              v-if="
+                (item.attachments && item.attachments.length > 0)
+                || (item.pending_attachments && item.pending_attachments.length > 0)
+              "
+              :files="item.attachments ?? []"
+              :pending-slots="item.pending_attachments ?? []"
             />
             <div v-if="item.reply_markup && item.reply_markup.length" class="mt-2 flex flex-wrap gap-1.5">
               <a
