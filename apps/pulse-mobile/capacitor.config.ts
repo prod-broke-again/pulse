@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
   },
+  plugins: {
+    SplashScreen: {
+      backgroundColor: '#ffffff',
+      androidScaleType: 'CENTER_INSIDE',
+    },
+  },
 }
 
 export default config
