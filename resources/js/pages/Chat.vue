@@ -215,6 +215,9 @@ function clearReplyTarget() {
 }
 
 function sendMessage() {
+    if (composerLocked.value) {
+        return;
+    }
     const text = newMessageText.value.trim();
     if (!selectedChatId.value || !text) return;
     const rId = replyToMessageId.value;
@@ -248,6 +251,24 @@ const interlocutorDisplay = computed(() => {
 const isAssignedToMe = computed(
     () => selectedChat.value?.assigned_to != null && selectedChat.value?.assigned_to === authUser.value?.id,
 );
+
+const hasOtherAssignee = computed(
+    () =>
+        selectedChat.value?.assigned_to != null &&
+        selectedChat.value.assigned_to !== authUser.value?.id,
+);
+
+const composerLocked = computed(() => hasOtherAssignee.value);
+
+const assignPrimaryLabel = computed(() => {
+    if (isAssignedToMe.value) {
+        return t('chat.assignedToMeLabel');
+    }
+    if (hasOtherAssignee.value) {
+        return t('chat.takeoverToMe');
+    }
+    return t('chat.assignToMe');
+});
 
 const echo = computed(() => getEcho(reverbConfig.value, authUser.value?.id ?? null));
 
@@ -499,7 +520,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                             >
                                 <Loader2 v-if="assigningInProgress" class="size-4 animate-spin" />
                                 <UserPlus v-else class="size-4" />
-                                {{ isAssignedToMe ? t('chat.assignedToMeLabel') : t('chat.assignToMe') }}
+                                {{ assignPrimaryLabel }}
                             </Button>
                             <Button variant="outline" size="sm" class="gap-1" @click="closeChat">
                                 <XCircle class="size-4" />
@@ -563,7 +584,10 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                         </div>
 
                         <!-- Canned responses -->
-                        <div v-if="cannedResponses.length" class="border-sidebar-border/70 flex flex-wrap gap-1 border-t p-2 dark:border-sidebar-border">
+                        <div
+                            v-if="cannedResponses.length && !composerLocked"
+                            class="border-sidebar-border/70 flex flex-wrap gap-1 border-t p-2 dark:border-sidebar-border"
+                        >
                             <Button
                                 v-for="cr in cannedResponses.slice(0, 5)"
                                 :key="cr.id"
@@ -578,6 +602,13 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
 
                         <!-- Input -->
                         <div class="border-sidebar-border/70 border-t p-3 dark:border-sidebar-border">
+                            <p
+                                v-if="composerLocked"
+                                class="mb-2 rounded-md border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+                                role="status"
+                            >
+                                {{ t('chat.composerLockedHint') }}
+                            </p>
                             <div
                                 v-if="replyToPreview"
                                 class="mb-2 flex items-start gap-2 rounded-md border border-border/80 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
@@ -606,6 +637,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                     type="text"
                                     :placeholder="t('chat.typeMessage')"
                                     class="min-w-0 flex-1"
+                                    :disabled="composerLocked"
                                     @input="
                                         () => {
                                             debouncedSendTyping();
@@ -613,7 +645,7 @@ const hasOlder = computed(() => oldestMessageId.value != null && messages.value.
                                         }
                                     "
                                 />
-                                <Button type="submit" :disabled="sendLoading || !newMessageText.trim()">
+                                <Button type="submit" :disabled="composerLocked || sendLoading || !newMessageText.trim()">
                                     <Loader2 v-if="sendLoading" class="size-4 animate-spin" />
                                     <Send v-else class="size-4" />
                                 </Button>

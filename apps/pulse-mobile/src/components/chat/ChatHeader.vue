@@ -173,7 +173,16 @@ function pickDepartment(id: number): void {
         type="button"
         class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
         :disabled="headerAction !== null"
-        aria-label="Назначить чат на себя"
+        :title="
+          meta.assignedToUserId != null && meta.assignedToUserId !== auth.user?.id
+            ? 'Забрать чат себе'
+            : 'Назначить чат на себя'
+        "
+        :aria-label="
+          meta.assignedToUserId != null && meta.assignedToUserId !== auth.user?.id
+            ? 'Забрать чат себе'
+            : 'Назначить чат на себя'
+        "
         @click="onAssignMe()"
       >
         <UserPlus

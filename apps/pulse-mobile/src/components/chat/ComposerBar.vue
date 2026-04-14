@@ -6,8 +6,15 @@ import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
 const chat = useChatStore()
-const { composerText, canSend, pendingReplyMarkup, cannedQuickReplies, quickLinkPresets, replyToMessageId } =
-  storeToRefs(chat)
+const {
+  composerText,
+  canSend,
+  composerLocked,
+  pendingReplyMarkup,
+  cannedQuickReplies,
+  quickLinkPresets,
+  replyToMessageId,
+} = storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
 const actionsDetails = ref<HTMLDetailsElement | null>(null)
 
@@ -73,6 +80,13 @@ function onSend() {
       </button>
     </div>
     <div class="px-3 pt-2.5">
+      <div
+        v-if="composerLocked"
+        class="mb-2 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+        role="status"
+      >
+        Чат у другого модератора. Нажмите «Назначить» в шапке, чтобы ответить.
+      </div>
       <div
         v-if="replyToMessageId != null"
         class="mb-2 flex items-start gap-2 rounded-xl border border-[var(--color-brand-200)]/40 bg-[var(--color-brand-bg)] px-3 py-2 text-xs dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)]"
@@ -162,6 +176,7 @@ function onSend() {
         type="button"
         class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-[var(--zinc-100)] text-base text-[var(--zinc-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-400)]"
         aria-label="Вложение"
+        :disabled="composerLocked"
         @click="fileInput?.click()"
       >
         <Paperclip class="size-4" />
@@ -175,6 +190,7 @@ function onSend() {
           class="max-h-[100px] min-w-0 flex-1 border-none bg-transparent text-sm leading-snug text-[var(--color-dark)] outline-none placeholder:text-[var(--zinc-400)] dark:text-[var(--zinc-100)]"
           placeholder="Написать ответ..."
           autocomplete="off"
+          :disabled="composerLocked"
           @input="chat.setComposerText(($event.target as HTMLInputElement).value)"
           @keydown.enter.prevent="canSend && onSend()"
         />

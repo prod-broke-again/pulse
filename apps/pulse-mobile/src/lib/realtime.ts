@@ -23,10 +23,39 @@ export type TypingPayload = {
   sender_type?: string
 }
 
+export type ChatAssignedPayload = {
+  chatId: number
+  assignedToUserId: number
+}
+
+function normalizeChatAssignedPayload(raw: unknown): ChatAssignedPayload | null {
+  if (raw === null || typeof raw !== 'object') {
+    return null
+  }
+  const o = raw as Record<string, unknown>
+  const chatId =
+    typeof o.chatId === 'number'
+      ? o.chatId
+      : typeof o.chat_id === 'number'
+        ? o.chat_id
+        : null
+  const assignedToUserId =
+    typeof o.assignedToUserId === 'number'
+      ? o.assignedToUserId
+      : typeof o.assigned_to_user_id === 'number'
+        ? o.assigned_to_user_id
+        : null
+  if (chatId === null || assignedToUserId === null) {
+    return null
+  }
+  return { chatId, assignedToUserId }
+}
+
 export type ChatChannelHandlers = {
   onNewMessage?: (payload: NewChatMessagePayload) => void
   onMessageRead?: (payload: MessageReadPayload) => void
   onTyping?: (payload: TypingPayload) => void
+  onChatAssigned?: (payload: ChatAssignedPayload) => void
 }
 
 export type ModeratorChannelHandlers = {
@@ -76,6 +105,18 @@ export function subscribeChatChannel(chatId: number, handlers: ChatChannelHandle
   ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => handlers.onNewMessage?.(e))
   ch.listen('.App\\Events\\MessageRead', (e: MessageReadPayload) => handlers.onMessageRead?.(e))
   ch.listen('typing', (e: TypingPayload) => handlers.onTyping?.(e))
+  ch.listen('.App\\Events\\ChatAssigned', (e: unknown) => {
+    const p = normalizeChatAssignedPayload(e)
+    if (p) {
+      handlers.onChatAssigned?.(p)
+    }
+  })
+  ch.listen('ChatAssigned', (e: unknown) => {
+    const p = normalizeChatAssignedPayload(e)
+    if (p) {
+      handlers.onChatAssigned?.(p)
+    }
+  })
 
   return () => {
     client.leave(`chat.${chatId}`)

@@ -271,9 +271,23 @@ export const useChatStore = defineStore('chat', () => {
     replyToMessageId.value = null
   }
 
+  const composerLocked = computed(() => {
+    const uid = useAuthStore().user?.id ?? null
+    const m = threadMeta.value
+    if (!m || uid == null) {
+      return false
+    }
+    const a = m.assignedToUserId
+    if (a == null) {
+      return false
+    }
+    return a !== uid
+  })
+
   const canSend = computed(
     () =>
-      composerText.value.trim().length > 0 || pendingReplyMarkup.value.length > 0,
+      !composerLocked.value &&
+      (composerText.value.trim().length > 0 || pendingReplyMarkup.value.length > 0),
   )
 
   function pad2(n: number) {
@@ -289,6 +303,9 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendMessage() {
+    if (composerLocked.value) {
+      return
+    }
     const text = composerText.value.trim()
     const chatId = activeChatId.value
     const markupSnapshot = [...pendingReplyMarkup.value]
@@ -362,6 +379,9 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendWithAttachments(files: File[]) {
+    if (composerLocked.value) {
+      return
+    }
     const chatId = activeChatId.value
     if (!chatId || files.length === 0) return
     const id = parseApiChatId(chatId)
@@ -454,6 +474,22 @@ export const useChatStore = defineStore('chat', () => {
           typingClearTimer = null
           setTyping(false)
         }, 4000)
+      },
+      onChatAssigned: (payload) => {
+        if (payload.chatId !== id) {
+          return
+        }
+        void (async () => {
+          try {
+            const chat = await chatApi.fetchChat(id)
+            if (activeChatId.value === chatId) {
+              applyThreadMetaFromApiChat(chat, chatId)
+            }
+            useInboxStore().scheduleInboxRefreshFromRealtime()
+          } catch {
+            /* ignore */
+          }
+        })()
       },
     })
   }
@@ -552,6 +588,7 @@ export const useChatStore = defineStore('chat', () => {
     setReplyTarget,
     clearReplyTarget,
     canSend,
+    composerLocked,
     sendMessage,
     addReplyMarkupPreset,
     removeReplyMarkupPreset,
