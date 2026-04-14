@@ -54,8 +54,17 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'half_daily')),
             'ignore_exceptions' => false,
+        ],
+
+        'half_daily' => [
+            'driver' => 'custom',
+            'via' => \App\Logging\SplitDailyLoggerFactory::class,
+            'path' => storage_path('logs'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_HALF_DAILY_DAYS', 3),
+            'replace_placeholders' => true,
         ],
 
         'single' => [
