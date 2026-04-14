@@ -6,16 +6,22 @@ import ReplyMarkupInline from './ReplyMarkupInline.vue'
 
 const props = defineProps<{
   message: ChatMessage
+  highlighted?: boolean
 }>()
 
 const emit = defineEmits<{
   reply: [messageId: string]
+  jumpReply: [messageId: number]
 }>()
 
 const canReply = computed(() => {
-  if (props.message.kind === 'system') return false
+  if (props.message.kind === 'system') {
+    return false
+  }
   const id = props.message.id
-  if (typeof id === 'string' && id.startsWith('temp-')) return false
+  if (typeof id === 'string' && id.startsWith('temp-')) {
+    return false
+  }
   const n = Number(id)
   return Number.isFinite(n) && n > 0
 })
@@ -23,15 +29,32 @@ const canReply = computed(() => {
 function onReplyClick() {
   emit('reply', props.message.id)
 }
+
+function replyQuoteTargetId(): number | null {
+  const id = props.message.reply_to?.id
+  if (id == null || id <= 0) {
+    return null
+  }
+  return id
+}
+
+function onReplyQuoteClick() {
+  const id = replyQuoteTargetId()
+  if (id != null) {
+    emit('jumpReply', id)
+  }
+}
 </script>
 
 <template>
   <div
     class="flex max-w-[82%] flex-col"
+    :data-message-id="message.kind !== 'system' ? message.id : undefined"
     :class="{
       'self-start': message.kind === 'incoming',
       'self-end': message.kind === 'outgoing',
       'max-w-[90%] self-center': message.kind === 'system',
+      'msg-jump-highlight': highlighted && message.kind !== 'system',
     }"
   >
     <div
@@ -52,8 +75,16 @@ function onReplyClick() {
         Ответить
       </button>
       <template v-if="message.attachment && !message.text">
+        <button
+          v-if="message.reply_to && replyQuoteTargetId() != null"
+          type="button"
+          class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-left text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+          @click="onReplyQuoteClick"
+        >
+          {{ message.reply_to!.text }}
+        </button>
         <p
-          v-if="message.reply_to"
+          v-else-if="message.reply_to"
           class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
         >
           {{ message.reply_to.text }}
@@ -83,8 +114,16 @@ function onReplyClick() {
           v-if="message.text || message.reply_to"
           class="rounded-[18px] rounded-bl-md bg-white px-3.5 py-2.5 text-sm leading-[1.55] text-[var(--color-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-100)]"
         >
+          <button
+            v-if="message.reply_to && replyQuoteTargetId() != null"
+            type="button"
+            class="mb-2 w-full border-l-2 border-[var(--color-brand)]/60 pl-2 text-left text-[11px] text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+            @click="onReplyQuoteClick"
+          >
+            {{ message.reply_to.text }}
+          </button>
           <p
-            v-if="message.reply_to"
+            v-else-if="message.reply_to"
             class="mb-2 border-l-2 border-[var(--color-brand)]/60 pl-2 text-[11px] text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
           >
             {{ message.reply_to.text }}
@@ -121,8 +160,16 @@ function onReplyClick() {
       <div
         class="rounded-[18px] rounded-br-md bg-[var(--color-brand)] px-3.5 py-2.5 text-sm leading-[1.55] text-white"
       >
+        <button
+          v-if="message.reply_to && replyQuoteTargetId() != null"
+          type="button"
+          class="mb-2 w-full border-l-2 border-white/50 pl-2 text-left text-[11px] text-white/90"
+          @click="onReplyQuoteClick"
+        >
+          {{ message.reply_to.text }}
+        </button>
         <p
-          v-if="message.reply_to"
+          v-else-if="message.reply_to"
           class="mb-2 border-l-2 border-white/50 pl-2 text-[11px] text-white/90"
         >
           {{ message.reply_to.text }}
@@ -142,3 +189,19 @@ function onReplyClick() {
     </template>
   </div>
 </template>
+
+<style scoped>
+.msg-jump-highlight {
+  animation: msg-jump-fade 1.5s ease-out forwards;
+}
+
+@keyframes msg-jump-fade {
+  0% {
+    box-shadow: 0 0 0 3px rgba(154, 95, 168, 0.45);
+    border-radius: 18px;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+</style>

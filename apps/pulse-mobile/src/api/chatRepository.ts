@@ -68,3 +68,10 @@ export async function syncChatHistory(chatId: number): Promise<Record<string, un
   const res = await http.post<{ data: Record<string, unknown> }>(`/chats/${chatId}/sync-history`)
   return res.data.data
 }
+
+export type ChatMuteMode = '1h' | '8h' | 'forever' | 'unmute'
+
+export async function muteChat(chatId: number, mode: ChatMuteMode): Promise<ApiChatRow> {
+  const res = await http.post<{ data: ApiChatRow }>(`/chats/${chatId}/mute`, { mode })
+  return res.data.data
+}

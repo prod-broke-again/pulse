@@ -13,8 +13,10 @@ use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Events\UserTyping as UserTypingEvent;
 use App\Http\Requests\Api\V1\ChangeChatDepartmentRequest;
 use App\Http\Requests\Api\V1\ListChatsRequest;
+use App\Http\Requests\Api\V1\MuteChatRequest;
 use App\Http\Resources\Api\V1\ChatResource;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
+use App\Infrastructure\Persistence\Eloquent\ChatUserReadStateModel;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,6 +32,11 @@ final class ChatController extends Controller
         /** @var User $user */
         $user = auth()->user();
         $chat->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->load([
+            'userReadStates' => function ($q) use ($user): void {
+                $q->where('user_id', $user->id);
+            },
+        ]);
         $chat->loadUnreadCountForUser($user);
 
         return response()->json([
@@ -73,6 +80,11 @@ final class ChatController extends Controller
         $assignChat->run($chat->id, $user->id);
 
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->load([
+            'userReadStates' => function ($q) use ($user): void {
+                $q->where('user_id', $user->id);
+            },
+        ]);
         $chat->loadUnreadCountForUser($user);
 
         return response()->json([
@@ -103,6 +115,49 @@ final class ChatController extends Controller
         /** @var User $user */
         $user = auth()->user();
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->load([
+            'userReadStates' => function ($q) use ($user): void {
+                $q->where('user_id', $user->id);
+            },
+        ]);
+        $chat->loadUnreadCountForUser($user);
+
+        return response()->json([
+            'data' => new ChatResource($chat),
+        ]);
+    }
+
+    public function mute(ChatModel $chat, MuteChatRequest $request): JsonResponse
+    {
+        Gate::authorize('view', $chat);
+
+        /** @var User $user */
+        $user = auth()->user();
+        $mode = $request->validated('mode');
+
+        $muteUntil = match ($mode) {
+            '1h' => now()->addHour(),
+            '8h' => now()->addHours(8),
+            'forever' => now()->addYears(100),
+            'unmute' => null,
+        };
+
+        ChatUserReadStateModel::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'chat_id' => $chat->id,
+            ],
+            [
+                'muted_until' => $muteUntil,
+            ],
+        );
+
+        $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->load([
+            'userReadStates' => function ($q) use ($user): void {
+                $q->where('user_id', $user->id);
+            },
+        ]);
         $chat->loadUnreadCountForUser($user);
 
         return response()->json([
@@ -152,6 +207,11 @@ final class ChatController extends Controller
         $action->run($chat->id, (int) $request->validated('department_id'), $user);
 
         $chat->refresh()->loadMissing(['source', 'department', 'assignee', 'latestMessage']);
+        $chat->load([
+            'userReadStates' => function ($q) use ($user): void {
+                $q->where('user_id', $user->id);
+            },
+        ]);
         $chat->loadUnreadCountForUser($user);
 
         return response()->json([

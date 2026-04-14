@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { Search } from 'lucide-vue-next'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import BottomNav from '../components/layout/BottomNav.vue'
 import EmptyState from '../components/common/EmptyState.vue'
@@ -12,6 +12,8 @@ import ChatCard from '../components/inbox/ChatCard.vue'
 import InboxHeader from '../components/inbox/InboxHeader.vue'
 import InboxTabs from '../components/inbox/InboxTabs.vue'
 import type { FilterId } from '../types/chat'
+import * as chatApi from '../api/chatRepository'
+import { isMutedUntilActive } from '../lib/chatMute'
 import { useInboxStore } from '../stores/inboxStore'
 import { useUiStore } from '../stores/uiStore'
 
@@ -33,6 +35,14 @@ const {
 } = storeToRefs(inbox)
 
 const ptrRefreshing = computed(() => ui.ptrRefreshing)
+
+const actionChatId = ref<string | null>(null)
+
+const actionChat = computed(() =>
+  actionChatId.value == null
+    ? null
+    : filteredChats.value.find((c) => c.id === actionChatId.value) ?? null,
+)
 
 const filterDefs: { id: FilterId; label: string; dot?: 'green' | 'grey' | 'none'; channel?: FilterId }[] = [
   { id: 'open', label: 'Открытые', dot: 'green' },
@@ -71,6 +81,79 @@ function openChat(id: string) {
   void router.push({ name: 'chat', params: { id } })
 }
 
+function openActionSheet(id: string): void {
+  actionChatId.value = id
+}
+
+function closeActionSheet(): void {
+  actionChatId.value = null
+}
+
+async function sheetAssignMe(): Promise<void> {
+  if (actionChatId.value == null) {
+    return
+  }
+  try {
+    await chatApi.assignMe(Number(actionChatId.value))
+    ui.pushToast('Чат назначен на вас', 'success')
+    closeActionSheet()
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось назначить чат', 'error')
+  }
+}
+
+async function sheetCloseChat(): Promise<void> {
+  if (actionChatId.value == null) {
+    return
+  }
+  try {
+    await chatApi.closeChat(Number(actionChatId.value))
+    ui.pushToast('Чат закрыт', 'success')
+    closeActionSheet()
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось закрыть чат', 'error')
+  }
+}
+
+async function sheetMute(mode: chatApi.ChatMuteMode): Promise<void> {
+  if (actionChatId.value == null) {
+    return
+  }
+  try {
+    await chatApi.muteChat(Number(actionChatId.value), mode)
+    ui.pushToast(
+      mode === 'unmute' ? 'Звук уведомлений включён' : 'Уведомления без звука',
+      'success',
+    )
+    closeActionSheet()
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось обновить настройки', 'error')
+  }
+}
+
+async function onSwipeClose(id: string): Promise<void> {
+  try {
+    await chatApi.closeChat(Number(id))
+    ui.pushToast('Чат закрыт', 'success')
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось закрыть чат', 'error')
+  }
+}
+
+async function onSwipeMute(id: string): Promise<void> {
+  try {
+    await chatApi.muteChat(Number(id), '1h')
+    ui.pushToast('Без звука на 1 час', 'success')
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось', 'error')
+  }
+}
+
 onMounted(() => {
   inbox.setBottomNav('inbox')
   void inbox.loadInbox()
@@ -80,7 +163,6 @@ onMounted(() => {
     }
   }
 })
-
 </script>
 
 <template>
@@ -102,7 +184,7 @@ onMounted(() => {
           placeholder="Поиск по имени или сообщению..."
           autocomplete="off"
           @input="inbox.setSearchQuery(($event.target as HTMLInputElement).value)"
-        />
+        >
       </div>
       <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
@@ -142,7 +224,15 @@ onMounted(() => {
           aria-hidden="true"
         />
       </div>
-      <ChatCard v-for="c in filteredChats" :key="c.id" :chat="c" @open="openChat" />
+      <ChatCard
+        v-for="c in filteredChats"
+        :key="c.id"
+        :chat="c"
+        @open="openChat"
+        @long-press="openActionSheet"
+        @swipe-close="onSwipeClose"
+        @swipe-mute="onSwipeMute"
+      />
     </div>
 
     <EmptyState v-else-if="showEmptyState" />
@@ -150,5 +240,82 @@ onMounted(() => {
     <ErrorState v-else-if="loadError" :on-retry="() => inbox.retryLoad()" />
 
     <BottomNav :inbox-badge="inboxBadge" />
+
+    <Teleport to="body">
+      <div
+        v-if="actionChatId && actionChat"
+        class="fixed inset-0 z-[300] flex items-end justify-center bg-black/40 px-4 pb-8 pt-12"
+        role="dialog"
+        aria-modal="true"
+        @click.self="closeActionSheet"
+      >
+        <div
+          class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-[var(--zinc-850)]"
+          @click.stop
+        >
+          <div class="border-b border-[var(--color-gray-line)] px-4 py-3 dark:border-[var(--zinc-700)]">
+            <div class="text-sm font-semibold text-[var(--color-dark)] dark:text-[var(--zinc-100)]">
+              {{ actionChat.name }}
+            </div>
+            <div class="text-xs text-[var(--zinc-500)]">
+              Действия с чатом
+            </div>
+          </div>
+          <button
+            type="button"
+            class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            @click="sheetAssignMe"
+          >
+            Назначить на меня
+          </button>
+          <button
+            type="button"
+            class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            @click="sheetCloseChat"
+          >
+            Закрыть чат
+          </button>
+          <div class="h-px bg-[var(--color-gray-line)] dark:bg-[var(--zinc-700)]" />
+          <template v-if="!isMutedUntilActive(actionChat.muted_until)">
+            <button
+              type="button"
+              class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+              @click="sheetMute('1h')"
+            >
+              Без звука: 1 час
+            </button>
+            <button
+              type="button"
+              class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+              @click="sheetMute('8h')"
+            >
+              Без звука: 8 часов
+            </button>
+            <button
+              type="button"
+              class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+              @click="sheetMute('forever')"
+            >
+              Без звука: навсегда
+            </button>
+          </template>
+          <button
+            v-else
+            type="button"
+            class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            @click="sheetMute('unmute')"
+          >
+            Включить звук уведомлений
+          </button>
+          <button
+            type="button"
+            class="flex w-full px-4 py-3 text-center text-sm font-medium text-[var(--zinc-500)]"
+            @click="closeActionSheet"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

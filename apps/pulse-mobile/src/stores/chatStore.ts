@@ -7,6 +7,7 @@ import * as quickLinkApi from '../api/quickLinkRepository'
 import * as msgApi from '../api/messageRepository'
 import * as uploadApi from '../api/uploadRepository'
 import { maxNumericMessageIdFromList, parseApiChatId } from '../lib/chatIds'
+import { isMutedUntilActive } from '../lib/chatMute'
 import { playIncomingTone, vibrateIncoming } from '../lib/notificationFeedback'
 import { subscribeChatChannel } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
@@ -80,6 +81,7 @@ export const useChatStore = defineStore('chat', () => {
       departmentId: chat.department_id ?? chat.department?.id ?? null,
       aiSummaryBar: prev?.aiSummaryBar ?? 'Нет данных AI для этого чата.',
       assignedToUserId: assigneeUserId(chat),
+      muted_until: chat.muted_until ?? null,
     }
   }
 
@@ -198,6 +200,7 @@ export const useChatStore = defineStore('chat', () => {
           aiSummary?.intent_tag?.trim() ||
           'Нет данных AI для этого чата.',
         assignedToUserId: assigneeUserId(chat),
+        muted_until: chat.muted_until ?? null,
       }
 
       messages.value = rows.map(mapApiMessageToChatMessage)
@@ -425,7 +428,7 @@ export const useChatStore = defineStore('chat', () => {
           } catch {
             messages.value = appendRealtimeMessageIfNew(messages.value, payload)
           }
-          if (payload.sender_type === 'client') {
+          if (payload.sender_type === 'client' && !isMutedUntilActive(threadMeta.value?.muted_until)) {
             playIncomingTone(settings.sound)
             vibrateIncoming(settings.vibration)
           }
@@ -506,6 +509,29 @@ export const useChatStore = defineStore('chat', () => {
     useChatUiStore().clearAiTimers()
   }
 
+  function mergeContextMessages(rows: import('../api/types').ApiMessageRow[]): void {
+    const mapped = rows.map(mapApiMessageToChatMessage)
+    const byId = new Map(messages.value.map((m) => [m.id, m]))
+    for (const m of mapped) {
+      byId.set(m.id, m)
+    }
+    messages.value = Array.from(byId.values()).sort((a, b) => Number(a.id) - Number(b.id))
+  }
+
+  async function ensureReplyMessageLoaded(replyToId: number): Promise<boolean> {
+    if (messages.value.some((m) => Number(m.id) === replyToId)) {
+      return true
+    }
+    try {
+      const rows = await msgApi.fetchMessageContext(replyToId)
+      mergeContextMessages(rows)
+      return true
+    } catch {
+      useUiStore().pushToast('Сообщение слишком далеко в истории или недоступно.', 'error')
+      return false
+    }
+  }
+
   return {
     activeChatId,
     messages,
@@ -544,5 +570,7 @@ export const useChatStore = defineStore('chat', () => {
     assignToMe,
     closeThread,
     changeDepartment,
+    mergeContextMessages,
+    ensureReplyMessageLoaded,
   }
 })

@@ -215,4 +215,46 @@ final class ChatMessageController extends Controller
             'data' => ['ok' => true],
         ]);
     }
+
+    /**
+     * Fragment of history around a message (for jump-to-reply when target is not loaded).
+     *
+     * @return JsonResponse
+     */
+    public function messageContext(MessageModel $message): JsonResponse
+    {
+        $chat = $message->chat;
+        Gate::authorize('view', $chat);
+
+        $message->loadMissing(['media', 'replyTo']);
+
+        $chatId = $message->chat_id;
+        $targetId = $message->id;
+        $window = 25;
+
+        $before = MessageModel::query()
+            ->where('chat_id', $chatId)
+            ->where('id', '<', $targetId)
+            ->with(['media', 'replyTo'])
+            ->orderByDesc('id')
+            ->limit($window)
+            ->get()
+            ->reverse()
+            ->values();
+
+        $after = MessageModel::query()
+            ->where('chat_id', $chatId)
+            ->where('id', '>', $targetId)
+            ->with(['media', 'replyTo'])
+            ->orderBy('id')
+            ->limit($window)
+            ->get()
+            ->values();
+
+        $merged = $before->concat([$message])->concat($after)->unique('id')->sortBy('id')->values();
+
+        return response()->json([
+            'data' => MessageResource::collection($merged),
+        ]);
+    }
 }

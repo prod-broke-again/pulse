@@ -65,5 +65,6 @@ export function mapApiChatToPreview(row: ApiChatRow): ChatPreviewItem {
     unreadCount: unreadCount > 0 ? unreadCount : undefined,
     hasAiTag: Boolean(row.ai_badge ?? row.ai_enabled),
     status,
+    muted_until: row.muted_until ?? null,
   }
 }

@@ -1,15 +1,88 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
 import type { ChatPreviewItem } from '../../types/chat'
 import ChannelGlyph from '../common/ChannelGlyph.vue'
+import { hapticLight } from '../../lib/haptics'
 
-defineProps<{
+const props = defineProps<{
   chat: ChatPreviewItem
 }>()
 
 const emit = defineEmits<{
   open: [id: string]
+  'long-press': [id: string]
+  'swipe-close': [id: string]
+  'swipe-mute': [id: string]
 }>()
+
+const touchStartX = ref(0)
+const touchStartY = ref(0)
+const blockClick = ref(false)
+let longPressTimer: number | null = null
+
+function clearLongPress(): void {
+  if (longPressTimer != null) {
+    window.clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function onTouchStart(e: TouchEvent): void {
+  clearLongPress()
+  const t = e.touches[0]
+  if (!t) {
+    return
+  }
+  touchStartX.value = t.clientX
+  touchStartY.value = t.clientY
+  const id = (e.currentTarget as HTMLElement).dataset.chatId
+  if (!id) {
+    return
+  }
+  longPressTimer = window.setTimeout(() => {
+    longPressTimer = null
+    void hapticLight()
+    emit('long-press', id)
+  }, 520)
+}
+
+function onTouchEnd(e: TouchEvent): void {
+  clearLongPress()
+  const t = e.changedTouches[0]
+  if (!t) {
+    return
+  }
+  const dx = t.clientX - touchStartX.value
+  const dy = t.clientY - touchStartY.value
+  const id = (e.currentTarget as HTMLElement).dataset.chatId
+  if (!id) {
+    return
+  }
+  if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.2) {
+    return
+  }
+  blockClick.value = true
+  window.setTimeout(() => {
+    blockClick.value = false
+  }, 450)
+  if (dx > 0) {
+    emit('swipe-close', id)
+  } else {
+    emit('swipe-mute', id)
+  }
+}
+
+function onCardClick(): void {
+  if (blockClick.value) {
+    return
+  }
+  emit('open', props.chat.id)
+}
+
+function onTouchCancel(): void {
+  clearLongPress()
+}
 </script>
 
 <template>
@@ -18,10 +91,14 @@ const emit = defineEmits<{
     :class="{
       'bg-[rgba(85,23,94,0.03)] dark:bg-[rgba(154,95,168,0.06)]': chat.unread,
     }"
+    :data-chat-id="chat.id"
     role="button"
     tabindex="0"
-    @click="emit('open', chat.id)"
+    @click="onCardClick"
     @keydown.enter.prevent="emit('open', chat.id)"
+    @touchstart.passive="onTouchStart"
+    @touchend="onTouchEnd"
+    @touchcancel="onTouchCancel"
   >
     <div
       class="relative flex size-12 shrink-0 items-center justify-center rounded-[14px] text-lg font-semibold text-white"

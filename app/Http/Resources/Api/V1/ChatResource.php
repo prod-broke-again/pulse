@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Api\V1;
 
 use App\Domains\Integration\ValueObject\SourceType;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -58,6 +59,7 @@ final class ChatResource extends JsonResource
             'channel' => $channel,
             'channel_label' => $channelLabel,
             'unread_count' => (int) ($this->unread_count ?? 0),
+            'muted_until' => $this->mutedUntilForUser($request->user()),
             'last_message_preview' => $preview,
             'last_message_at' => $latest?->created_at?->toIso8601String(),
             'source' => $this->whenLoaded('source', fn () => [
@@ -90,5 +92,18 @@ final class ChatResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function mutedUntilForUser(?User $user): ?string
+    {
+        if ($user === null) {
+            return null;
+        }
+        if (! $this->relationLoaded('userReadStates')) {
+            return null;
+        }
+        $state = $this->userReadStates->firstWhere('user_id', $user->id);
+
+        return $state?->muted_until?->toIso8601String();
     }
 }

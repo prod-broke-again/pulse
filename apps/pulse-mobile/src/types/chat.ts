@@ -20,6 +20,7 @@ export interface ChatPreviewItem {
   unreadCount?: number
   hasAiTag: boolean
   status: TicketStatus
+  muted_until?: string | null
 }
 
 export interface MessageAttachment {
@@ -41,7 +42,7 @@ export interface ChatMessage {
   time?: string
   attachment?: MessageAttachment
   /** Quoted message (API + realtime). */
-  reply_to?: { id: number; text: string; sender_type: string }
+  reply_to?: { id: number | null; text: string; sender_type: string }
   /** Inline URL buttons (moderator presets), shown under bubble. */
   reply_markup?: ReplyMarkupButton[]
   /** Client messages marked read by staff (API + MessageRead broadcast). */
@@ -73,6 +74,8 @@ export interface ChatThreadMeta {
   aiSummaryBar: string
   /** Pulse user id of assignee; null if unassigned. */
   assignedToUserId: number | null
+  /** Server mute for notifications. */
+  muted_until?: string | null
 }
 
 export interface AiReplyOption {

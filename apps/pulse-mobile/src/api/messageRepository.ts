@@ -23,3 +23,8 @@ export async function sendMessage(
   )
   return res.data.data
 }
+
+export async function fetchMessageContext(messageId: number): Promise<ApiMessageRow[]> {
+  const res = await http.get<{ data: ApiMessageRow[] }>(`/messages/${messageId}/context`)
+  return res.data.data
+}

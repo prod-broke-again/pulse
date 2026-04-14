@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $user_id
  * @property int $chat_id
  * @property int|null $last_read_message_id
+ * @property \Illuminate\Support\Carbon|null $muted_until
  */
 class ChatUserReadStateModel extends Model
 {
@@ -22,6 +23,7 @@ class ChatUserReadStateModel extends Model
         'user_id',
         'chat_id',
         'last_read_message_id',
+        'muted_until',
     ];
 
     public function user(): BelongsTo
@@ -37,5 +39,13 @@ class ChatUserReadStateModel extends Model
     public function lastReadMessage(): BelongsTo
     {
         return $this->belongsTo(MessageModel::class, 'last_read_message_id');
+    }
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return [
+            'muted_until' => 'datetime',
+        ];
     }
 }

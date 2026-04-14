@@ -19,6 +19,7 @@ export interface ApiChatRow {
   user_metadata?: { name?: string } | null
   source?: { type?: string } | null
   department?: { id?: number; name?: string; category?: string } | null
+  muted_until?: string | null
 }
 
 export interface ApiPaginatedMeta {

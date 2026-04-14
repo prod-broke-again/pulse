@@ -63,7 +63,15 @@ final readonly class ListChatsQuery
         $tab = $filters['tab'] ?? 'my';
 
         $query = ChatModel::query()
-            ->with(['source', 'department', 'assignee', 'latestMessage'])
+            ->with([
+                'source',
+                'department',
+                'assignee',
+                'latestMessage',
+                'userReadStates' => function (Builder $q) use ($user): void {
+                    $q->where('user_id', $user->id);
+                },
+            ])
             ->withUnreadCountForUser($user);
 
         $this->applyStatusFilter($query, $filters);

@@ -44,6 +44,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/chats/{chat}/close', [ChatController::class, 'close'])->name('api.v1.chats.close');
         Route::post('/chats/{chat}/typing', [ChatController::class, 'typing'])->name('api.v1.chats.typing');
         Route::post('/chats/{chat}/sync-history', [ChatController::class, 'syncHistory'])->name('api.v1.chats.sync-history');
+        Route::post('/chats/{chat}/mute', [ChatController::class, 'mute'])->name('api.v1.chats.mute');
         Route::get('/chats/{chat}/ai/summary', [ChatAiController::class, 'summary'])->name('api.v1.chats.ai.summary');
         Route::get('/chats/{chat}/ai/suggestions', [ChatAiController::class, 'suggestions'])->name('api.v1.chats.ai.suggestions');
 
@@ -53,6 +54,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/chats/{chat}/read', [ChatMessageController::class, 'readChat'])
             ->middleware('throttle:api-chat-read')
             ->name('api.v1.chats.read');
+        Route::get('/messages/{message}/context', [ChatMessageController::class, 'messageContext'])
+            ->name('api.v1.messages.context');
 
         // Uploads
         Route::post('/uploads', [UploadController::class, 'store'])->name('api.v1.uploads.store');
