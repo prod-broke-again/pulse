@@ -4,27 +4,37 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Application\Ai\Dto\AiChatKickoffDto;
 use App\Application\Ai\Dto\AiSuggestedReplyDto;
 use App\Application\Ai\Dto\AiThreadSummaryDto;
 use App\Contracts\Ai\AiProviderInterface;
 use App\Contracts\ChatTopicGeneratorInterface;
+use App\Support\AiKickoffPrompt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class TimewebAiService implements AiProviderInterface, ChatTopicGeneratorInterface
 {
-    private const TOPIC_SYSTEM_PROMPT = 'Ты помощник модератора. Прочитай первые сообщения клиента и дай ОЧЕНЬ краткий заголовок темы. Правила: 1) Длина строго от 2 до 5 слов. 2) Только суть, без кавычек и точек. 3) Если обращение общее (консультация, вопрос, уточнение, техподдержка без явной покупки) — заголовок «Общее». 4) Слова «Продажи», «Продажа» и близкие формулировки используй ТОЛЬКО если клиент явно пишет о покупке, оплате, заказе, коммерческом предложении или оформлении сделки; иначе не используй их. 5) Ответь ТОЛЬКО заголовком.';
+    private const KICKOFF_MAX_TOKENS = 2000;
 
     private const SUMMARY_SYSTEM_PROMPT = 'Ты помощник модератора. По переписке верни JSON: {"summary":"краткое резюме на русском 2-4 предложения","intent_tag":"одна короткая метка темы на русском"}. Только JSON, без markdown.';
 
     private const SUGGEST_SYSTEM_PROMPT = 'Ты помощник модератора. По переписке предложи 2 коротких варианта ответа клиенту на русском. Верни JSON: {"replies":[{"id":"r1","text":"..."},{"id":"r2","text":"..."}]}. Только JSON.';
 
+    public function generateKickoffFromClientMessages(string $messagesText): AiChatKickoffDto
+    {
+        $content = $this->chatCompletion(AiKickoffPrompt::SYSTEM, $messagesText, self::KICKOFF_MAX_TOKENS);
+        if ($content === null || $content === '') {
+            return new AiChatKickoffDto;
+        }
+
+        return AiKickoffPrompt::parse($content);
+    }
+
     public function generateTopic(string $messagesText): ?string
     {
-        $content = $this->chatCompletion(self::TOPIC_SYSTEM_PROMPT, $messagesText, 50);
-
-        return $content !== null ? $this->cleanTopic($content) : null;
+        return $this->generateKickoffFromClientMessages($messagesText)->topic;
     }
 
     public function summarizeThread(string $context): AiThreadSummaryDto
@@ -115,16 +125,5 @@ final class TimewebAiService implements AiProviderInterface, ChatTopicGeneratorI
 
             return null;
         }
-    }
-
-    private function cleanTopic(string $content): ?string
-    {
-        $topic = trim(preg_replace('/\s+/', ' ', $content));
-        $topic = trim($topic, '"\'');
-        if ($topic === '') {
-            return null;
-        }
-
-        return $topic;
     }
 }

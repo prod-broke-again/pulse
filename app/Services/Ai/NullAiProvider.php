@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services\Ai;
 
+use App\Application\Ai\Dto\AiChatKickoffDto;
 use App\Application\Ai\Dto\AiThreadSummaryDto;
 use App\Contracts\Ai\AiProviderInterface;
 
 final class NullAiProvider implements AiProviderInterface
 {
+    public function generateKickoffFromClientMessages(string $messagesText): AiChatKickoffDto
+    {
+        return new AiChatKickoffDto;
+    }
+
     public function generateTopic(string $messagesText): ?string
     {
         return null;
