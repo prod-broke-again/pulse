@@ -19,6 +19,39 @@ final class ChangeChatDepartment
 
     public function run(int $chatId, int $departmentId, User $user): Chat
     {
+        $domainChat = $this->findChatOrFail($chatId);
+        $this->assertDepartmentValidForChat($departmentId, $domainChat);
+
+        if (! $user->isAdmin()) {
+            $hasDept = $user->departments()->where('departments.id', $departmentId)->exists();
+            if (! $hasDept) {
+                throw new AuthorizationException('Нет доступа к выбранному отделу.');
+            }
+        }
+
+        $departmentReassignedByUserId = $domainChat->departmentReassignedByUserId;
+        if ($domainChat->aiSuggestedDepartmentId !== null
+            && $departmentId !== $domainChat->aiSuggestedDepartmentId) {
+            $departmentReassignedByUserId = $user->id;
+        }
+
+        return $this->persistDepartmentChange($domainChat, $departmentId, $departmentReassignedByUserId);
+    }
+
+    public function runAsSystem(int $chatId, int $departmentId): Chat
+    {
+        $domainChat = $this->findChatOrFail($chatId);
+        $this->assertDepartmentValidForChat($departmentId, $domainChat);
+
+        return $this->persistDepartmentChange(
+            $domainChat,
+            $departmentId,
+            $domainChat->departmentReassignedByUserId,
+        );
+    }
+
+    private function findChatOrFail(int $chatId): Chat
+    {
         $domainChat = $this->chats->findById($chatId);
         if ($domainChat === null) {
             throw ValidationException::withMessages([
@@ -26,6 +59,11 @@ final class ChangeChatDepartment
             ]);
         }
 
+        return $domainChat;
+    }
+
+    private function assertDepartmentValidForChat(int $departmentId, Chat $domainChat): void
+    {
         $department = DepartmentModel::query()
             ->whereKey($departmentId)
             ->where('is_active', true)
@@ -42,14 +80,13 @@ final class ChangeChatDepartment
                 'department_id' => ['Отдел не относится к источнику этого чата.'],
             ]);
         }
+    }
 
-        if (! $user->isAdmin()) {
-            $hasDept = $user->departments()->where('departments.id', $departmentId)->exists();
-            if (! $hasDept) {
-                throw new AuthorizationException('Нет доступа к выбранному отделу.');
-            }
-        }
-
+    private function persistDepartmentChange(
+        Chat $domainChat,
+        int $departmentId,
+        ?int $departmentReassignedByUserId,
+    ): Chat {
         return $this->chats->persist(new Chat(
             id: $domainChat->id,
             sourceId: $domainChat->sourceId,
@@ -59,6 +96,10 @@ final class ChangeChatDepartment
             status: $domainChat->status,
             assignedTo: $domainChat->assignedTo,
             topic: $domainChat->topic,
+            aiSuggestedDepartmentId: $domainChat->aiSuggestedDepartmentId,
+            aiDepartmentConfidence: $domainChat->aiDepartmentConfidence,
+            aiDepartmentAssignedAt: $domainChat->aiDepartmentAssignedAt,
+            departmentReassignedByUserId: $departmentReassignedByUserId,
         ));
     }
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Search, Send, MessageCircleMore, Loader2, MoreVertical } from 'lucide-vue-next'
+import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useChatStore } from '../../stores/chatStore'
 import type { Conversation, ConversationChannel } from '../../types/chat'
 import { isMutedUntilActive } from '../../lib/chatMute'
@@ -309,10 +310,11 @@ function unreadBadgeClass(count: number): string {
             </span>
             <span
               v-if="chat.department"
-              class="max-w-[140px] truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
+              class="inline-flex max-w-[140px] items-center gap-0.5 truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
               style="background: var(--color-brand-50); color: var(--color-brand-200)"
               :title="`Отдел: ${chat.department}`"
             >
+              <component :is="resolveDepartmentIcon(chat.departmentIcon)" class="h-3 w-3 shrink-0" />
               {{ chat.department }}
             </span>
             <span

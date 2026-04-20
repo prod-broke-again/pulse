@@ -56,7 +56,7 @@ final class EloquentChatRepository implements ChatRepositoryInterface
     {
         $model = $chat->id > 0
             ? ChatModel::findOrFail($chat->id)
-            : new ChatModel();
+            : new ChatModel;
 
         $model->source_id = $chat->sourceId;
         $model->department_id = $chat->departmentId;
@@ -65,6 +65,10 @@ final class EloquentChatRepository implements ChatRepositoryInterface
         $model->status = $chat->status->value;
         $model->assigned_to = $chat->assignedTo;
         $model->topic = $chat->topic;
+        $model->ai_suggested_department_id = $chat->aiSuggestedDepartmentId;
+        $model->ai_department_confidence = $chat->aiDepartmentConfidence;
+        $model->ai_department_assigned_at = $chat->aiDepartmentAssignedAt;
+        $model->department_reassigned_by_user_id = $chat->departmentReassignedByUserId;
         $model->save();
 
         return $this->toEntity($model);
@@ -81,6 +85,12 @@ final class EloquentChatRepository implements ChatRepositoryInterface
             status: $model->getStatusEnum(),
             assignedTo: $model->assigned_to,
             topic: $model->topic,
+            aiSuggestedDepartmentId: $model->ai_suggested_department_id,
+            aiDepartmentConfidence: $model->ai_department_confidence !== null
+                ? (float) $model->ai_department_confidence
+                : null,
+            aiDepartmentAssignedAt: $model->ai_department_assigned_at?->toDateTimeImmutable(),
+            departmentReassignedByUserId: $model->department_reassigned_by_user_id,
         );
     }
 }

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $slug
  * @property string $category
+ * @property string|null $icon
  * @property bool $ai_enabled
  * @property bool $is_active
  */
@@ -28,6 +29,7 @@ class DepartmentModel extends Model
         'name',
         'slug',
         'category',
+        'icon',
         'ai_enabled',
         'is_active',
     ];

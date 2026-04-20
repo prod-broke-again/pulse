@@ -6,6 +6,8 @@ export interface Conversation {
   name: string
   channel: ConversationChannel
   department: string
+  /** Имя иконки Lucide с бэкенда (`DepartmentIcons`). */
+  departmentIcon?: string | null
   /** Тема от AI (чат.topic), не путать с отделом. */
   topic?: string | null
   message: string

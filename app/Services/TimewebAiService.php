@@ -22,9 +22,13 @@ final class TimewebAiService implements AiProviderInterface, ChatTopicGeneratorI
 
     private const SUGGEST_SYSTEM_PROMPT = 'Ты помощник модератора. По переписке предложи 2 коротких варианта ответа клиенту на русском. Верни JSON: {"replies":[{"id":"r1","text":"..."},{"id":"r2","text":"..."}]}. Только JSON.';
 
-    public function generateKickoffFromClientMessages(string $messagesText): AiChatKickoffDto
+    public function generateKickoffFromClientMessages(string $messagesText, array $departments = []): AiChatKickoffDto
     {
-        $content = $this->chatCompletion(AiKickoffPrompt::SYSTEM, $messagesText, self::KICKOFF_MAX_TOKENS);
+        $userContent = $departments === []
+            ? $messagesText
+            : AiKickoffPrompt::buildUserMessage($messagesText, $departments);
+
+        $content = $this->chatCompletion(AiKickoffPrompt::SYSTEM, $userContent, self::KICKOFF_MAX_TOKENS);
         if ($content === null || $content === '') {
             return new AiChatKickoffDto;
         }

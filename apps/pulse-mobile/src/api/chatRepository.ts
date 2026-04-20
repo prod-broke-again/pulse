@@ -52,6 +52,7 @@ export interface DepartmentOption {
   id: number
   name: string
   slug: string
+  icon?: string
 }
 
 export async function fetchDepartments(sourceId: number): Promise<DepartmentOption[]> {

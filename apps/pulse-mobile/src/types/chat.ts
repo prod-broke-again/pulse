@@ -15,6 +15,8 @@ export interface ChatPreviewItem {
   timeLabel: string
   preview: string
   department: string
+  /** Имя иконки Lucide (`DepartmentIcons` на бэкенде). */
+  departmentIcon?: string | null
   channel: ChannelSource
   unread: boolean
   unreadCount?: number
@@ -84,6 +86,8 @@ export interface ChatThreadMeta {
   channel: ChannelSource
   channelLabel: string
   departmentLabel: string
+  /** Иконка отдела (имя компонента Lucide с API). */
+  departmentIcon?: string | null
   /** Источник чата — для списка отделов (GET /departments). */
   sourceId: number | null
   /** Текущий отдел (id). */

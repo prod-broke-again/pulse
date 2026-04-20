@@ -10,7 +10,7 @@ use App\Contracts\Ai\AiProviderInterface;
 
 final class NullAiProvider implements AiProviderInterface
 {
-    public function generateKickoffFromClientMessages(string $messagesText): AiChatKickoffDto
+    public function generateKickoffFromClientMessages(string $messagesText, array $departments = []): AiChatKickoffDto
     {
         return new AiChatKickoffDto;
     }

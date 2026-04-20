@@ -7,13 +7,13 @@ import {
   Copy,
   EllipsisVertical,
   Hash,
-  Building2,
   Loader2,
   RotateCw,
   Sparkles,
 } from 'lucide-vue-next'
 import type { Conversation } from '../../types/chat'
 import { fetchDepartments, type DepartmentOption } from '../../api/departments'
+import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 
 const props = defineProps<{
   activeConversation: Conversation
@@ -199,7 +199,10 @@ function channelLabel(ch: Conversation['channel']): string {
           </span>
           <span>{{ channelLabel(activeConversation.channel) }}</span>
           <span v-if="activeConversation.department" class="inline-flex items-center gap-1" title="Отдел">
-            <Building2 class="h-3 w-3 shrink-0" />
+            <component
+              :is="resolveDepartmentIcon(activeConversation.departmentIcon)"
+              class="h-3 w-3 shrink-0"
+            />
             {{ activeConversation.department }}
           </span>
           <span
@@ -306,7 +309,7 @@ function channelLabel(ch: Conversation['channel']): string {
               role="menuitem"
               @click="selectDepartment(d.id)"
             >
-              <Building2 class="h-4 w-4 shrink-0" />
+              <component :is="resolveDepartmentIcon(d.icon)" class="h-4 w-4 shrink-0" />
               {{ d.name }}
             </button>
           </template>

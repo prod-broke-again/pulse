@@ -390,4 +390,66 @@ final class ChatApiTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_change_department_after_ai_suggestion_records_reassigned_by_moderator(): void
+    {
+        $dept2 = DepartmentModel::create([
+            'source_id' => $this->source->id,
+            'name' => 'Billing',
+            'slug' => 'billing-'.uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->moderator->departments()->sync([$this->department->id, $dept2->id]);
+
+        $chat = $this->createChat(['department_id' => $this->department->id]);
+        $chat->forceFill([
+            'ai_suggested_department_id' => $this->department->id,
+            'ai_department_confidence' => 0.85,
+        ])->save();
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->patchJson("/api/v1/chats/{$chat->id}/department", [
+                'department_id' => $dept2->id,
+            ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('chats', [
+            'id' => $chat->id,
+            'department_id' => $dept2->id,
+            'department_reassigned_by_user_id' => $this->moderator->id,
+        ]);
+    }
+
+    public function test_change_department_to_ai_suggested_does_not_set_reassigned_by(): void
+    {
+        $dept2 = DepartmentModel::create([
+            'source_id' => $this->source->id,
+            'name' => 'Billing',
+            'slug' => 'billing-'.uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->moderator->departments()->sync([$this->department->id, $dept2->id]);
+
+        $chat = $this->createChat(['department_id' => $this->department->id]);
+        $chat->forceFill([
+            'ai_suggested_department_id' => $dept2->id,
+            'ai_department_confidence' => 0.9,
+        ])->save();
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->patchJson("/api/v1/chats/{$chat->id}/department", [
+                'department_id' => $dept2->id,
+            ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('chats', [
+            'id' => $chat->id,
+            'department_id' => $dept2->id,
+            'department_reassigned_by_user_id' => null,
+        ]);
+    }
 }

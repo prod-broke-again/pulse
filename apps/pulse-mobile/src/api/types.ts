@@ -18,7 +18,17 @@ export interface ApiChatRow {
   last_message_at?: string | null
   user_metadata?: { name?: string } | null
   source?: { type?: string } | null
-  department?: { id?: number; name?: string; category?: string } | null
+  department?: {
+    id?: number
+    name?: string
+    category?: string
+    ai_enabled?: boolean
+    icon?: string | null
+  } | null
+  topic?: string | null
+  ai_suggested_department_id?: number | null
+  ai_department_confidence?: number | null
+  ai_department_assigned_at?: string | null
   muted_until?: string | null
 }
 

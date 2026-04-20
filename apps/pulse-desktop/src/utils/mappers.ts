@@ -65,6 +65,7 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
     name,
     channel,
     department: chat.department?.name ?? '',
+    departmentIcon: chat.department?.icon ?? null,
     topic,
     message: chat.latest_message?.text ?? '',
     time: latestTime,

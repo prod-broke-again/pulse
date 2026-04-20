@@ -18,5 +18,9 @@ final readonly class Chat
         public ChatStatus $status,
         public ?int $assignedTo,
         public ?string $topic = null,
+        public ?int $aiSuggestedDepartmentId = null,
+        public ?float $aiDepartmentConfidence = null,
+        public ?\DateTimeImmutable $aiDepartmentAssignedAt = null,
+        public ?int $departmentReassignedByUserId = null,
     ) {}
 }

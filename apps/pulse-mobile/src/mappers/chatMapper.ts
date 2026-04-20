@@ -51,6 +51,7 @@ export function mapApiChatToPreview(row: ApiChatRow): ChatPreviewItem {
   const name = resolveGuestName(row)
   const channel = channelFromApi(row.channel ?? row.source?.type)
   const department = row.category_label ?? row.department?.name ?? 'Поддержка'
+  const departmentIcon = row.department?.icon ?? null
   const status = row.status === 'closed' ? 'closed' : 'open'
   const unreadCount = row.unread_count ?? 0
   return {
@@ -60,6 +61,7 @@ export function mapApiChatToPreview(row: ApiChatRow): ChatPreviewItem {
     timeLabel: formatTimeLabel(row.last_message_at ?? undefined),
     preview: row.last_message_preview ?? '',
     department,
+    departmentIcon,
     channel,
     unread: unreadCount > 0,
     unreadCount: unreadCount > 0 ? unreadCount : undefined,

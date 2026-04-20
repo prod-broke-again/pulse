@@ -14,5 +14,7 @@ final readonly class AiChatKickoffDto
         public string $summary = '',
         public ?string $intentTag = null,
         public array $replies = [],
+        public ?int $suggestedDepartmentId = null,
+        public ?float $confidence = null,
     ) {}
 }

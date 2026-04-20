@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Application\Ai\Dto\AiChatKickoffDto;
 use App\Application\Ai\Dto\AiSuggestedReplyDto;
+use App\Domains\Integration\Entity\Department;
 use Illuminate\Support\Str;
 
 /**
@@ -14,21 +15,68 @@ use Illuminate\Support\Str;
 final class AiKickoffPrompt
 {
     public const SYSTEM = <<<'PROMPT'
-Ты помощник модератора. Ниже — первые сообщения клиента (одна или несколько строк, только текст клиента).
-Верни ОДИН JSON без markdown и без пояснений вне JSON. Структура строго:
-{"topic":"…","summary":"…","intent_tag":"…","replies":[{"id":"r1","text":"…"},{"id":"r2","text":"…"}]}
+Ты помощник службы поддержки. По первым сообщениям клиента ты должен:
+1. Сформулировать кратко тему (topic, 2-5 слов).
+2. Сделать короткое саммари (summary, 2-4 предложения на русском).
+3. Определить одну короткую метку намерения (intent_tag).
+4. Предложить 2 возможных ответа (replies, вежливый тон).
+5. Выбрать наиболее подходящий департамент из ПРЕДОСТАВЛЕННОГО списка
+   по его id. Если ни один не подходит — верни null. Новые департаменты
+   НЕ создавай.
+6. Оцени уверенность своего выбора числом от 0 до 1 (confidence).
 
-Правила для topic (заголовок в списке чатов):
-1) Длина строго от 2 до 5 слов. 2) Только суть, без кавычек и точек.
-3) Если обращение общее (консультация, вопрос, уточнение, техподдержка без явной покупки) — topic «Общее».
-4) Слова «Продажи», «Продажа» и близкие формулировки в topic используй ТОЛЬКО если клиент явно пишет о покупке, оплате, заказе, коммерческом предложении или оформлении сделки; иначе не используй их.
+Верни ТОЛЬКО валидный JSON вида:
+{
+  "topic": "...",
+  "summary": "...",
+  "intent_tag": "...",
+  "replies": [{"id":"r1","text":"..."},{"id":"r2","text":"..."}],
+  "suggested_department_id": 5,
+  "confidence": 0.92
+}
 
-Правила для summary: 2–4 предложения на русском — кратко перескажи суть обращения для модератора.
-
-Правила для intent_tag: одна короткая метка темы на русском.
-
-Правила для replies: ровно 2 коротких варианта ответа клиенту на русском, разные по смыслу, вежливый тон.
+Правила:
+- topic до 255 символов, по-русски.
+- suggested_department_id — только из списка, переданного в user-сообщении.
+  Если сомневаешься — верни null и confidence <= 0.5.
+- confidence отражает, насколько уверенно ты выбрал департамент:
+  0.9+ — очень уверенно, явное совпадение;
+  0.7–0.9 — уверенно;
+  0.5–0.7 — есть сомнения;
+  < 0.5 — плохо подходит.
+- Никакого текста вне JSON.
 PROMPT;
+
+    /**
+     * @param  list<Department>  $departments
+     */
+    public static function buildUserMessage(string $messagesText, array $departments): string
+    {
+        $list = [];
+        foreach ($departments as $d) {
+            if (! $d instanceof Department) {
+                continue;
+            }
+            $list[] = [
+                'id' => $d->id,
+                'name' => $d->name,
+                'category' => $d->category,
+                'description' => self::categoryDescription($d->category),
+            ];
+        }
+
+        $json = json_encode($list, JSON_UNESCAPED_UNICODE);
+
+        return <<<TXT
+Первые сообщения клиента:
+---
+{$messagesText}
+---
+
+Список департаментов (выбирай id только отсюда):
+{$json}
+TXT;
+    }
 
     public static function parse(string $content): AiChatKickoffDto
     {
@@ -38,7 +86,7 @@ PROMPT;
         }
 
         try {
-            /** @var array{topic?: string, summary?: string, intent_tag?: string, replies?: list<array{id?: string, text?: string}>} $data */
+            /** @var array{topic?: string, summary?: string, intent_tag?: string, replies?: list<array{id?: string, text?: string}>, suggested_department_id?: int|null, confidence?: mixed} $data */
             $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
             return new AiChatKickoffDto;
@@ -62,13 +110,55 @@ PROMPT;
                 $replies[] = new AiSuggestedReplyDto(id: $id, text: $text);
             }
         }
+        $replies = array_slice($replies, 0, 2);
+
+        $suggestedDepartmentId = null;
+        if (array_key_exists('suggested_department_id', $data) && $data['suggested_department_id'] !== null) {
+            $rawId = $data['suggested_department_id'];
+            if (is_int($rawId)) {
+                $suggestedDepartmentId = $rawId;
+            } elseif (is_numeric($rawId)) {
+                $suggestedDepartmentId = (int) $rawId;
+            }
+        }
+
+        $confidence = null;
+        if (array_key_exists('confidence', $data) && is_numeric($data['confidence'])) {
+            $confidence = self::clampConfidence((float) $data['confidence']);
+        }
 
         return new AiChatKickoffDto(
             topic: $topic,
             summary: $summary,
             intentTag: $intentTag,
             replies: $replies,
+            suggestedDepartmentId: $suggestedDepartmentId,
+            confidence: $confidence,
         );
+    }
+
+    private static function categoryDescription(string $category): string
+    {
+        return match ($category) {
+            'support' => 'общие вопросы, заказы, оплата, доставка, сервис',
+            'registration' => 'регистрация, учётная запись, доступ, верификация',
+            'tech' => 'баги, настройка, интеграции, технические сбои',
+            'ethics' => 'жалобы, этика, конфликтные ситуации',
+            'other' => 'прочее, не подходит под другие категории',
+            default => 'общее описание отдела',
+        };
+    }
+
+    private static function clampConfidence(float $value): float
+    {
+        if ($value < 0) {
+            return 0.0;
+        }
+        if ($value > 1) {
+            return 1.0;
+        }
+
+        return $value;
     }
 
     private static function cleanTopicLine(string $content): ?string

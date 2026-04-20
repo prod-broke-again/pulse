@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Api\V1\ListDepartmentsRequest;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Models\User;
+use App\Support\DepartmentIcons;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
@@ -41,13 +42,14 @@ final class DepartmentController extends Controller
             $query->whereIn('id', $deptIds);
         }
 
-        $rows = $query->get(['id', 'name', 'slug']);
+        $rows = $query->get(['id', 'name', 'slug', 'icon']);
 
         return response()->json([
             'data' => $rows->map(static fn (DepartmentModel $d) => [
                 'id' => $d->id,
                 'name' => $d->name,
                 'slug' => $d->slug,
+                'icon' => DepartmentIcons::normalize($d->icon),
             ])->values()->all(),
         ]);
     }

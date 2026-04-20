@@ -78,6 +78,7 @@ export const useChatStore = defineStore('chat', () => {
       channel: preview.channel,
       channelLabel: chat.channel_label ?? 'Web',
       departmentLabel: preview.department,
+      departmentIcon: preview.departmentIcon ?? null,
       sourceId: chat.source_id ?? null,
       departmentId: chat.department_id ?? chat.department?.id ?? null,
       aiSummaryBar: prev?.aiSummaryBar ?? 'Нет данных AI для этого чата.',
@@ -194,6 +195,7 @@ export const useChatStore = defineStore('chat', () => {
         channel: preview.channel,
         channelLabel: chat.channel_label ?? 'Web',
         departmentLabel: preview.department,
+        departmentIcon: preview.departmentIcon ?? null,
         sourceId: chat.source_id ?? null,
         departmentId: chat.department_id ?? chat.department?.id ?? null,
         aiSummaryBar:

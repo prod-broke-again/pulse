@@ -20,6 +20,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $status
  * @property int|null $assigned_to
  * @property string|null $topic
+ * @property int|null $ai_suggested_department_id
+ * @property string|null $ai_department_confidence
+ * @property \Illuminate\Support\Carbon|null $ai_department_assigned_at
+ * @property int|null $department_reassigned_by_user_id
  * @property \Illuminate\Support\Carbon|null $last_auto_reply_at
  * @property-read int|null $unread_count
  */
@@ -35,6 +39,10 @@ class ChatModel extends Model
         'status',
         'assigned_to',
         'topic',
+        'ai_suggested_department_id',
+        'ai_department_confidence',
+        'ai_department_assigned_at',
+        'department_reassigned_by_user_id',
         'last_auto_reply_at',
     ];
 
@@ -43,6 +51,8 @@ class ChatModel extends Model
     {
         return [
             'user_metadata' => 'array',
+            'ai_department_confidence' => 'decimal:2',
+            'ai_department_assigned_at' => 'datetime',
             'last_auto_reply_at' => 'datetime',
         ];
     }

@@ -6,6 +6,7 @@ namespace App\Http\Resources\Api\V1;
 
 use App\Domains\Integration\ValueObject\SourceType;
 use App\Models\User;
+use App\Support\DepartmentIcons;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -47,6 +48,11 @@ final class ChatResource extends JsonResource
             'id' => $this->id,
             'source_id' => $this->source_id,
             'department_id' => $this->department_id,
+            'ai_suggested_department_id' => $this->ai_suggested_department_id,
+            'ai_department_confidence' => $this->ai_department_confidence !== null
+                ? (float) $this->ai_department_confidence
+                : null,
+            'ai_department_assigned_at' => $this->ai_department_assigned_at?->toIso8601String(),
             'external_user_id' => $this->external_user_id,
             'user_metadata' => $this->user_metadata,
             'status' => $this->status,
@@ -75,6 +81,7 @@ final class ChatResource extends JsonResource
                     'name' => $this->department->name,
                     'category' => $cat instanceof \BackedEnum ? $cat->value : (string) $cat,
                     'ai_enabled' => (bool) $this->department->ai_enabled,
+                    'icon' => DepartmentIcons::normalize($this->department->icon),
                 ];
             }),
             'assignee' => $this->whenLoaded('assignee', fn () => $this->assignee ? [

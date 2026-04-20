@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
+import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import type { ChatPreviewItem } from '../../types/chat'
 import ChannelGlyph from '../common/ChannelGlyph.vue'
 import { hapticLight } from '../../lib/haptics'
@@ -150,9 +151,10 @@ function onTouchCancel(): void {
         </span>
         <span
           v-if="chat.department"
-          class="max-w-[min(140px,45vw)] truncate rounded-md bg-[var(--color-brand-50)] px-[7px] py-0.5 text-[10px] font-semibold text-[var(--color-brand-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
+          class="inline-flex max-w-[min(140px,45vw)] items-center gap-0.5 truncate rounded-md bg-[var(--color-brand-50)] px-[7px] py-0.5 text-[10px] font-semibold text-[var(--color-brand-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
           :title="chat.department"
         >
+          <component :is="resolveDepartmentIcon(chat.departmentIcon)" class="size-2.5 shrink-0" />
           {{ chat.department }}
         </span>
         <span

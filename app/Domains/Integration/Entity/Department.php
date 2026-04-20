@@ -12,5 +12,8 @@ final readonly class Department
         public string $name,
         public string $slug,
         public bool $isActive,
+        public bool $aiEnabled,
+        public string $category,
+        public ?string $icon = null,
     ) {}
 }

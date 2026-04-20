@@ -12,8 +12,10 @@ interface AiProviderInterface
 {
     /**
      * Один запрос к LLM: краткий topic + summary/intent + 2 варианта ответа по первым сообщениям клиента.
+     *
+     * @param  list<\App\Domains\Integration\Entity\Department>  $departments
      */
-    public function generateKickoffFromClientMessages(string $messagesText): AiChatKickoffDto;
+    public function generateKickoffFromClientMessages(string $messagesText, array $departments = []): AiChatKickoffDto;
 
     public function generateTopic(string $messagesText): ?string;
 

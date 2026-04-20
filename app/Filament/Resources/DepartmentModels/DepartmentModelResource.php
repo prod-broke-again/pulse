@@ -8,6 +8,7 @@ use App\Filament\Resources\DepartmentModels\Pages\CreateDepartmentModel;
 use App\Filament\Resources\DepartmentModels\Pages\EditDepartmentModel;
 use App\Filament\Resources\DepartmentModels\Pages\ListDepartmentModels;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
+use App\Support\DepartmentIcons;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -56,6 +57,13 @@ class DepartmentModelResource extends Resource
                 ->label('Слаг')
                 ->required()
                 ->maxLength(255),
+            Select::make('icon')
+                ->label('Иконка (Lucide)')
+                ->options(collect(DepartmentIcons::ALLOWED)->mapWithKeys(
+                    static fn (string $name) => [$name => $name],
+                )->all())
+                ->nullable()
+                ->searchable(),
             Toggle::make('is_active')
                 ->label('Активен')
                 ->default(true),

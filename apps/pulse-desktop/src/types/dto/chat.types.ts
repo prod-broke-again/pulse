@@ -11,7 +11,14 @@ export interface ApiChat {
   /** Краткая тема от AI (GenerateChatTopicJob), не путать с отделом. */
   topic?: string | null
   source?: { id: number; name: string; type: string }
-  department?: { id: number; name: string }
+  department?: { id: number; name: string; category?: string; ai_enabled?: boolean; icon?: string | null }
+  category_code?: string | null
+  category_label?: string | null
+  ai_enabled?: boolean | null
+  ai_badge?: boolean | null
+  ai_suggested_department_id?: number | null
+  ai_department_confidence?: number | null
+  ai_department_assigned_at?: string | null
   assignee?: { id: number; name: string; avatar_url?: string | null } | null
   /** Непрочитанные сообщения клиента для текущего модератора */
   unread_count?: number

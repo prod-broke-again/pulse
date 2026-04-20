@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy } from 'lucide-vue-next'
 import { Teleport, computed, ref } from 'vue'
+import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useRouter } from 'vue-router'
 import * as chatApi from '../../api/chatRepository'
 import { parseApiChatId } from '../../lib/chatIds'
@@ -148,12 +149,18 @@ function pickDepartment(id: number): void {
         <button
           v-if="showDepartmentPicker"
           type="button"
-          class="min-w-0 truncate border-none bg-transparent p-0 text-left text-[11px] text-[var(--zinc-400)] underline decoration-dotted underline-offset-2"
+          class="inline-flex min-w-0 max-w-full items-center gap-0.5 truncate border-none bg-transparent p-0 text-left text-[11px] text-[var(--zinc-400)] underline decoration-dotted underline-offset-2"
           @click="openDeptSheet()"
         >
-          · {{ meta.departmentLabel }}
+          <span aria-hidden="true">·</span>
+          <component :is="resolveDepartmentIcon(meta.departmentIcon)" class="size-2.5 shrink-0" />
+          {{ meta.departmentLabel }}
         </button>
-        <span v-else>· {{ meta.departmentLabel }}</span>
+        <span v-else class="inline-flex min-w-0 max-w-full items-center gap-0.5 truncate">
+          <span aria-hidden="true">·</span>
+          <component :is="resolveDepartmentIcon(meta.departmentIcon)" class="size-2.5 shrink-0" />
+          {{ meta.departmentLabel }}
+        </span>
       </div>
     </div>
     <div class="flex gap-1">
@@ -246,10 +253,11 @@ function pickDepartment(id: number): void {
             <li v-for="d in departments" :key="d.id">
               <button
                 type="button"
-                class="flex w-full rounded-xl px-3 py-3 text-left text-sm font-medium text-[var(--color-dark)] transition active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+                class="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-medium text-[var(--color-dark)] transition active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
                 :class="d.id === meta.departmentId ? 'bg-[var(--color-brand-bg)] dark:bg-[var(--zinc-800)]' : ''"
                 @click="pickDepartment(d.id)"
               >
+                <component :is="resolveDepartmentIcon(d.icon)" class="size-4 shrink-0 text-[var(--color-brand)]" />
                 {{ d.name }}
               </button>
             </li>
