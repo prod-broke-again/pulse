@@ -211,6 +211,17 @@ final class GenerateChatTopicJob implements ShouldQueue
         if ($confidence >= $threshold && $chat->departmentId !== $suggestedId) {
             try {
                 $afterMove = $changeChatDepartment->runAsSystem($this->chatId, $suggestedId);
+            } catch (\Throwable $e) {
+                Log::warning('AI dept auto-assign: department change failed', [
+                    'chat_id' => $this->chatId,
+                    'suggested_department_id' => $suggestedId,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $chat;
+            }
+
+            try {
                 $chat = $chatRepository->persist(new Chat(
                     id: $afterMove->id,
                     sourceId: $afterMove->sourceId,
@@ -226,9 +237,10 @@ final class GenerateChatTopicJob implements ShouldQueue
                     departmentReassignedByUserId: $afterMove->departmentReassignedByUserId,
                 ));
             } catch (\Throwable $e) {
-                Log::warning('AI dept auto-assign failed', [
+                Log::warning('AI dept auto-assign: persist ai_department_assigned_at failed after department move', [
                     'chat_id' => $this->chatId,
-                    'suggested' => $suggestedId,
+                    'suggested_department_id' => $suggestedId,
+                    'department_id_after_move' => $afterMove->departmentId,
                     'error' => $e->getMessage(),
                 ]);
             }
