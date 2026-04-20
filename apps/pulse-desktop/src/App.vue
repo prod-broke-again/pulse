@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Minus, Square, X, Moon, Sun, Activity, TriangleAlert, RotateCw } from 'lucide-vue-next'
 import ProjectSidebar, { type SidebarView } from './components/chat/ProjectSidebar.vue'
 import InboxPanel from './components/chat/InboxPanel.vue'
@@ -109,6 +109,9 @@ function setupModeratorRealtime(): void {
         text: payload.text ?? '',
         sender_type: payload.sender_type,
       })
+    },
+    onChatTopicGenerated: (payload) => {
+      chatStore.applyChatTopicFromRealtime(payload.chatId, payload.topic)
     },
   })
 }
@@ -420,12 +423,14 @@ function showToast(message: string): void {
   }, 4000)
 }
 
-function onAiInsertComposerText(text: string): void {
+async function onAiInsertComposerText(text: string): Promise<void> {
   if (composerLocked.value) {
     showToast(composerLockHint.value || 'Чат в работе у другого модератора. Заберите чат себе, чтобы ответить.')
     return
   }
   chatComposerRef.value?.insertFromAi(text)
+  await nextTick()
+  chatComposerRef.value?.focusComposer?.()
 }
 </script>
 

@@ -8,6 +8,8 @@ export interface ApiChat {
   user_metadata: Record<string, unknown> | null
   status: 'new' | 'active' | 'closed'
   assigned_to: number | null
+  /** Краткая тема от AI (GenerateChatTopicJob), не путать с отделом. */
+  topic?: string | null
   source?: { id: number; name: string; type: string }
   department?: { id: number; name: string }
   assignee?: { id: number; name: string; avatar_url?: string | null } | null

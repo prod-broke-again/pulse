@@ -55,12 +55,17 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
 
   const unreadCount = typeof chat.unread_count === 'number' ? Math.max(0, chat.unread_count) : 0
 
+  const topicRaw = chat.topic
+  const topic =
+    typeof topicRaw === 'string' && topicRaw.trim() !== '' ? topicRaw.trim() : null
+
   return {
     id: chat.id,
     initials,
     name,
     channel,
     department: chat.department?.name ?? '',
+    topic,
     message: chat.latest_message?.text ?? '',
     time: latestTime,
     active: chat.id === activeId,

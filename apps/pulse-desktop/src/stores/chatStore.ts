@@ -248,6 +248,23 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** Тема чата от AI после GenerateChatTopicJob (WS: ChatTopicGenerated). */
+  function applyChatTopicFromRealtime(chatId: number, topic: string): void {
+    const t = topic.trim()
+    if (t === '') {
+      return
+    }
+    const index = chats.value.findIndex((c) => c.id === chatId)
+    if (index === -1) {
+      scheduleListRefreshFromRealtime(500, { silent: true })
+      return
+    }
+    const row = chats.value[index]
+    const next = [...chats.value]
+    next[index] = { ...row, topic: t }
+    chats.value = next
+  }
+
   return {
     chats,
     selectedChatId,
@@ -270,5 +287,6 @@ export const useChatStore = defineStore('chat', () => {
     loadMore,
     changeDepartment,
     muteChat,
+    applyChatTopicFromRealtime,
   }
 })

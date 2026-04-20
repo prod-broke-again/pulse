@@ -19,14 +19,21 @@ final class ChatTopicGenerated implements ShouldBroadcastNow
     public function __construct(
         public int $chatId,
         public string $topic,
+        public ?int $assignedModeratorUserId = null,
     ) {}
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
     {
-        return [
-            new PrivateChannel('chat.' . $this->chatId),
+        $channels = [
+            new PrivateChannel('chat.'.$this->chatId),
         ];
+
+        if ($this->assignedModeratorUserId !== null) {
+            $channels[] = new PrivateChannel('moderator.'.$this->assignedModeratorUserId);
+        }
+
+        return $channels;
     }
 
     /** @return array<string, mixed> */
@@ -35,6 +42,7 @@ final class ChatTopicGenerated implements ShouldBroadcastNow
         return [
             'chatId' => $this->chatId,
             'topic' => $this->topic,
+            'assigned_moderator_user_id' => $this->assignedModeratorUserId,
         ];
     }
 }

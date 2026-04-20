@@ -10,6 +10,7 @@ import {
   Building2,
   Loader2,
   RotateCw,
+  Sparkles,
 } from 'lucide-vue-next'
 import type { Conversation } from '../../types/chat'
 import { fetchDepartments, type DepartmentOption } from '../../api/departments'
@@ -197,9 +198,17 @@ function channelLabel(ch: Conversation['channel']): string {
             {{ activeConversation.id }}
           </span>
           <span>{{ channelLabel(activeConversation.channel) }}</span>
-          <span v-if="activeConversation.department" class="inline-flex items-center gap-1">
+          <span v-if="activeConversation.department" class="inline-flex items-center gap-1" title="Отдел">
             <Building2 class="h-3 w-3 shrink-0" />
             {{ activeConversation.department }}
+          </span>
+          <span
+            v-if="activeConversation.topic"
+            class="inline-flex max-w-[min(280px,45vw)] items-center gap-1 truncate"
+            :title="`Тема (AI): ${activeConversation.topic}`"
+          >
+            <Sparkles class="h-3 w-3 shrink-0" />
+            {{ activeConversation.topic }}
           </span>
         </div>
       </div>

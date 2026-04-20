@@ -35,6 +35,7 @@ const quickLinkStore = useQuickLinkStore()
 const messageText = ref('')
 const attachments = ref<{ path: string; name: string; isUploading: boolean }[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const composerTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const showCanned = ref(false)
 const showQuickLinks = ref(false)
 /** Кнопки reply_markup, добавленные из быстрых ссылок (отправляются вместе с текстом). */
@@ -172,7 +173,11 @@ function triggerFileSelect(): void {
   fileInput.value?.click()
 }
 
-defineExpose({ insertFromAi })
+function focusComposer(): void {
+  composerTextareaRef.value?.focus()
+}
+
+defineExpose({ insertFromAi, focusComposer })
 </script>
 
 <template>
@@ -313,6 +318,7 @@ defineExpose({ insertFromAi })
           {{ props.composerLockHint ?? 'Чат в работе у другого модератора. Заберите чат себе, чтобы ответить.' }}
         </div>
         <textarea
+          ref="composerTextareaRef"
           v-model="messageText"
           class="composer-textarea"
           placeholder="Введите ответ..."

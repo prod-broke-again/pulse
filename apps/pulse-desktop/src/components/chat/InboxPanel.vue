@@ -311,9 +311,17 @@ function unreadBadgeClass(count: number): string {
               v-if="chat.department"
               class="max-w-[140px] truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
               style="background: var(--color-brand-50); color: var(--color-brand-200)"
-              :title="chat.department"
+              :title="`Отдел: ${chat.department}`"
             >
               {{ chat.department }}
+            </span>
+            <span
+              v-if="chat.topic"
+              class="max-w-[120px] truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
+              style="background: rgba(85, 23, 94, 0.08); color: var(--color-brand-200)"
+              :title="`Тема (AI): ${chat.topic}`"
+            >
+              {{ chat.topic }}
             </span>
             <span
               v-if="isMutedUntilActive(chat.muted_until)"

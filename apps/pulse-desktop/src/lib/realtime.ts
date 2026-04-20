@@ -45,6 +45,29 @@ export type ChatAssignedPayload = {
   assignedToUserId: number
 }
 
+export type ChatTopicGeneratedPayload = {
+  chatId: number
+  topic: string
+}
+
+function normalizeChatTopicPayload(raw: unknown): ChatTopicGeneratedPayload | null {
+  if (raw === null || typeof raw !== 'object') {
+    return null
+  }
+  const o = raw as Record<string, unknown>
+  const chatId =
+    typeof o.chatId === 'number'
+      ? o.chatId
+      : typeof o.chat_id === 'number'
+        ? o.chat_id
+        : null
+  const topic = typeof o.topic === 'string' ? o.topic : null
+  if (chatId === null || topic === null) {
+    return null
+  }
+  return { chatId, topic }
+}
+
 function normalizeChatAssignedPayload(raw: unknown): ChatAssignedPayload | null {
   if (raw === null || typeof raw !== 'object') {
     return null
@@ -74,12 +97,14 @@ export type ChatChannelHandlers = {
   onMessageRead?: (payload: MessageReadPayload) => void
   onTyping?: (payload: TypingPayload) => void
   onChatAssigned?: (payload: ChatAssignedPayload) => void
+  onChatTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void
 }
 
 export type ModeratorChannelHandlers = {
   /** Same event as chat channel, for inbox refresh when message targets assigned moderator. */
   onNewMessage?: (payload: NewChatMessagePayload) => void
   onChatMessageUpdated?: (payload: ChatMessageUpdatedPayload) => void
+  onChatTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void
 }
 
 function pulseOrigin(): string {
@@ -153,6 +178,12 @@ export function subscribeChatChannel(chatId: number, handlers: ChatChannelHandle
       handlers.onChatAssigned?.(p)
     }
   })
+  ch.listen('.App\\Events\\ChatTopicGenerated', (e: unknown) => {
+    const p = normalizeChatTopicPayload(e)
+    if (p) {
+      handlers.onChatTopicGenerated?.(p)
+    }
+  })
 
   return () => {
     client.leave(`chat.${chatId}`)
@@ -174,6 +205,12 @@ export function subscribeModeratorChannel(
   ch.listen('.App\\Events\\ChatMessageUpdated', (e: ChatMessageUpdatedPayload) =>
     handlers.onChatMessageUpdated?.(e),
   )
+  ch.listen('.App\\Events\\ChatTopicGenerated', (e: unknown) => {
+    const p = normalizeChatTopicPayload(e)
+    if (p) {
+      handlers.onChatTopicGenerated?.(p)
+    }
+  })
 
   return () => {
     client.leave(`moderator.${userId}`)

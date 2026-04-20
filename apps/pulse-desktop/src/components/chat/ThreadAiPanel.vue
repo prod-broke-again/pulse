@@ -8,6 +8,8 @@ import {
   Lightbulb,
 } from 'lucide-vue-next'
 import { fetchAiSummary, fetchAiSuggestions } from '../../api/ai'
+import { useChatStore } from '../../stores/chatStore'
+import { useMessageStore } from '../../stores/messageStore'
 
 const props = defineProps<{
   chatId: number | null
@@ -18,24 +20,163 @@ const emit = defineEmits<{
   notify: [message: string]
 }>()
 
-/** По умолчанию свёрнуто; данные AI запрашиваются только после раскрытия. */
+const chatStore = useChatStore()
+const messageStore = useMessageStore()
+
 const open = ref(false)
 const summaryText = ref('Раскройте панель, чтобы загрузить резюме')
-/** Текст резюме для кнопки «Рекомендация» (без служебных строк). */
 const insertableSummary = ref<string | null>(null)
 const suggestions = ref<Array<{ id: string; text: string }>>([])
 const loading = ref(false)
 const suggestionsLoading = ref(false)
 const errorText = ref<string | null>(null)
 
+let prefetchDebounce: ReturnType<typeof setTimeout> | null = null
+
+/** Хвост треда: новое сообщение → фоновое обновление AI. */
+const threadTailRevision = computed(() => {
+  const id = props.chatId
+  if (id == null || chatStore.selectedChatId !== id) {
+    return 0
+  }
+  const msgs = messageStore.messages
+  if (msgs.length === 0) {
+    return 0
+  }
+  const last = msgs[msgs.length - 1]!
+  return last.id * 1_000_000 + msgs.length
+})
+
+function isPlaceholderSummary(text: string): boolean {
+  const t = text.trim()
+  return (
+    t === 'Выберите обращение'
+    || t === 'Раскройте панель, чтобы загрузить резюме'
+    || t === 'Загрузка...'
+  )
+}
+
+async function runAiFetch(id: number, mode: 'full' | 'quiet'): Promise<void> {
+  const quiet = mode === 'quiet'
+  if (!quiet) {
+    loading.value = true
+    errorText.value = null
+    if (isPlaceholderSummary(summaryText.value) || summaryText.value === 'Не удалось загрузить резюме') {
+      summaryText.value = 'Загрузка...'
+    }
+  }
+  try {
+    const [summary, sug] = await Promise.all([
+      fetchAiSummary(id).catch(() => null),
+      fetchAiSuggestions(id).catch(() => null),
+    ])
+    if (props.chatId !== id) {
+      return
+    }
+    if (summary) {
+      const body =
+        summary.summary?.trim()
+        || summary.intent_tag?.trim()
+        || ''
+      summaryText.value = body || 'Нет данных AI для этого чата.'
+      insertableSummary.value = body || null
+    } else if (!quiet) {
+      summaryText.value = 'Не удалось загрузить резюме'
+      insertableSummary.value = null
+    }
+
+    if (sug?.replies?.length) {
+      suggestions.value = sug.replies
+    } else if (!quiet) {
+      suggestions.value = []
+    }
+  } catch {
+    if (!quiet) {
+      errorText.value = 'Ошибка загрузки AI'
+      summaryText.value = 'Не удалось загрузить резюме'
+      insertableSummary.value = null
+    }
+  } finally {
+    if (!quiet) {
+      loading.value = false
+    }
+  }
+}
+
+function scheduleQuietPrefetch(id: number): void {
+  if (prefetchDebounce != null) {
+    clearTimeout(prefetchDebounce)
+  }
+  prefetchDebounce = setTimeout(() => {
+    prefetchDebounce = null
+    if (props.chatId === id) {
+      void runAiFetch(id, 'quiet')
+    }
+  }, 450)
+}
+
+watch(
+  () => props.chatId,
+  (id, prevId) => {
+    if (prefetchDebounce != null) {
+      clearTimeout(prefetchDebounce)
+      prefetchDebounce = null
+    }
+    if (id == null) {
+      suggestions.value = []
+      errorText.value = null
+      insertableSummary.value = null
+      summaryText.value = 'Выберите обращение'
+      return
+    }
+    if (id !== prevId) {
+      suggestions.value = []
+      errorText.value = null
+      insertableSummary.value = null
+      summaryText.value = open.value ? 'Загрузка...' : 'Раскройте панель, чтобы загрузить резюме'
+      void runAiFetch(id, open.value ? 'full' : 'quiet')
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => threadTailRevision.value,
+  () => {
+    const id = props.chatId
+    if (id == null || chatStore.selectedChatId !== id) {
+      return
+    }
+    scheduleQuietPrefetch(id)
+  },
+)
+
+watch(
+  () => open.value,
+  (isOpen) => {
+    const id = props.chatId
+    if (id == null || !isOpen) {
+      return
+    }
+    const needsFull =
+      isPlaceholderSummary(summaryText.value)
+      || summaryText.value === 'Не удалось загрузить резюме'
+      || (insertableSummary.value == null && suggestions.value.length === 0)
+    void runAiFetch(id, needsFull ? 'full' : 'quiet')
+  },
+)
+
 async function refreshSuggestionsOnly(): Promise<void> {
   const id = props.chatId
-  if (id == null || !open.value) {
+  if (id == null) {
     return
   }
   suggestionsLoading.value = true
   try {
     const sug = await fetchAiSuggestions(id).catch(() => null)
+    if (props.chatId !== id) {
+      return
+    }
     suggestions.value = sug?.replies?.length ? sug.replies : []
     if (suggestions.value.length === 0) {
       emit('notify', 'Не удалось получить новые варианты')
@@ -44,61 +185,6 @@ async function refreshSuggestionsOnly(): Promise<void> {
     suggestionsLoading.value = false
   }
 }
-
-watch(
-  () => [props.chatId, open.value] as const,
-  async ([id, isOpen], prev) => {
-    const prevId = prev?.[0]
-    if (id == null) {
-      suggestions.value = []
-      errorText.value = null
-      insertableSummary.value = null
-      summaryText.value = 'Выберите обращение'
-      return
-    }
-    if (!isOpen) {
-      if (id !== prevId) {
-        suggestions.value = []
-        errorText.value = null
-        insertableSummary.value = null
-        summaryText.value = 'Раскройте панель, чтобы загрузить резюме'
-      }
-      return
-    }
-    suggestions.value = []
-    errorText.value = null
-    insertableSummary.value = null
-    summaryText.value = 'Загрузка...'
-    loading.value = true
-    try {
-      const [summary, sug] = await Promise.all([
-        fetchAiSummary(id).catch(() => null),
-        fetchAiSuggestions(id).catch(() => null),
-      ])
-      if (summary) {
-        const body =
-          summary.summary?.trim()
-          || summary.intent_tag?.trim()
-          || ''
-        summaryText.value = body || 'Нет данных AI для этого чата.'
-        insertableSummary.value = body || null
-      } else {
-        summaryText.value = 'Не удалось загрузить резюме'
-        insertableSummary.value = null
-      }
-      if (sug?.replies?.length) {
-        suggestions.value = sug.replies
-      }
-    } catch {
-      errorText.value = 'Ошибка загрузки AI'
-      summaryText.value = 'Не удалось загрузить резюме'
-      insertableSummary.value = null
-    } finally {
-      loading.value = false
-    }
-  },
-  { immediate: true },
-)
 
 async function onDraftClick(): Promise<void> {
   if (props.chatId == null || panelBusy.value) {

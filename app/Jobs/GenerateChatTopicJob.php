@@ -74,6 +74,10 @@ final class GenerateChatTopicJob implements ShouldQueue
         );
         $chatRepository->persist($updated);
 
-        event(new ChatTopicGenerated(chatId: $this->chatId, topic: $topic));
+        event(new ChatTopicGenerated(
+            chatId: $this->chatId,
+            topic: $topic,
+            assignedModeratorUserId: $chat->assignedTo,
+        ));
     }
 }

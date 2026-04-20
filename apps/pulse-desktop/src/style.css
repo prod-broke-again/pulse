@@ -507,6 +507,7 @@ body {
 }
 
 .ai-suggestion {
+  width: 100%;
   padding: 9px 12px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);

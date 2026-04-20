@@ -6,6 +6,8 @@ export interface Conversation {
   name: string
   channel: ConversationChannel
   department: string
+  /** Тема от AI (чат.topic), не путать с отделом. */
+  topic?: string | null
   message: string
   time: string
   /** Количество непрочитанных сообщений клиента для текущего модератора (с сервера). */

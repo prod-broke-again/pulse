@@ -20,7 +20,7 @@ import {
   setCachedMessages,
 } from '../lib/localElectronStore'
 import { subscribeChatChannel } from '../lib/realtime'
-import type { ChatMessageUpdatedPayload } from '../lib/realtime'
+import type { ChatMessageUpdatedPayload, ChatTopicGeneratedPayload } from '../lib/realtime'
 import { mapRealtimePayloadToMessageItem } from '../utils/mappers'
 import { useAuthStore } from './authStore'
 import { useChatStore } from './chatStore'
@@ -325,6 +325,12 @@ export const useMessageStore = defineStore('message', () => {
           return
         }
         void chat.applyChatAssigned(chatId)
+      },
+      onChatTopicGenerated: (payload: ChatTopicGeneratedPayload) => {
+        if (payload.chatId !== chatId) {
+          return
+        }
+        chat.applyChatTopicFromRealtime(payload.chatId, payload.topic)
       },
     })
   }
