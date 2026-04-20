@@ -5,6 +5,15 @@
 		},
 		{
 			"path": "../id"
+		},
+		{
+			"path": "../a4pp-1"
+		},
+		{
+			"path": "../psy"
+		},
+		{
+			"path": "../docs"
 		}
 	],
 	"settings": {}
