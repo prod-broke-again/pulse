@@ -139,10 +139,10 @@ onMounted(async () => {
 
 const presetIds = computed(() => Object.keys(PRESET_LABELS) as NotificationPresetId[])
 
-let volumeDebounce: ReturnType<typeof setTimeout> | null = null
+let volumeDebounce: number | null = null
 function scheduleVolumeSave(): void {
   if (volumeDebounce != null) {
-    clearTimeout(volumeDebounce)
+    window.clearTimeout(volumeDebounce)
   }
   volumeDebounce = window.setTimeout(() => {
     volumeDebounce = null

@@ -59,6 +59,7 @@ const soundEnabled = ref(typeof localStorage !== 'undefined' ? desktopSoundEnabl
 const toastMessage = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null)
+const chatComposerRef = ref<InstanceType<typeof ChatComposer> | null>(null)
 const isElectron = typeof window !== 'undefined' && typeof window.appWindow !== 'undefined'
 const isMaximized = ref(false)
 const isDevtoolsOpen = ref(false)
@@ -418,6 +419,14 @@ function showToast(message: string): void {
     toastTimer = null
   }, 4000)
 }
+
+function onAiInsertComposerText(text: string): void {
+  if (composerLocked.value) {
+    showToast(composerLockHint.value || 'Чат в работе у другого модератора. Заберите чат себе, чтобы ответить.')
+    return
+  }
+  chatComposerRef.value?.insertFromAi(text)
+}
 </script>
 
 <template>
@@ -573,8 +582,13 @@ function showToast(message: string): void {
                 @merge-context="onMergeMessageContext"
                 @toast="showToast"
               />
-              <ThreadAiPanel :chat-id="chatStore.selectedChatId" />
+              <ThreadAiPanel
+                :chat-id="chatStore.selectedChatId"
+                @insert-composer-text="onAiInsertComposerText"
+                @notify="showToast"
+              />
               <ChatComposer
+                ref="chatComposerRef"
                 :is-sending="messageStore.isSending"
                 :reply-to-preview="replyToPreview"
                 :composer-locked="composerLocked"

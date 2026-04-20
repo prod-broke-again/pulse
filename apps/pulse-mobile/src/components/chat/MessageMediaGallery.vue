@@ -141,7 +141,7 @@ const currentImage = computed(() => imageItems.value[lightboxIndex.value] ?? nul
         </Transition>
       </button>
       <div
-        v-for="(s, i) in pendingImageSlots"
+        v-for="(_s, i) in pendingImageSlots"
         :key="`p-img-${i}`"
         class="overflow-hidden rounded-lg"
         aria-hidden="true"

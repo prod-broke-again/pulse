@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineExpose, ref, watch } from 'vue'
 import { Paperclip, Zap, Sparkles, Type, SendHorizontal, Loader2, X, FileIcon, Save, Link2 } from 'lucide-vue-next'
 import { sendTypingIndicator } from '../../api/chats'
 import { uploadFile } from '../../api/uploads'
@@ -71,6 +71,18 @@ watch(messageText, () => {
 function insertCanned(text: string): void {
   messageText.value = messageText.value ? `${messageText.value}\n${text}` : text
   showCanned.value = false
+}
+
+/** Вставка из панели AI (как шаблон: дописывает к черновику). */
+function insertFromAi(text: string): void {
+  if (props.composerLocked) {
+    return
+  }
+  const t = text.trim()
+  if (!t) {
+    return
+  }
+  messageText.value = messageText.value ? `${messageText.value}\n${t}` : t
 }
 
 function toggleCanned(): void {
@@ -159,6 +171,8 @@ function handleKeydown(event: KeyboardEvent): void {
 function triggerFileSelect(): void {
   fileInput.value?.click()
 }
+
+defineExpose({ insertFromAi })
 </script>
 
 <template>
