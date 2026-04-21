@@ -324,8 +324,16 @@ final readonly class ProcessInboundWebhook
             return false;
         }
 
-        /** @var User $user */
         $user = $account->user;
+        if ($user === null) {
+            Log::warning('business owner outgoing: social account has no user', [
+                'source_id' => $sourceId,
+                'social_account_id' => $account->id,
+            ]);
+
+            return false;
+        }
+
         if (! $this->userCanModerateSource($user, $sourceId)) {
             Log::info('business owner outgoing: telegram linked user not on source', [
                 'source_id' => $sourceId,
@@ -382,6 +390,11 @@ final readonly class ProcessInboundWebhook
             $replyToInternalId = $replied?->id;
         }
 
+        if ($externalMessageId !== null && $externalMessageId !== ''
+            && $this->messageRepository->findByChatAndExternalMessageId($chat->id, $externalMessageId) !== null) {
+            return true;
+        }
+
         if ($attachments !== []) {
             $payload['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($attachments);
         }
@@ -397,6 +410,8 @@ final readonly class ProcessInboundWebhook
         );
 
         $this->dispatchAttachmentDownloads($attachments, $message->id);
+
+        ChatModel::query()->whereKey($chat->id)->update(['last_auto_reply_at' => now()]);
 
         return true;
     }

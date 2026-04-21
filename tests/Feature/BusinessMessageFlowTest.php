@@ -313,6 +313,40 @@ final class BusinessMessageFlowTest extends TestCase
         $this->assertSame('Ответ с телефона', $msg->text);
     }
 
+    public function test_business_owner_outgoing_webhook_retry_does_not_duplicate_message(): void
+    {
+        $source = $this->createTgSource([
+            'telegram_mode' => 'business',
+            'business_connection_user_id' => '999001',
+        ]);
+        $moderator = User::factory()->create();
+        $moderator->assignRole('moderator');
+        $moderator->sources()->attach($source->id);
+
+        SocialAccount::query()->create([
+            'user_id' => $moderator->id,
+            'provider' => 'telegram',
+            'provider_user_id' => '999001',
+        ]);
+
+        $messenger = $this->mockMessenger();
+        $payload = [
+            'business_message' => [
+                'message_id' => 777,
+                'business_connection_id' => 'bc-1',
+                'from' => ['id' => 999001],
+                'chat' => ['id' => 555888, 'type' => 'private', 'first_name' => 'C'],
+                'text' => 'once',
+            ],
+        ];
+
+        app(ProcessInboundWebhook::class)->run($source->id, $messenger, $payload);
+        app(ProcessInboundWebhook::class)->run($source->id, $messenger, $payload);
+
+        $this->assertSame(1, MessageModel::query()->count());
+        $this->assertSame('777', MessageModel::query()->value('external_message_id'));
+    }
+
     public function test_send_message_system_delivery_includes_business_connection_id(): void
     {
         $source = $this->createTgSource([
