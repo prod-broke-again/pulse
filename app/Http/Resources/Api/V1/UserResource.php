@@ -26,6 +26,7 @@ final class UserResource extends JsonResource
             'roles' => $user->getRoleNames()->values(),
             'is_admin' => $user->hasRole('admin'),
             'source_ids' => $this->pulseSourceIds($user),
+            'sources' => $this->pulseSources($user),
             'department_ids' => $user->departments()->pluck('departments.id')->values(),
             'notification_sound_prefs' => app(\App\Services\NotificationSoundPreferencesService::class)->forUser($user),
         ];
@@ -50,6 +51,29 @@ final class UserResource extends JsonResource
         return $user->sources()
             ->pluck('sources.id')
             ->map(fn (mixed $id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{id:int,name:string}>
+     */
+    private function pulseSources(User $user): array
+    {
+        $query = SourceModel::query()
+            ->select(['id', 'name'])
+            ->orderBy('id');
+
+        if (! $user->hasRole('admin')) {
+            $query->whereIn('id', $user->sources()->pluck('sources.id')->all());
+        }
+
+        return $query
+            ->get()
+            ->map(static fn (SourceModel $source): array => [
+                'id' => (int) $source->id,
+                'name' => (string) $source->name,
+            ])
             ->values()
             ->all();
     }

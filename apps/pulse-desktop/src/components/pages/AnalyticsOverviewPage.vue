@@ -23,6 +23,17 @@ const error = ref<string | null>(null)
 const data = ref<AnalyticsOverviewData | null>(null)
 
 const sourceOptions = computed(() => authStore.user?.source_ids ?? [])
+const sourceNamesById = computed(() => {
+  const map = new Map<number, string>()
+  for (const source of authStore.user?.sources ?? []) {
+    map.set(source.id, source.name)
+  }
+  return map
+})
+
+function sourceLabel(sourceId: number): string {
+  return sourceNamesById.value.get(sourceId) ?? `Проект #${sourceId}`
+}
 
 async function load() {
   loading.value = true
@@ -95,7 +106,7 @@ const cards = [
             Все
           </option>
           <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-            Проект #{{ sid }}
+            {{ sourceLabel(sid) }}
           </option>
         </select>
       </label>

@@ -39,7 +39,18 @@ const form = ref({
 const departmentOptions = ref<{ id: number; name: string }[]>([])
 
 const sourceOptions = computed(() => authStore.user?.source_ids ?? [])
+const sourceNamesById = computed(() => {
+  const map = new Map<number, string>()
+  for (const source of authStore.user?.sources ?? []) {
+    map.set(source.id, source.name)
+  }
+  return map
+})
 const isAdmin = computed(() => authStore.user?.roles?.includes('admin'))
+
+function sourceLabel(sourceId: number): string {
+  return sourceNamesById.value.get(sourceId) ?? `Проект #${sourceId}`
+}
 
 async function loadDepartmentOptions(sourceId: number) {
   try {
@@ -78,7 +89,7 @@ function scopeLabel(row: ApiQuickLink): string {
     return isAdmin.value ? 'Глобально' : '—'
   }
   if (row.scope_type === 'source') {
-    return `Источник #${row.scope_id}`
+    return row.scope_id != null ? sourceLabel(row.scope_id) : '—'
   }
   if (row.scope_type === 'department') {
     return `Отдел #${row.scope_id}`
@@ -298,7 +309,7 @@ async function move(index: number, dir: -1 | 1) {
             Все доступные
           </option>
           <option v-for="sid in sourceOptions" :key="sid" :value="sid">
-            Проект #{{ sid }}
+            {{ sourceLabel(sid) }}
           </option>
         </select>
       </label>
@@ -473,7 +484,7 @@ async function move(index: number, dir: -1 | 1) {
               style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
             >
               <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                Проект #{{ sid }}
+                {{ sourceLabel(sid) }}
               </option>
             </select>
           </label>
@@ -486,7 +497,7 @@ async function move(index: number, dir: -1 | 1) {
                 style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
               >
                 <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                  Проект #{{ sid }}
+                  {{ sourceLabel(sid) }}
                 </option>
               </select>
             </label>

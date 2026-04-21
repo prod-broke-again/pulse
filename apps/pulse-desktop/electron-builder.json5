@@ -33,6 +33,12 @@
     ],
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
+  // Публичный репозиторий только для релизов (README + бинарники). Замените owner/repo перед прод-сборкой.
+  "publish": {
+    "provider": "github",
+    "owner": "prod-broke-again",
+    "repo": "pulse-desktop-releases"
+  },
   "nsis": {
     "oneClick": false,
     "perMachine": false,

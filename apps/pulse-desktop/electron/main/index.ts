@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import electronUpdater from 'electron-updater'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -19,6 +20,7 @@ import {
 } from './windowPreferences'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const { autoUpdater } = electronUpdater
 
 /** Deep link for ACHPP ID OAuth callback (must match IdP client redirect URI). */
 const OAUTH_PROTOCOL = 'pulse-desktop'
@@ -65,6 +67,16 @@ function registerOAuthProtocol(): void {
 }
 
 registerOAuthProtocol()
+
+/** GitHub Releases в публичном репо (см. electron-builder.json5 → publish). */
+function setupAutoUpdate(): void {
+  if (!app.isPackaged) {
+    return
+  }
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  void autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+}
 
 const argvOAuthUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}:`))
 if (argvOAuthUrl) {
@@ -298,6 +310,7 @@ app.whenReady().then(async () => {
   await initLocalDb()
   registerWindowManagementIpc()
   registerLocalStoreIpc()
+  setupAutoUpdate()
   await createWindow()
 })
 

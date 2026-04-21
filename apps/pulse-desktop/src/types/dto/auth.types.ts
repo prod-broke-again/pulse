@@ -10,6 +10,8 @@ export interface ApiUser {
   /** С сервера; при отсутствии в кэше — не полагаться на это поле. */
   is_admin?: boolean
   source_ids: number[]
+  /** Optional list of accessible sources with names for UI labels. */
+  sources?: Array<{ id: number; name: string }>
   department_ids: number[]
   /** С сервера; при отсутствии в кэше клиент подставляет дефолты. */
   notification_sound_prefs?: NotificationSoundPrefs | null

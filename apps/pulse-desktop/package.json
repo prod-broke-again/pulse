@@ -1,6 +1,6 @@
 {
   "name": "pulse-desktop",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "main": "dist-electron/main/index.js",
   "description": "Pulse — десктоп-клиент центра обращений АЧПП (мессенджер для модераторов).",
   "author": "Eugene @prod-broke-again",
@@ -49,6 +49,7 @@
     "laravel-echo": "^2.3.4",
     "lucide-vue-next": "^0.564.0",
     "pinia": "^3.0.4",
+    "electron-updater": "^6.3.9",
     "pusher-js": "^8.5.0",
     "sql.js": "^1.14.1",
     "tailwindcss": "^4.1.18"
