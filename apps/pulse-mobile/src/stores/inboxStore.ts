@@ -11,7 +11,7 @@ import {
   resolveNotificationScenario,
   vibrateIncoming,
 } from '../lib/notificationFeedback'
-import { getEcho, subscribeModeratorChannel } from '../lib/realtime'
+import { getEcho, subscribeModeratorChannel, subscribeSourceInbox } from '../lib/realtime'
 import type { NewChatMessagePayload } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
 import { useAuthStore } from './authStore'
@@ -19,6 +19,10 @@ import { useSettingsStore } from './settingsStore'
 import type { BottomNavId, ChatPreviewItem, FilterId, InboxTab } from '../types/chat'
 
 let moderatorUnsub: (() => void) | null = null
+let sourceInboxUnsubs: Array<() => void> = []
+
+/** Same NewChatMessage may arrive on moderator.* and source-inbox.* */
+let lastInboxRealtimeDedupeKey: string | null = null
 
 function deriveApiStatus(filters: Set<FilterId>): 'open' | 'closed' | 'all' {
   const hasOpen = filters.has('open')
@@ -175,6 +179,78 @@ export const useInboxStore = defineStore('inbox', () => {
     }, debounceMs)
   }
 
+  function onModeratorOrSourceInboxMessage(payload: NewChatMessagePayload): void {
+    const dedupeKey = `${payload.chatId}:${payload.messageId}`
+    if (lastInboxRealtimeDedupeKey === dedupeKey) {
+      return
+    }
+    lastInboxRealtimeDedupeKey = dedupeKey
+    window.setTimeout(() => {
+      if (lastInboxRealtimeDedupeKey === dedupeKey) {
+        lastInboxRealtimeDedupeKey = null
+      }
+    }, 1500)
+
+    scheduleInboxRefreshFromRealtime()
+    if (payload.sender_type !== 'client') {
+      return
+    }
+    const auth = useAuthStore()
+    void import('./chatStore').then(({ useChatStore }) => {
+      const chatStore = useChatStore()
+      const viewing = chatStore.activeChatId ? parseApiChatId(chatStore.activeChatId) : null
+      if (viewing === payload.chatId) {
+        return
+      }
+      const preview = chats.value.find((c) => Number(c.id) === payload.chatId)
+      if (isMutedUntilActive(preview?.muted_until)) {
+        return
+      }
+      const settings = useSettingsStore()
+      if (!settings.sound) {
+        return
+      }
+      const prefs = mergeNotificationSoundPrefs(auth.user?.notification_sound_prefs ?? null)
+      if (!prefs.mute) {
+        const urgent = payload.is_new_chat === true
+        const scenario = resolveNotificationScenario({ isUrgent: urgent })
+        playIncomingToneFromPrefs(prefs, scenario)
+      }
+      vibrateIncoming(settings.vibration)
+    })
+  }
+
+  function teardownSourceInboxRealtime(): void {
+    for (const u of sourceInboxUnsubs) {
+      try {
+        u()
+      } catch {
+        // noop
+      }
+    }
+    sourceInboxUnsubs = []
+  }
+
+  function setupSourceInboxRealtime(): void {
+    teardownSourceInboxRealtime()
+    const auth = useAuthStore()
+    const ids = auth.user?.source_ids ?? []
+    if (!auth.user?.id || ids.length === 0) {
+      return
+    }
+    getEcho()
+    for (const sid of ids) {
+      sourceInboxUnsubs.push(
+        subscribeSourceInbox(sid, {
+          onNewMessage: onModeratorOrSourceInboxMessage,
+          onChatTopicGenerated: () => {
+            scheduleInboxRefreshFromRealtime()
+          },
+        }),
+      )
+    }
+  }
+
   function setupModeratorRealtimeInbox(): void {
     moderatorUnsub?.()
     moderatorUnsub = null
@@ -185,44 +261,24 @@ export const useInboxStore = defineStore('inbox', () => {
     }
     getEcho()
     moderatorUnsub = subscribeModeratorChannel(uid, {
-      onNewMessage: (payload: NewChatMessagePayload) => {
-        scheduleInboxRefreshFromRealtime()
-        if (payload.sender_type !== 'client') {
-          return
-        }
-        void import('./chatStore').then(({ useChatStore }) => {
-          const chatStore = useChatStore()
-          const viewing = chatStore.activeChatId ? parseApiChatId(chatStore.activeChatId) : null
-          if (viewing === payload.chatId) {
-            return
-          }
-          const preview = chats.value.find((c) => Number(c.id) === payload.chatId)
-          if (isMutedUntilActive(preview?.muted_until)) {
-            return
-          }
-          const settings = useSettingsStore()
-          if (!settings.sound) {
-            return
-          }
-          const prefs = mergeNotificationSoundPrefs(auth.user?.notification_sound_prefs ?? null)
-          if (!prefs.mute) {
-            const scenario = resolveNotificationScenario({ isUrgent: false })
-            playIncomingToneFromPrefs(prefs, scenario)
-          }
-          vibrateIncoming(settings.vibration)
-        })
-      },
+      onNewMessage: onModeratorOrSourceInboxMessage,
     })
   }
 
   watch(
-    () => useAuthStore().user?.id,
-    (uid) => {
+    () => {
+      const u = useAuthStore().user
+      const sig = (u?.source_ids ?? []).slice().sort().join(',')
+      return [u?.id, sig] as const
+    },
+    ([uid]) => {
       if (uid) {
         setupModeratorRealtimeInbox()
+        setupSourceInboxRealtime()
       } else {
         moderatorUnsub?.()
         moderatorUnsub = null
+        teardownSourceInboxRealtime()
       }
     },
     { immediate: true },

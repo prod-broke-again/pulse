@@ -20,6 +20,9 @@ export type NewChatMessagePayload = {
   attachments?: Array<Record<string, unknown>>
   pending_attachments?: PendingAttachmentMeta[]
   reply_to?: { id: number | null; text: string; sender_type: string } | null
+  /** Present when backend broadcasts with source-inbox (same payload fields + extras). */
+  source_id?: number | null
+  is_new_chat?: boolean
 }
 
 export type ChatMessageUpdatedPayload = {
@@ -48,6 +51,7 @@ export type ChatAssignedPayload = {
 export type ChatTopicGeneratedPayload = {
   chatId: number
   topic: string
+  source_id?: number | null
 }
 
 function normalizeChatTopicPayload(raw: unknown): ChatTopicGeneratedPayload | null {
@@ -104,6 +108,11 @@ export type ModeratorChannelHandlers = {
   /** Same event as chat channel, for inbox refresh when message targets assigned moderator. */
   onNewMessage?: (payload: NewChatMessagePayload) => void
   onChatMessageUpdated?: (payload: ChatMessageUpdatedPayload) => void
+  onChatTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void
+}
+
+export type SourceInboxHandlers = {
+  onNewMessage?: (payload: NewChatMessagePayload) => void
   onChatTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void
 }
 
@@ -214,6 +223,33 @@ export function subscribeModeratorChannel(
 
   return () => {
     client.leave(`moderator.${userId}`)
+  }
+}
+
+/** All moderators with access to this source (private channel). Unassigned chats + topics. */
+export function subscribeSourceInbox(sourceId: number, handlers: SourceInboxHandlers): () => void {
+  const client = getEcho()
+  if (!client) {
+    return () => {}
+  }
+
+  const ch = client.private(`source-inbox.${sourceId}`)
+  ch.listen('.App\\Events\\NewChatMessage', (e: NewChatMessagePayload) => handlers.onNewMessage?.(e))
+  if (handlers.onChatTopicGenerated) {
+    ch.listen('.App\\Events\\ChatTopicGenerated', (e: unknown) => {
+      const p = normalizeChatTopicPayload(e)
+      if (p) {
+        handlers.onChatTopicGenerated?.(p)
+      }
+    })
+  }
+
+  return () => {
+    try {
+      client.leave(`source-inbox.${sourceId}`)
+    } catch {
+      // noop
+    }
   }
 }
 

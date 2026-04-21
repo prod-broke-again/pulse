@@ -79,6 +79,8 @@ final readonly class SendMessage
             ? NewChatMessageBroadcastExtras::fromMessage($model)
             : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
 
+        $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
+
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
             messageId: $persisted->id,
@@ -89,6 +91,8 @@ final readonly class SendMessage
             pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $chat->assignedTo,
+            sourceId: $chat->sourceId,
+            isNewChat: $isNewChat,
         ));
 
         $source = $this->sourceRepository->findById($chat->sourceId);

@@ -140,6 +140,7 @@ final class GenerateChatTopicJob implements ShouldQueue
             chatId: $this->chatId,
             topic: $topic,
             assignedModeratorUserId: $latest->assignedTo,
+            sourceId: $latest->sourceId,
         ));
     }
 

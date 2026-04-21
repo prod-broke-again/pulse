@@ -32,6 +32,8 @@ final class NewChatMessage implements ShouldBroadcastNow
         public array $pendingAttachments = [],
         public ?array $replyTo = null,
         public ?int $assignedModeratorUserId = null,
+        public int $sourceId = 0,
+        public bool $isNewChat = false,
     ) {}
 
     /** @return array<int, Channel|PrivateChannel> */
@@ -41,6 +43,10 @@ final class NewChatMessage implements ShouldBroadcastNow
             new PrivateChannel('chat.'.$this->chatId),
             new Channel('widget-chat.'.$this->chatId),
         ];
+
+        if ($this->sourceId > 0) {
+            $channels[] = new PrivateChannel('source-inbox.'.$this->sourceId);
+        }
 
         if ($this->assignedModeratorUserId !== null) {
             $channels[] = new PrivateChannel('moderator.'.$this->assignedModeratorUserId);
@@ -61,6 +67,8 @@ final class NewChatMessage implements ShouldBroadcastNow
             'attachments' => $this->attachments,
             'pending_attachments' => $this->pendingAttachments,
             'reply_to' => $this->replyTo,
+            'source_id' => $this->sourceId > 0 ? $this->sourceId : null,
+            'is_new_chat' => $this->isNewChat,
         ];
     }
 }

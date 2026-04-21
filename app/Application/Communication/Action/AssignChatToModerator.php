@@ -50,13 +50,13 @@ final readonly class AssignChatToModerator
         $this->events->dispatch(new ChatAssignedEvent(chatId: $persisted->id, assignedToUserId: $userId));
 
         if ($previousAssignee !== $userId) {
-            $this->persistAssignmentSystemMessage($persisted->id, $userId);
+            $this->persistAssignmentSystemMessage($persisted->id, $userId, $persisted->sourceId);
         }
 
         return $persisted;
     }
 
-    private function persistAssignmentSystemMessage(int $chatId, int $assignedToUserId): void
+    private function persistAssignmentSystemMessage(int $chatId, int $assignedToUserId, int $sourceId): void
     {
         $assignee = User::query()->find($assignedToUserId);
         $name = $assignee !== null ? trim((string) $assignee->name) : '';
@@ -85,6 +85,8 @@ final readonly class AssignChatToModerator
             ? NewChatMessageBroadcastExtras::fromMessage($model)
             : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
 
+        $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
+
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
             messageId: $persistedMessage->id,
@@ -95,6 +97,8 @@ final readonly class AssignChatToModerator
             pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $assignedToUserId,
+            sourceId: $sourceId,
+            isNewChat: $isNewChat,
         ));
     }
 }

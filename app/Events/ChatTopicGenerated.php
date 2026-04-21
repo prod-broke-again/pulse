@@ -20,6 +20,7 @@ final class ChatTopicGenerated implements ShouldBroadcastNow
         public int $chatId,
         public string $topic,
         public ?int $assignedModeratorUserId = null,
+        public int $sourceId = 0,
     ) {}
 
     /** @return array<int, PrivateChannel> */
@@ -28,6 +29,10 @@ final class ChatTopicGenerated implements ShouldBroadcastNow
         $channels = [
             new PrivateChannel('chat.'.$this->chatId),
         ];
+
+        if ($this->sourceId > 0) {
+            $channels[] = new PrivateChannel('source-inbox.'.$this->sourceId);
+        }
 
         if ($this->assignedModeratorUserId !== null) {
             $channels[] = new PrivateChannel('moderator.'.$this->assignedModeratorUserId);
@@ -43,6 +48,7 @@ final class ChatTopicGenerated implements ShouldBroadcastNow
             'chatId' => $this->chatId,
             'topic' => $this->topic,
             'assigned_moderator_user_id' => $this->assignedModeratorUserId,
+            'source_id' => $this->sourceId > 0 ? $this->sourceId : null,
         ];
     }
 }

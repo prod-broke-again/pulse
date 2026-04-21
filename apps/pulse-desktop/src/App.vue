@@ -18,7 +18,7 @@ import { useMessageStore, notifyIncomingForModeratorInbox } from './stores/messa
 import { syncChatHistory } from './api/chats'
 import { mapChatToConversation, mapApiMessage } from './utils/mappers'
 import { completeOAuthFromCallbackUrl } from './lib/completeOAuthFromUrl'
-import { disconnectEcho, getEcho, subscribeModeratorChannel } from './lib/realtime'
+import { disconnectEcho, getEcho, subscribeModeratorChannel, subscribeSourceInbox } from './lib/realtime'
 import { desktopSoundEnabled, setDesktopSoundEnabled } from './lib/desktopNotifications'
 import { patchNotificationSoundPreferences } from './api/notificationSoundPreferences'
 import {
@@ -69,6 +69,8 @@ let detachWindowListener: (() => void) | null = null
 let detachDevtoolsListener: (() => void) | null = null
 let detachOAuthListener: (() => void) | null = null
 let unsubscribeModeratorChannel: (() => void) | null = null
+/** Unsubscribe all `source-inbox.{id}` channels for current user. */
+let teardownSourceInboxRealtime: (() => void) | null = null
 
 const replyToMessageId = ref<number | null>(null)
 
@@ -116,10 +118,57 @@ function setupModeratorRealtime(): void {
   })
 }
 
+function setupSourceInboxRealtime(): void {
+  teardownSourceInboxRealtime?.()
+  teardownSourceInboxRealtime = null
+  if (!authStore.isAuthenticated || authStore.user?.id == null) {
+    return
+  }
+  const sourceIds = authStore.user.source_ids ?? []
+  if (sourceIds.length === 0) {
+    return
+  }
+  getEcho()
+  const unsubs: Array<() => void> = []
+  for (const sid of sourceIds) {
+    unsubs.push(
+      subscribeSourceInbox(sid, {
+        onNewMessage: (payload) => {
+          chatStore.bumpChatFromRealtime(payload)
+          void notifyIncomingForModeratorInbox({
+            chatId: payload.chatId,
+            messageId: payload.messageId,
+            text: payload.text ?? '',
+            sender_type: payload.sender_type,
+          })
+        },
+        onChatTopicGenerated: (payload) => {
+          chatStore.applyChatTopicFromRealtime(payload.chatId, payload.topic)
+        },
+      }),
+    )
+  }
+  teardownSourceInboxRealtime = () => {
+    for (const u of unsubs) {
+      try {
+        u()
+      } catch {
+        // noop
+      }
+    }
+  }
+}
+
 watch(
-  () => [authStore.isAuthenticated, authStore.user?.id] as const,
+  () =>
+    [
+      authStore.isAuthenticated,
+      authStore.user?.id,
+      (authStore.user?.source_ids ?? []).slice().sort().join(','),
+    ] as const,
   () => {
     setupModeratorRealtime()
+    setupSourceInboxRealtime()
   },
   { immediate: true },
 )
@@ -229,6 +278,8 @@ onBeforeUnmount(() => {
   detachWindowListener?.()
   detachDevtoolsListener?.()
   detachOAuthListener?.()
+  teardownSourceInboxRealtime?.()
+  teardownSourceInboxRealtime = null
   unsubscribeModeratorChannel?.()
   unsubscribeModeratorChannel = null
   stopModeratorPresenceForDesktop()

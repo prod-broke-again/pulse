@@ -250,6 +250,8 @@ final class WidgetApiController extends Controller
         $message->loadMissing('replyTo');
         $extras = \App\Support\NewChatMessageBroadcastExtras::fromMessage($message);
 
+        $isNewChat = MessageModel::query()->where('chat_id', $chat->id)->count() === 1;
+
         event(new \App\Events\NewChatMessage(
             chatId: $chat->id,
             messageId: $message->id,
@@ -260,6 +262,8 @@ final class WidgetApiController extends Controller
             pendingAttachments: $extras['pending_attachments'],
             replyTo: $extras['reply_to'],
             assignedModeratorUserId: $chat->assigned_to,
+            sourceId: (int) $chat->source_id,
+            isNewChat: $isNewChat,
         ));
 
         $clientMessageCount = MessageModel::where('chat_id', $chat->id)
