@@ -1,6 +1,22 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Search, Send, MessageCircleMore, Loader2, MoreVertical } from 'lucide-vue-next'
+import {
+  Search,
+  Send,
+  MessageCircle,
+  MessageCircleMore,
+  Archive,
+  Loader2,
+  MoreVertical,
+  UserPlus,
+  CircleCheck,
+  Clock,
+  Infinity,
+  Volume2,
+  Sparkles,
+  ChevronDown,
+  RotateCcw,
+} from 'lucide-vue-next'
 import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useChatStore } from '../../stores/chatStore'
 import type { Conversation, ConversationChannel } from '../../types/chat'
@@ -16,8 +32,10 @@ function sourceBadgeClass(channel: ConversationChannel): string {
   return 'bg-[var(--color-brand-200)]'
 }
 
-defineProps<{
+const props = defineProps<{
   conversations: Conversation[]
+  /** Для скрытия «Назначить на меня», если чат уже у текущего пользователя. */
+  currentUserId?: number | null
   activeTab: 'my' | 'unassigned' | 'all'
   isLoading: boolean
   canLoadMore: boolean
@@ -29,9 +47,11 @@ const emit = defineEmits<{
   (e: 'select-chat', chatId: number): void
   (e: 'change-tab', tab: 'my' | 'unassigned' | 'all'): void
   (e: 'load-more'): void
-  (e: 'change-status', status: 'open' | 'closed'): void
+  (e: 'change-status', status: 'open' | 'closed' | 'all'): void
   (e: 'assign-me', chatId: number): void
   (e: 'close-chat', chatId: number): void
+  /** Закрытый чат: вернуть в работу (тот же API, что «назначить на меня»). */
+  (e: 'reopen-chat', chatId: number): void
   (e: 'mute-chat', chatId: number, mode: '1h' | '8h' | 'forever' | 'unmute'): void
 }>()
 
@@ -81,18 +101,57 @@ watch(searchQuery, (newQuery) => {
 })
 
 const statusSelect = computed({
-  get: () => chatStore.filters.status,
-  set: (v: 'open' | 'closed') => {
+  get: () => chatStore.filters.status ?? 'open',
+  set: (v: 'open' | 'closed' | 'all') => {
     void chatStore.setFilters({ status: v })
   },
 })
 
-function isMenuChatMuted(): boolean {
+const menuConversation = computed((): Conversation | null => {
   const id = menuChatId.value
   if (id == null) {
-    return false
+    return null
   }
-  const row = chatStore.chats.find((c) => c.id === id)
+  return props.conversations.find((c) => c.id === id) ?? null
+})
+
+/** Показывать пункт назначения, если чат не у текущего пользователя (или id неизвестен). */
+const showAssignMenuItem = computed((): boolean => {
+  const c = menuConversation.value
+  if (!c) {
+    return true
+  }
+  const me = props.currentUserId
+  if (me == null) {
+    return true
+  }
+  if (c.assignedTo == null) {
+    return true
+  }
+  return c.assignedTo !== me
+})
+
+const assignMenuLabel = computed((): string => {
+  const c = menuConversation.value
+  if (!c) {
+    return 'Назначить на меня'
+  }
+  const me = props.currentUserId
+  if (me == null) {
+    return 'Назначить на меня'
+  }
+  if (c.assignedTo == null) {
+    return 'Назначить на меня'
+  }
+  if (c.assignedTo === me) {
+    return 'Назначить на меня'
+  }
+  const name = c.assignee?.name?.trim() ?? ''
+  return name !== '' ? `Забрать себе (у ${name})` : 'Забрать себе'
+})
+
+function isMenuChatMuted(): boolean {
+  const row = menuConversation.value
   return isMutedUntilActive(row?.muted_until)
 }
 
@@ -119,9 +178,27 @@ function pickClose(): void {
   if (id == null) {
     return
   }
-  emit('close-chat', id)
+  const c = menuConversation.value
+  if (c && (c.status ?? 'open') === 'closed') {
+    emit('reopen-chat', id)
+  } else {
+    emit('close-chat', id)
+  }
   closeMenu()
 }
+
+const closeOrReopenMenuLabel = computed((): string => {
+  const c = menuConversation.value
+  if (c && (c.status ?? 'open') === 'closed') {
+    return 'Вернуть в работу'
+  }
+  return 'Закрыть чат'
+})
+
+const isMenuChatClosed = computed((): boolean => {
+  const c = menuConversation.value
+  return c != null && (c.status ?? 'open') === 'closed'
+})
 
 /** Базовый паттерн счетчика: фикс. высота + min-width + padding, единая типографика для всех чисел. */
 function unreadBadgeClass(count: number): string {
@@ -213,22 +290,33 @@ function unreadBadgeClass(count: number): string {
             v-model="searchQuery"
             type="text"
             placeholder="Поиск по имени или теме..."
-            class="w-full rounded-[var(--radius-md)] border py-2 pl-9 pr-2.5 text-[13px] outline-none transition"
+            class="h-10 w-full rounded-[var(--radius-md)] border py-2 pl-9 pr-2.5 text-[13px] leading-normal outline-none transition"
             style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
           >
         </div>
-        <select
-          v-model="statusSelect"
-          class="min-w-[100px] cursor-pointer rounded-[var(--radius-md)] border px-2.5 py-2 text-xs outline-none"
-          style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-        >
-          <option value="open">
-            Открытые
-          </option>
-          <option value="closed">
-            Закрытые
-          </option>
-        </select>
+        <div class="relative isolate shrink-0">
+          <select
+            v-model="statusSelect"
+            class="h-10 min-w-[124px] cursor-pointer appearance-none rounded-[var(--radius-md)] border py-0 pl-2.5 pr-8 text-[13px] leading-normal outline-none transition"
+            style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
+            aria-label="Фильтр по статусу обращения"
+          >
+            <option value="open">
+              Открытые
+            </option>
+            <option value="closed">
+              Закрытые
+            </option>
+            <option value="all">
+              Все
+            </option>
+          </select>
+          <ChevronDown
+            class="pointer-events-none absolute right-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2"
+            style="color: var(--text-muted)"
+            aria-hidden="true"
+          />
+        </div>
       </div>
     </div>
 
@@ -261,7 +349,10 @@ function unreadBadgeClass(count: number): string {
         v-for="chat in conversations"
         :key="chat.id"
         class="group chat-item-m flex cursor-pointer gap-3 rounded-[var(--radius-md)] border border-transparent px-2.5 py-3 transition-colors"
-        :class="chat.id === selectedChatId ? 'chat-item-active' : ''"
+        :class="[
+          chat.id === selectedChatId ? 'chat-item-active' : '',
+          (chat.status ?? 'open') === 'closed' ? 'chat-item-closed' : '',
+        ]"
         :data-unread="(chat.unreadCount ?? 0) > 0 ? '1' : '0'"
         @click="emit('select-chat', chat.id)"
         @contextmenu="openMenuAt(chat.id, $event)"
@@ -276,13 +367,33 @@ function unreadBadgeClass(count: number): string {
             style="border-color: var(--bg-inbox)"
             :class="sourceBadgeClass(chat.channel)"
           >
-            <Send v-if="chat.channel === 'telegram'" class="h-2 w-2" />
+            <Send v-if="chat.channel === 'telegram' || chat.channel === 'tg'" class="h-2 w-2" />
             <MessageCircleMore v-else class="h-2 w-2" />
           </div>
         </div>
         <div class="min-w-0 flex-1">
-          <div class="mb-0.5 flex items-center justify-between gap-2">
-            <span class="truncate text-[13.5px] font-semibold" style="color: var(--text-primary)">{{ chat.name }}</span>
+          <div class="mb-0.5 flex min-w-0 items-center justify-between gap-2">
+            <div class="flex min-w-0 flex-1 items-center gap-1.5">
+              <span
+                class="inline-flex shrink-0"
+                :title="(chat.status ?? 'open') === 'open' ? 'Чат открыт' : 'Чат закрыт'"
+                :aria-label="(chat.status ?? 'open') === 'open' ? 'Чат открыт' : 'Чат закрыт'"
+              >
+                <MessageCircle
+                  v-if="(chat.status ?? 'open') === 'open'"
+                  class="h-3.5 w-3.5 shrink-0"
+                  style="color: var(--status-open)"
+                  aria-hidden="true"
+                />
+                <Archive
+                  v-else
+                  class="h-3.5 w-3.5 shrink-0"
+                  style="color: var(--status-closed)"
+                  aria-hidden="true"
+                />
+              </span>
+              <span class="truncate text-[13.5px] font-semibold" style="color: var(--text-primary)">{{ chat.name }}</span>
+            </div>
             <div class="flex shrink-0 items-center gap-2">
               <span
                 v-if="(chat.unreadCount ?? 0) > 0"
@@ -299,35 +410,26 @@ function unreadBadgeClass(count: number): string {
           <p class="truncate text-[12.5px] leading-snug" style="color: var(--text-secondary)">
             {{ chat.message }}
           </p>
-          <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span
-              class="rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
-              :style="(chat.status ?? 'open') === 'open'
-                ? { background: 'rgba(34,197,94,0.1)', color: '#16a34a' }
-                : { background: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)' }"
-            >
-              {{ (chat.status ?? 'open') === 'open' ? 'Открыт' : 'Закрыт' }}
-            </span>
+          <div class="mt-1.5 flex w-full min-w-0 flex-wrap items-center gap-1.5">
             <span
               v-if="chat.department"
-              class="inline-flex max-w-[140px] items-center gap-0.5 truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
-              style="background: var(--color-brand-50); color: var(--color-brand-200)"
+              class="inbox-meta-chip inbox-meta-chip-dept inline-flex min-h-[1.25rem] min-w-0 max-w-full flex-1 basis-[min(100%,12rem)] items-center gap-0.5"
               :title="`Отдел: ${chat.department}`"
             >
-              <component :is="resolveDepartmentIcon(chat.departmentIcon)" class="h-3 w-3 shrink-0" />
-              {{ chat.department }}
+              <component :is="resolveDepartmentIcon(chat.departmentIcon)" class="h-3 w-3 shrink-0 opacity-90" />
+              <span class="min-w-0 flex-1 truncate">{{ chat.department }}</span>
             </span>
             <span
               v-if="chat.topic"
-              class="max-w-[120px] truncate rounded-full px-1.5 py-px text-[10px] font-semibold"
-              style="background: rgba(85, 23, 94, 0.08); color: var(--color-brand-200)"
+              class="inbox-meta-chip inbox-meta-chip-topic inline-flex min-h-[1.25rem] min-w-0 max-w-full flex-1 basis-[min(100%,12rem)] items-center gap-0.5"
               :title="`Тема (AI): ${chat.topic}`"
             >
-              {{ chat.topic }}
+              <Sparkles class="h-3 w-3 shrink-0 opacity-90" aria-hidden="true" />
+              <span class="min-w-0 flex-1 truncate">{{ chat.topic }}</span>
             </span>
             <span
               v-if="isMutedUntilActive(chat.muted_until)"
-              class="rounded-full px-1.5 py-px text-[10px] font-semibold"
+              class="inline-flex shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold"
               style="background: rgba(148,163,184,0.2); color: var(--text-muted)"
             >
               Без звука
@@ -355,50 +457,61 @@ function unreadBadgeClass(count: number): string {
         @click.stop
       >
         <button
+          v-if="showAssignMenuItem"
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full text-left"
           @click="pickAssign"
         >
-          Назначить на меня
+          <UserPlus class="h-4 w-4 shrink-0" />
+          {{ assignMenuLabel }}
         </button>
         <button
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full"
+          :class="isMenuChatClosed
+            ? '!text-emerald-600 hover:!bg-emerald-500/10 [&_svg]:!text-emerald-600'
+            : '!text-red-500 hover:!bg-red-500/10 [&_svg]:!text-red-500'"
           @click="pickClose"
         >
-          Закрыть чат
+          <CircleCheck v-if="!isMenuChatClosed" class="h-4 w-4 shrink-0" />
+          <RotateCcw v-else class="h-4 w-4 shrink-0" />
+          {{ closeOrReopenMenuLabel }}
         </button>
         <div class="my-1 h-px" style="background: var(--border-light)" />
         <button
           v-if="!isMenuChatMuted()"
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full text-left"
           @click="pickMute('1h')"
         >
+          <Clock class="h-4 w-4 shrink-0" />
           Без звука: 1 час
         </button>
         <button
           v-if="!isMenuChatMuted()"
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full text-left"
           @click="pickMute('8h')"
         >
+          <Clock class="h-4 w-4 shrink-0" />
           Без звука: 8 часов
         </button>
         <button
           v-if="!isMenuChatMuted()"
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full text-left"
           @click="pickMute('forever')"
         >
+          <Infinity class="h-4 w-4 shrink-0" />
           Без звука: навсегда
         </button>
         <button
           v-if="isMenuChatMuted()"
           type="button"
-          class="flex w-full px-3 py-2 text-left text-[13px] transition hover:bg-[var(--bg-card-hover)]"
+          class="dropdown-item w-full text-left"
           @click="pickMute('unmute')"
         >
+          <Volume2 class="h-4 w-4 shrink-0" />
           Включить звук уведомлений
         </button>
       </div>
@@ -410,6 +523,15 @@ function unreadBadgeClass(count: number): string {
 .chat-item-m:hover {
   background: var(--bg-card-hover);
 }
+
+.chat-item-closed {
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--bg-inbox));
+}
+
+.chat-item-closed.chat-item-m:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, var(--bg-card-hover));
+}
+
 .chat-item-active {
   background: var(--color-brand-50);
   border-color: rgba(85, 23, 94, 0.1) !important;
@@ -418,6 +540,54 @@ function unreadBadgeClass(count: number): string {
   background: rgba(154, 95, 168, 0.1);
   border-color: rgba(154, 95, 168, 0.15) !important;
 }
+
+.chat-item-closed.chat-item-active {
+  background: color-mix(in srgb, var(--color-brand-200) 16%, var(--bg-inbox));
+  border-color: rgba(85, 23, 94, 0.12) !important;
+}
+[data-theme="dark"] .chat-item-closed.chat-item-active {
+  background: rgba(154, 95, 168, 0.14);
+  border-color: rgba(154, 95, 168, 0.2) !important;
+}
+
+[data-theme="dark"] .chat-item-closed {
+  background: color-mix(in srgb, #000000 28%, var(--bg-inbox));
+}
+[data-theme="dark"] .chat-item-closed.chat-item-m:hover {
+  background: color-mix(in srgb, #000000 18%, var(--bg-card-hover));
+}
+
+.inbox-meta-chip {
+  padding: 0.125rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  border: 1px solid transparent;
+}
+
+.inbox-meta-chip-dept {
+  color: var(--color-brand-200);
+  background: color-mix(in srgb, var(--color-brand-200) 12%, var(--bg-inbox));
+  border-color: color-mix(in srgb, var(--color-brand-200) 38%, var(--border-light));
+}
+
+.inbox-meta-chip-topic {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--color-brand-200) 8%, var(--bg-inbox));
+  border-color: color-mix(in srgb, var(--color-brand-200) 28%, var(--border-light));
+}
+
+[data-theme="dark"] .inbox-meta-chip-dept {
+  background: color-mix(in srgb, var(--color-brand-200) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand-200) 42%, var(--border-light));
+}
+
+[data-theme="dark"] .inbox-meta-chip-topic {
+  background: color-mix(in srgb, var(--color-brand-200) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand-200) 30%, var(--border-light));
+}
+
 [data-unread="1"] .font-semibold {
   font-weight: 700;
 }

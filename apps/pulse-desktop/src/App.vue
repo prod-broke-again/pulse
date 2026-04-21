@@ -637,6 +637,7 @@ async function onAiInsertComposerText(text: string): Promise<void> {
       <template v-if="activeView === 'chats'">
         <InboxPanel
           :conversations="conversations"
+          :current-user-id="authStore.user?.id ?? null"
           :active-tab="chatStore.activeTab ?? 'my'"
           :tab-counts="chatStore.tabCounts"
           :is-loading="chatStore.isLoading"
@@ -648,6 +649,7 @@ async function onAiInsertComposerText(text: string): Promise<void> {
           @change-status="(s) => chatStore.setFilters({ status: s })"
           @assign-me="assignToMe"
           @close-chat="closeChatFromList"
+          @reopen-chat="assignToMe"
           @mute-chat="onMuteChatFromList"
         />
 
@@ -673,6 +675,7 @@ async function onAiInsertComposerText(text: string): Promise<void> {
               :sync-history-loading="syncHistoryLoading"
               @assign-me="assignToMe"
               @close-chat="closeChatAction"
+              @reopen-chat="assignToMe"
               @change-department="onChangeDepartment"
               @sync-history="onSyncHistory"
               @select-messages-for-copy="() => chatMessagesRef?.enterSelectionMode()"
