@@ -124,7 +124,30 @@ watch(
   { immediate: true, deep: true },
 )
 
+const hasElectronWindowPrefs = typeof window !== 'undefined' && Boolean(window.pulseWindowSettings)
+const closeButtonBehavior = ref<'ask' | 'quit' | 'hide-to-tray'>('ask')
+const closePrefsReady = ref(!hasElectronWindowPrefs)
+
+async function persistCloseButtonBehavior(): Promise<void> {
+  try {
+    await window.pulseWindowSettings?.setPrefs({ closeButtonBehavior: closeButtonBehavior.value })
+  } catch {
+    /* ignore */
+  }
+}
+
 onMounted(async () => {
+  if (window.pulseWindowSettings) {
+    try {
+      const p = await window.pulseWindowSettings.getPrefs()
+      closeButtonBehavior.value = p.closeButtonBehavior
+    } catch {
+      /* ignore */
+    } finally {
+      closePrefsReady.value = true
+    }
+  }
+
   if (!user.value || !isStaff.value) {
     return
   }
@@ -356,6 +379,41 @@ function clearCustomSound(): void {
           </button>
         </div>
 
+        <div v-if="hasElectronWindowPrefs" class="rounded-[var(--radius-md)] border p-5" style="border-color: var(--border-light); background: var(--bg-inbox)">
+          <h4 class="font-bold" style="color: var(--text-primary)">
+            Кнопка «Закрыть» в окне
+          </h4>
+          <p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary)">
+            Только на этом компьютере. В фоне приложение остаётся в трее и получает чаты по сети.
+          </p>
+          <fieldset v-if="closePrefsReady" class="mt-4 space-y-3">
+            <label class="flex cursor-pointer items-start gap-3 text-sm" style="color: var(--text-primary)">
+              <input v-model="closeButtonBehavior" class="mt-1" type="radio" value="ask" @change="persistCloseButtonBehavior">
+              <span>
+                <span class="font-medium">Спрашивать каждый раз</span>
+                <span class="mt-0.5 block text-xs" style="color: var(--text-muted)">Показать выбор: в фоне или полный выход</span>
+              </span>
+            </label>
+            <label class="flex cursor-pointer items-start gap-3 text-sm" style="color: var(--text-primary)">
+              <input v-model="closeButtonBehavior" class="mt-1" type="radio" value="hide-to-tray" @change="persistCloseButtonBehavior">
+              <span>
+                <span class="font-medium">Сворачивать в трей</span>
+                <span class="mt-0.5 block text-xs" style="color: var(--text-muted)">Окно скрывается, иконка остаётся возле часов</span>
+              </span>
+            </label>
+            <label class="flex cursor-pointer items-start gap-3 text-sm" style="color: var(--text-primary)">
+              <input v-model="closeButtonBehavior" class="mt-1" type="radio" value="quit" @change="persistCloseButtonBehavior">
+              <span>
+                <span class="font-medium">Полностью закрывать приложение</span>
+                <span class="mt-0.5 block text-xs" style="color: var(--text-muted)">Завершить процесс, как «Выйти» в трее</span>
+              </span>
+            </label>
+          </fieldset>
+          <p v-else class="mt-3 text-xs" style="color: var(--text-muted)">
+            Загрузка…
+          </p>
+        </div>
+
         <div v-if="!isStaff" class="flex items-center justify-between">
           <div>
             <h4 class="font-bold" style="color: var(--text-primary)">
@@ -504,7 +562,7 @@ function clearCustomSound(): void {
       </div>
 
       <p class="text-xs" style="color: var(--text-secondary)">
-        Тема сохраняется на этом устройстве. Настройки звука модератора — в аккаунте на сервере.
+        Тема и поведение кнопки «Закрыть» сохраняются на этом устройстве. Настройки звука модератора — в аккаунте на сервере.
       </p>
 
       <div class="flex items-center gap-4 pt-6">

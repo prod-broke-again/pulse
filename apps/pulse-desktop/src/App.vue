@@ -225,6 +225,13 @@ async function toggleSoundFromHeader(): Promise<void> {
 }
 
 onMounted(async () => {
+  if (window.pulseWindowSettings?.onCloseRequested) {
+    detachCloseRequestedListener = window.pulseWindowSettings.onCloseRequested(() => {
+      closeChoiceRemember.value = false
+      closeChoiceDialogOpen.value = true
+    })
+  }
+
   window.addEventListener('online', onBrowserOnline)
   window.addEventListener('offline', onBrowserOffline)
   isDark.value = localStorage.getItem('app-theme-dark') === '1'
@@ -273,6 +280,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  detachCloseRequestedListener?.()
+  detachCloseRequestedListener = null
   window.removeEventListener('online', onBrowserOnline)
   window.removeEventListener('offline', onBrowserOffline)
   detachWindowListener?.()
@@ -309,7 +318,24 @@ async function toggleMaximizeWindow(): Promise<void> {
 }
 
 async function closeWindow(): Promise<void> {
-  await window.appWindow?.close()
+  await window.appWindow?.requestClose()
+}
+
+const closeChoiceDialogOpen = ref(false)
+const closeChoiceRemember = ref(false)
+let detachCloseRequestedListener: (() => void) | null = null
+
+async function confirmCloseDialog(action: 'quit' | 'hide-to-tray' | 'cancel'): Promise<void> {
+  if (action === 'cancel') {
+    closeChoiceDialogOpen.value = false
+    return
+  }
+  closeChoiceDialogOpen.value = false
+  await window.pulseWindowSettings?.confirmClose({
+    action,
+    remember: closeChoiceRemember.value,
+  })
+  closeChoiceRemember.value = false
 }
 
 const syncHistoryLoading = ref(false)
@@ -693,5 +719,70 @@ async function onAiInsertComposerText(text: string): Promise<void> {
     >
       {{ toastMessage }}
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="closeChoiceDialogOpen && isElectron"
+        class="fixed inset-0 z-[300] flex items-center justify-center px-4 py-8"
+        style="background: rgba(15, 10, 25, 0.55); backdrop-filter: blur(4px)"
+        role="presentation"
+        @click.self="confirmCloseDialog('cancel')"
+      >
+        <div
+          class="no-drag-region w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+          style="background: var(--bg-thread); border-color: var(--border-light)"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pulse-close-choice-title"
+          @click.stop
+        >
+          <h2 id="pulse-close-choice-title" class="text-lg font-bold leading-snug" style="color: var(--text-primary)">
+            Закрыть окно?
+          </h2>
+          <p class="mt-3 text-sm leading-relaxed" style="color: var(--text-secondary)">
+            Pulse может продолжить работу в фоне: обращения и уведомления будут приходить, пока вы не выйдете через иконку в
+            области уведомлений (трей). Полный выход завершит приложение.
+          </p>
+          <label class="mt-4 flex cursor-pointer items-start gap-2.5 text-sm" style="color: var(--text-primary)">
+            <input
+              v-model="closeChoiceRemember"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border"
+              style="border-color: var(--border-light); accent-color: var(--color-brand)"
+            >
+            <span>Запомнить выбор и не показывать это окно снова</span>
+          </label>
+          <p class="mt-2 text-xs leading-relaxed" style="color: var(--text-muted)">
+            Позже это можно изменить в разделе «Настройки».
+          </p>
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition hover:opacity-90"
+              style="border: 1px solid var(--border-light); color: var(--text-primary); background: transparent"
+              @click="confirmCloseDialog('cancel')"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              class="rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition hover:opacity-90"
+              style="border: 1px solid var(--border-light); color: var(--text-primary); background: var(--bg-inbox)"
+              @click="confirmCloseDialog('hide-to-tray')"
+            >
+              Оставить в фоне
+            </button>
+            <button
+              type="button"
+              class="rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+              style="background: var(--color-brand)"
+              @click="confirmCloseDialog('quit')"
+            >
+              Выйти из приложения
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

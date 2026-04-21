@@ -1,9 +1,11 @@
 /// <reference types="vite/client" />
 
+type CloseButtonBehavior = 'ask' | 'quit' | 'hide-to-tray'
+
 interface AppWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
-  close: () => Promise<void>
+  requestClose: () => Promise<void>
   isMaximized: () => Promise<boolean>
   isDevtoolsOpened: () => Promise<boolean>
   isFocused: () => Promise<boolean>
@@ -11,9 +13,17 @@ interface AppWindowApi {
   onDevtoolsVisibilityChanged: (callback: (payload: { isOpen: boolean }) => void) => () => void
 }
 
+interface PulseWindowSettingsApi {
+  getPrefs: () => Promise<{ closeButtonBehavior: CloseButtonBehavior }>
+  setPrefs: (p: { closeButtonBehavior: CloseButtonBehavior }) => Promise<void>
+  onCloseRequested: (cb: () => void) => () => void
+  confirmClose: (opts: { action: 'quit' | 'hide-to-tray'; remember: boolean }) => Promise<void>
+}
+
 declare global {
   interface Window {
     appWindow?: AppWindowApi
+    pulseWindowSettings?: PulseWindowSettingsApi
     electronOAuth?: {
       onCallback: (listener: (url: string) => void) => () => void
     }

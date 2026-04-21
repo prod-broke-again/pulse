@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -12,6 +12,11 @@ import {
   outboxRemove,
   setMessageCacheJson,
 } from './localDb'
+import {
+  loadWindowPreferences,
+  saveWindowPreferences,
+  type CloseButtonBehavior,
+} from './windowPreferences'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -72,8 +77,80 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null
+let tray: Tray | null = null
+/** True when user chose «Выйти» / из меню трея — иначе закрытие окна сворачивает в трей. */
+let isAppQuitting = false
+
+let closeButtonBehavior: CloseButtonBehavior = 'ask'
+
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+
+function trayIcon(): Electron.NativeImage {
+  const iconPath = path.join(process.env.VITE_PUBLIC ?? '', 'logo.png')
+  let image = nativeImage.createFromPath(iconPath)
+  if (!image.isEmpty() && process.platform === 'win32') {
+    image = image.resize({ width: 16, height: 16 })
+  }
+  return image
+}
+
+function ensureTray(): void {
+  if (tray) {
+    return
+  }
+  const image = trayIcon()
+  if (image.isEmpty()) {
+    return
+  }
+  tray = new Tray(image)
+  tray.setToolTip('Pulse — АЧПП')
+  const show = (): void => {
+    if (win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+    }
+  }
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Открыть Pulse', click: show },
+      { type: 'separator' },
+      {
+        label: 'Выйти полностью',
+        click: (): void => {
+          isAppQuitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
+  tray.on('click', show)
+}
+
+function destroyTray(): void {
+  tray?.destroy()
+  tray = null
+}
+
+function attachWindowCloseHandler(browser: BrowserWindow): void {
+  browser.on('close', (e) => {
+    if (isAppQuitting) {
+      return
+    }
+    e.preventDefault()
+    if (closeButtonBehavior === 'quit') {
+      isAppQuitting = true
+      app.quit()
+      return
+    }
+    if (closeButtonBehavior === 'hide-to-tray') {
+      browser.hide()
+      ensureTray()
+      return
+    }
+    browser.webContents.send('app:close-requested')
+  })
+}
 
 function dispatchOAuthUrlToRenderer(url: string): void {
   if (!url.startsWith(`${OAUTH_PROTOCOL}:`)) {
@@ -144,6 +221,7 @@ async function createWindow() {
     if (url.startsWith('https:')) shell.openExternal(url)
     return { action: 'deny' }
   })
+  attachWindowCloseHandler(win)
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
 
@@ -152,6 +230,50 @@ if (process.platform === 'darwin') {
     event.preventDefault()
     dispatchOAuthUrlToRenderer(url)
   })
+}
+
+function registerWindowManagementIpc(): void {
+  ipcMain.handle('windowPrefs:get', (): { closeButtonBehavior: CloseButtonBehavior } => ({
+    closeButtonBehavior,
+  }))
+  ipcMain.handle('windowPrefs:set', (_, p: { closeButtonBehavior: CloseButtonBehavior }) => {
+    if (
+      p.closeButtonBehavior !== 'ask'
+      && p.closeButtonBehavior !== 'quit'
+      && p.closeButtonBehavior !== 'hide-to-tray'
+    ) {
+      return
+    }
+    closeButtonBehavior = p.closeButtonBehavior
+    saveWindowPreferences({ closeButtonBehavior: p.closeButtonBehavior })
+  })
+  /** Крестик в заголовке: инициирует обработку «спросить / трей / выход». */
+  ipcMain.handle('window:request-user-close', () => {
+    win?.close()
+  })
+  ipcMain.handle(
+    'window:confirm-close',
+    (
+      _,
+      opts: {
+        action: 'quit' | 'hide-to-tray'
+        remember: boolean
+      },
+    ) => {
+      if (opts.remember) {
+        const next: CloseButtonBehavior = opts.action === 'quit' ? 'quit' : 'hide-to-tray'
+        closeButtonBehavior = next
+        saveWindowPreferences({ closeButtonBehavior: next })
+      }
+      if (opts.action === 'quit') {
+        isAppQuitting = true
+        app.quit()
+      } else {
+        win?.hide()
+        ensureTray()
+      }
+    },
+  )
 }
 
 function registerLocalStoreIpc(): void {
@@ -172,12 +294,15 @@ function registerLocalStoreIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  closeButtonBehavior = loadWindowPreferences().closeButtonBehavior
   await initLocalDb()
+  registerWindowManagementIpc()
   registerLocalStoreIpc()
   await createWindow()
 })
 
 app.on('before-quit', () => {
+  destroyTray()
   closeLocalDb()
 })
 
@@ -192,6 +317,9 @@ app.on('second-instance', (_event, commandLine) => {
     dispatchOAuthUrlToRenderer(url)
   }
   if (win) {
+    if (!win.isVisible()) {
+      win.show()
+    }
     if (win.isMinimized()) {
       win.restore()
     }
@@ -202,7 +330,11 @@ app.on('second-instance', (_event, commandLine) => {
 app.on('activate', () => {
   const allWindows = BrowserWindow.getAllWindows()
   if (allWindows.length) {
-    allWindows[0].focus()
+    const w = allWindows[0]!
+    if (!w.isDestroyed() && !w.isVisible()) {
+      w.show()
+    }
+    w.focus()
   } else {
     createWindow()
   }
@@ -241,9 +373,6 @@ ipcMain.handle('window:toggle-maximize', () => {
   return true
 })
 
-ipcMain.handle('window:close', () => {
-  win?.close()
-})
 
 ipcMain.handle('window:is-maximized', () => {
   return win?.isMaximized() ?? false

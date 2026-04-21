@@ -26,7 +26,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 contextBridge.exposeInMainWorld('appWindow', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize') as Promise<boolean>,
-  close: () => ipcRenderer.invoke('window:close'),
+  /** Крестик: учитывает настройку «выход / трей / спросить». */
+  requestClose: () => ipcRenderer.invoke('window:request-user-close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized') as Promise<boolean>,
   isDevtoolsOpened: () => ipcRenderer.invoke('window:is-devtools-opened') as Promise<boolean>,
   isFocused: () => ipcRenderer.invoke('window:is-focused') as Promise<boolean>,
@@ -40,6 +41,22 @@ contextBridge.exposeInMainWorld('appWindow', {
     ipcRenderer.on('window-devtools-visibility-changed', listener)
     return () => ipcRenderer.removeListener('window-devtools-visibility-changed', listener)
   },
+})
+
+contextBridge.exposeInMainWorld('pulseWindowSettings', {
+  getPrefs: () =>
+    ipcRenderer.invoke('windowPrefs:get') as Promise<{ closeButtonBehavior: 'ask' | 'quit' | 'hide-to-tray' }>,
+  setPrefs: (p: { closeButtonBehavior: 'ask' | 'quit' | 'hide-to-tray' }) =>
+    ipcRenderer.invoke('windowPrefs:set', p) as Promise<void>,
+  onCloseRequested: (cb: () => void) => {
+    const handler = (): void => {
+      cb()
+    }
+    ipcRenderer.on('app:close-requested', handler)
+    return () => ipcRenderer.removeListener('app:close-requested', handler)
+  },
+  confirmClose: (opts: { action: 'quit' | 'hide-to-tray'; remember: boolean }) =>
+    ipcRenderer.invoke('window:confirm-close', opts) as Promise<void>,
 })
 
 contextBridge.exposeInMainWorld('electronShell', {
