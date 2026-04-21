@@ -224,7 +224,7 @@ function unreadBadgeClass(count: number): string {
       <div class="mb-3.5 flex items-center justify-between">
         <span class="text-lg font-bold" style="color: var(--text-primary)">Обращения</span>
         <span
-          class="rounded-full px-2 py-0.5 text-xs font-semibold"
+          class="inbox-total-badge rounded-full px-2 py-0.5 text-xs font-semibold"
           style="color: var(--color-brand-200); background: var(--color-brand-50)"
         >
           {{ chatStore.pagination.total }}
@@ -558,6 +558,11 @@ function unreadBadgeClass(count: number): string {
 }
 
 [data-theme="dark"] .tab-count-badge {
+  background: color-mix(in srgb, var(--color-brand-200) 28%, transparent) !important;
+  color: #d6b7f5 !important;
+}
+
+[data-theme="dark"] .inbox-total-badge {
   background: color-mix(in srgb, var(--color-brand-200) 28%, transparent) !important;
   color: #d6b7f5 !important;
 }

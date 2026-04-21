@@ -7,13 +7,10 @@
 			"path": "../id"
 		},
 		{
-			"path": "../a4pp-1"
+			"path": "../../../Projects/aquila-launcher"
 		},
 		{
-			"path": "../psy"
-		},
-		{
-			"path": "../docs"
+			"path": "../../../Projects/smart-commit"
 		}
 	],
 	"settings": {}
