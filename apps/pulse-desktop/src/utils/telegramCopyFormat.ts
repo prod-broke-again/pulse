@@ -83,7 +83,7 @@ export function formatMessagesTelegramStyle(
       m.from === 'client'
         ? peerName
         : m.delivery_channel === 'telegram_app'
-          ? 'Telegram'
+          ? 'Отправлено из Telegram'
           : moderatorName
     const prefix = formatRuDateTimeBracket(m.createdAtIso)
     const body = messageBodyLine(m)

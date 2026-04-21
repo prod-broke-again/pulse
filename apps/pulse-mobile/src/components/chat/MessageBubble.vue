@@ -126,6 +126,12 @@ const hasMedia = computed(
       </span>
     </template>
     <template v-else>
+      <p
+        v-if="message.deliveryChannel === 'telegram_app'"
+        class="mb-1 self-end text-[10px] font-medium text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+      >
+        Отправлено из Telegram
+      </p>
       <button
         v-if="canReply"
         type="button"

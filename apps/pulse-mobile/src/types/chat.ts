@@ -68,6 +68,8 @@ export interface ChatMessage {
   isRead?: boolean
   /** Optimistic send correlation */
   clientMessageId?: string
+  /** From message payload (e.g. business owner wrote from Telegram app). */
+  deliveryChannel?: string
 }
 
 /** Body for POST /chats/{id}/send */

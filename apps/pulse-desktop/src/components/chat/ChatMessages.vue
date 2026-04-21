@@ -73,7 +73,7 @@ function moderatorLabel(): string {
 
 function moderatorBubbleLabel(item: MessageItem): string {
   if (item.from === 'moderator' && item.delivery_channel === 'telegram_app') {
-    return 'Telegram'
+    return 'Отправлено из Telegram'
   }
   return moderatorLabel()
 }

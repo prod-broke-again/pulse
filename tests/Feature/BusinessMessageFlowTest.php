@@ -249,7 +249,7 @@ final class BusinessMessageFlowTest extends TestCase
         $this->assertSame(0, ChatModel::query()->count());
     }
 
-    public function test_business_owner_outgoing_without_pulse_telegram_link_is_ignored(): void
+    public function test_business_owner_outgoing_without_pulse_telegram_link_is_ingested_as_telegram_app(): void
     {
         Log::spy();
         $source = $this->createTgSource([
@@ -265,6 +265,41 @@ final class BusinessMessageFlowTest extends TestCase
                 'from' => ['id' => 999001],
                 'chat' => ['id' => 555888, 'type' => 'private', 'first_name' => 'Client'],
                 'text' => 'Это мое исходящее сообщение из личного аккаунта',
+            ],
+        ]);
+
+        $chat = ChatModel::query()->first();
+        $this->assertNotNull($chat);
+        $this->assertSame('555888', $chat->external_user_id);
+
+        $msg = MessageModel::query()->where('chat_id', $chat->id)->first();
+        $this->assertNotNull($msg);
+        $this->assertSame('moderator', $msg->sender_type);
+        $this->assertNull($msg->sender_id);
+        $this->assertSame('Это мое исходящее сообщение из личного аккаунта', $msg->text);
+        $this->assertSame('telegram_app', $msg->payload['delivery_channel'] ?? null);
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(fn (string $m, array $ctx): bool => $m === 'business owner outgoing ingested as telegram_app'
+                && ($ctx['source_id'] ?? null) === $source->id
+                && ($ctx['chat_id'] ?? null) === $chat->id);
+    }
+
+    public function test_business_owner_outgoing_without_private_peer_is_still_ignored(): void
+    {
+        Log::spy();
+        $source = $this->createTgSource([
+            'telegram_mode' => 'business',
+            'business_connection_user_id' => '999001',
+        ]);
+        $messenger = $this->mockMessenger();
+
+        app(ProcessInboundWebhook::class)->run($source->id, $messenger, [
+            'business_message' => [
+                'message_id' => 322,
+                'business_connection_id' => 'bc-1',
+                'from' => ['id' => 999001],
+                'text' => 'no chat block',
             ],
         ]);
 

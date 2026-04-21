@@ -126,6 +126,11 @@ export function mapRealtimePayloadToChatMessage(p: NewChatMessagePayload): ChatM
 
   const mediaAttachments = mapRealtimeAttachmentsToMediaItems(p.attachments)
   const pendingSlots = normalizePendingSlots(p.pending_attachments)
+  const deliveryChannelRaw = p.delivery_channel
+  const deliveryChannel =
+    typeof deliveryChannelRaw === 'string' && deliveryChannelRaw !== ''
+      ? deliveryChannelRaw
+      : undefined
 
   return {
     id: String(p.messageId),
@@ -137,6 +142,7 @@ export function mapRealtimePayloadToChatMessage(p: NewChatMessagePayload): ChatM
     ...(pendingSlots ? { pendingMediaSlots: pendingSlots } : {}),
     ...(p.reply_to ? { reply_to: p.reply_to } : {}),
     ...(kind === 'incoming' ? { isRead: false } : {}),
+    ...(deliveryChannel ? { deliveryChannel } : {}),
   }
 }
 
@@ -151,6 +157,9 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
   const text = row.text ?? ''
 
   const replyMarkup = normalizeReplyMarkup(row.reply_markup)
+  const dchRaw = row.payload?.delivery_channel
+  const deliveryChannel =
+    typeof dchRaw === 'string' && dchRaw !== '' ? dchRaw : undefined
 
   return {
     id: String(row.id),
@@ -163,6 +172,7 @@ export function mapApiMessageToChatMessage(row: ApiMessageRow): ChatMessage {
     ...(row.reply_to ? { reply_to: row.reply_to } : {}),
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     ...(kind === 'incoming' && row.is_read === true ? { isRead: true } : {}),
+    ...(deliveryChannel ? { deliveryChannel } : {}),
   }
 }
 

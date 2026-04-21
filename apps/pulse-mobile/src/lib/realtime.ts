@@ -20,6 +20,8 @@ export type NewChatMessagePayload = {
   reply_to?: { id: number; text: string; sender_type: string } | null
   source_id?: number | null
   is_new_chat?: boolean
+  /** e.g. telegram_app when business owner wrote from Telegram app */
+  delivery_channel?: string | null
 }
 
 export type ChatMessageUpdatedPayload = {

@@ -54,7 +54,12 @@ export function formatChatMessagesTelegramStyle(
   for (const m of timeline) {
     if (m.kind === 'system') continue
     if (!selectedIds.has(String(m.id))) continue
-    const who = m.kind === 'outgoing' ? moderatorName : peerName
+    const who =
+      m.kind === 'outgoing' && m.deliveryChannel === 'telegram_app'
+        ? 'Отправлено из Telegram'
+        : m.kind === 'outgoing'
+          ? moderatorName
+          : peerName
     lines.push(`${formatRuDateTimeBracket(m.createdAtIso)} ${who}: ${bodyLine(m)}`)
   }
   return lines.join('\n')

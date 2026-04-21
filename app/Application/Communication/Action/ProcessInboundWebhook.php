@@ -93,6 +93,10 @@ final readonly class ProcessInboundWebhook
                     return;
                 }
 
+                if ($this->tryIngestBusinessOwnerOutgoingAsTelegramApp($sourceId, $source->settings, $payload, $messenger)) {
+                    return;
+                }
+
                 Log::info('business owner outgoing message ignored', ['source_id' => $sourceId]);
 
                 return;
@@ -415,6 +419,104 @@ final readonly class ProcessInboundWebhook
         $this->dispatchAttachmentDownloads($attachments, $message->id);
 
         ChatModel::query()->whereKey($chat->id)->update(['last_auto_reply_at' => now()]);
+
+        return true;
+    }
+
+    /**
+     * When the business owner writes from the Telegram app but Pulse cannot match a linked moderator
+     * ({@see SocialAccount}), still persist the line in the client chat so operators see it — clients show
+     * the "Telegram" label when {@code delivery_channel} is {@code telegram_app}.
+     */
+    private function tryIngestBusinessOwnerOutgoingAsTelegramApp(
+        int $sourceId,
+        array $settings,
+        array $payload,
+        MessengerProviderInterface $messenger,
+    ): bool {
+        $mediaGroupId = $this->webhookPayloadExtractor->extractTelegramMediaGroupId($payload);
+        if ($mediaGroupId !== null && $mediaGroupId !== '') {
+            Log::info('business owner outgoing media group skipped (not supported)', ['source_id' => $sourceId]);
+
+            return true;
+        }
+
+        $peerExternalUserId = $this->webhookPayloadExtractor->extractTelegramBusinessMessagePrivateChatPeerExternalUserId($payload);
+        if ($peerExternalUserId === null || $peerExternalUserId === '') {
+            return false;
+        }
+
+        $fromId = $this->businessMessageFromTelegramUserId($payload);
+        if ($fromId !== null && $fromId !== '' && $peerExternalUserId === $fromId) {
+            return false;
+        }
+
+        $departmentId = $this->webhookPayloadExtractor->extractDepartmentId($payload, $sourceId);
+        $attachments = $this->inboundAttachmentExtractor->extract($payload);
+        $text = $this->webhookPayloadExtractor->extractText($payload, $attachments);
+        $userMetadata = $this->webhookPayloadExtractor->extractTelegramBusinessMessageChatPeerUserMetadata($payload);
+        $userMetadata = $this->vkUserMetadataEnricher->enrich(
+            SourceType::Tg,
+            $settings,
+            $payload,
+            $userMetadata,
+        );
+        $userMetadata = $this->telegramUserMetadataEnricher->enrich(
+            SourceType::Tg,
+            $settings,
+            $payload,
+            $userMetadata,
+        );
+        $externalMessageId = $this->webhookPayloadExtractor->extractExternalMessageId($payload);
+        $businessConnectionId = $this->webhookPayloadExtractor->extractBusinessConnectionId($payload);
+
+        $chat = $this->inboundChatUpsert->resolve(
+            $sourceId,
+            $departmentId,
+            $peerExternalUserId,
+            $userMetadata,
+            $businessConnectionId,
+        );
+
+        $attachments = $this->resolveTelegramFileUrls($attachments, SourceType::Tg, $settings, $sourceId);
+
+        $replyToExternalId = $this->webhookPayloadExtractor->extractReplyToExternalMessageId($payload);
+        $replyToInternalId = null;
+        if ($replyToExternalId !== null && $replyToExternalId !== '') {
+            $replied = $this->messageRepository->findByChatAndExternalMessageId($chat->id, $replyToExternalId);
+            $replyToInternalId = $replied?->id;
+        }
+
+        if ($externalMessageId !== null && $externalMessageId !== ''
+            && $this->messageRepository->findByChatAndExternalMessageId($chat->id, $externalMessageId) !== null) {
+            return true;
+        }
+
+        if ($attachments !== []) {
+            $payload['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($attachments);
+        }
+
+        $messagePayload = $payload;
+        $messagePayload['delivery_channel'] = 'telegram_app';
+
+        $message = $this->createMessage->run(
+            chatId: $chat->id,
+            text: $text,
+            senderType: SenderType::Moderator,
+            senderId: null,
+            payload: $messagePayload,
+            externalMessageId: $externalMessageId,
+            replyToMessageId: $replyToInternalId,
+        );
+
+        $this->dispatchAttachmentDownloads($attachments, $message->id);
+
+        ChatModel::query()->whereKey($chat->id)->update(['last_auto_reply_at' => now()]);
+
+        Log::info('business owner outgoing ingested as telegram_app', [
+            'source_id' => $sourceId,
+            'chat_id' => $chat->id,
+        ]);
 
         return true;
     }
