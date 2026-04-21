@@ -25,8 +25,15 @@ trait MapsSourceConnectionSettings
         if (($data['type'] ?? '') !== 'vk') {
             $data['offline_auto_reply_enabled'] = (bool) ($settings['offline_auto_reply_enabled'] ?? false);
             $data['offline_auto_reply_text'] = (string) ($settings['offline_auto_reply_text'] ?? '');
+            $data['welcome_enabled'] = (bool) ($settings['welcome_enabled'] ?? false);
+            $data['welcome_text'] = (string) ($settings['welcome_text'] ?? '');
             $conn = $settings;
-            unset($conn['offline_auto_reply_enabled'], $conn['offline_auto_reply_text']);
+            unset(
+                $conn['offline_auto_reply_enabled'],
+                $conn['offline_auto_reply_text'],
+                $conn['welcome_enabled'],
+                $conn['welcome_text'],
+            );
             $data['connection_settings'] = $conn;
         }
 
@@ -44,7 +51,14 @@ trait MapsSourceConnectionSettings
             $data['settings'] = is_array($conn) ? $conn : [];
             $data['settings']['offline_auto_reply_enabled'] = (bool) ($data['offline_auto_reply_enabled'] ?? false);
             $data['settings']['offline_auto_reply_text'] = trim((string) ($data['offline_auto_reply_text'] ?? ''));
-            unset($data['offline_auto_reply_enabled'], $data['offline_auto_reply_text']);
+            $data['settings']['welcome_enabled'] = (bool) ($data['welcome_enabled'] ?? false);
+            $data['settings']['welcome_text'] = trim((string) ($data['welcome_text'] ?? ''));
+            unset(
+                $data['offline_auto_reply_enabled'],
+                $data['offline_auto_reply_text'],
+                $data['welcome_enabled'],
+                $data['welcome_text'],
+            );
         }
 
         unset($data['connection_settings']);

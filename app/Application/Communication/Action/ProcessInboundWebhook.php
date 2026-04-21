@@ -6,6 +6,7 @@ namespace App\Application\Communication\Action;
 
 use App\Application\Communication\Webhook\InboundAttachmentExtractor;
 use App\Application\Communication\Webhook\InboundChatUpsert;
+use App\Application\Communication\Webhook\StartCommandDetector;
 use App\Application\Communication\Webhook\TelegramMediaGroupInboundBuffer;
 use App\Application\Communication\Webhook\TelegramUserMetadataEnricher;
 use App\Application\Communication\Webhook\VkUserMetadataEnricher;
@@ -17,8 +18,10 @@ use App\Domains\Integration\Repository\SourceRepositoryInterface;
 use App\Domains\Integration\ValueObject\SourceType;
 use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
+use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Jobs\DownloadInboundAttachmentJob;
 use App\Services\MaybeSendOfflineAutoReply;
+use App\Services\SendWelcomeMessage;
 use App\Support\PendingInboundAttachments;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +36,8 @@ final readonly class ProcessInboundWebhook
         private VkUserMetadataEnricher $vkUserMetadataEnricher,
         private TelegramUserMetadataEnricher $telegramUserMetadataEnricher,
         private InboundChatUpsert $inboundChatUpsert,
+        private StartCommandDetector $startCommandDetector,
+        private SendWelcomeMessage $sendWelcomeMessage,
         private MessageRepositoryInterface $messageRepository,
         private TelegramMediaGroupInboundBuffer $telegramMediaGroupInboundBuffer,
     ) {}
@@ -53,6 +58,15 @@ final readonly class ProcessInboundWebhook
         }
 
         $externalUserId = $this->webhookPayloadExtractor->extractExternalUserId($payload);
+        if ($this->startCommandDetector->isStartCommand($source->type, $payload)) {
+            $sourceModel = SourceModel::query()->find($sourceId);
+            if ($sourceModel !== null) {
+                $this->sendWelcomeMessage->run($sourceModel, $externalUserId);
+            }
+
+            return;
+        }
+
         $departmentId = $this->webhookPayloadExtractor->extractDepartmentId($payload, $sourceId);
         $attachments = $this->inboundAttachmentExtractor->extract($payload);
         $text = $this->webhookPayloadExtractor->extractText($payload, $attachments);

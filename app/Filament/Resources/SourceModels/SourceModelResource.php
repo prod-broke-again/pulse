@@ -105,6 +105,16 @@ class SourceModelResource extends Resource
                     ->rows(3)
                     ->columnSpanFull()
                     ->nullable(),
+                Toggle::make('welcome_enabled')
+                    ->label('Приветственное сообщение на /start')
+                    ->helperText('Отправляется на /start у TG-ботов и «Начать» у VK. Чат в инбоксе не создаётся. Не чаще 1 раза в 5 минут на одного пользователя.')
+                    ->default(false),
+                Textarea::make('welcome_text')
+                    ->label('Текст приветствия')
+                    ->rows(4)
+                    ->maxLength(2000)
+                    ->columnSpanFull()
+                    ->nullable(),
             ])
                 ->statePath('settings')
                 ->visible(fn (callable $get): bool => $get('type') === 'vk')
@@ -142,6 +152,16 @@ class SourceModelResource extends Resource
                 Textarea::make('offline_auto_reply_text')
                     ->label('Текст автоответа (офлайн)')
                     ->rows(3)
+                    ->columnSpanFull()
+                    ->nullable(),
+                Toggle::make('welcome_enabled')
+                    ->label('Приветственное сообщение на /start')
+                    ->helperText('Отправляется на /start у TG-ботов и «Начать» у VK. Чат в инбоксе не создаётся. Не чаще 1 раза в 5 минут на одного пользователя.')
+                    ->default(false),
+                Textarea::make('welcome_text')
+                    ->label('Текст приветствия')
+                    ->rows(4)
+                    ->maxLength(2000)
                     ->columnSpanFull()
                     ->nullable(),
             ])
