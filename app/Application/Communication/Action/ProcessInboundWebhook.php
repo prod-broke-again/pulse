@@ -85,6 +85,12 @@ final readonly class ProcessInboundWebhook
 
                 return;
             }
+
+            if ($mode === TelegramMode::Business && $this->isBusinessOwnerOutgoingMessage($source->settings, $payload)) {
+                Log::info('business owner outgoing message ignored', ['source_id' => $sourceId]);
+
+                return;
+            }
         }
 
         $externalUserId = $this->webhookPayloadExtractor->extractExternalUserId($payload);
@@ -279,5 +285,37 @@ final readonly class ProcessInboundWebhook
                 $attachment['kind'] ?? null,
             );
         }
+    }
+
+    /** @param array<string, mixed> $settings @param array<string, mixed> $payload */
+    private function isBusinessOwnerOutgoingMessage(array $settings, array $payload): bool
+    {
+        $ownerRaw = $settings['business_connection_user_id'] ?? null;
+        if (! is_scalar($ownerRaw)) {
+            return false;
+        }
+        $ownerId = trim((string) $ownerRaw);
+        if ($ownerId === '') {
+            return false;
+        }
+
+        $bm = $payload['business_message'] ?? null;
+        if (! is_array($bm)) {
+            return false;
+        }
+        $from = $bm['from'] ?? null;
+        if (! is_array($from)) {
+            return false;
+        }
+        $fromIdRaw = $from['id'] ?? null;
+        if (! is_scalar($fromIdRaw)) {
+            return false;
+        }
+        $fromId = trim((string) $fromIdRaw);
+        if ($fromId === '') {
+            return false;
+        }
+
+        return $fromId === $ownerId;
     }
 }

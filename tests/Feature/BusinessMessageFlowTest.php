@@ -247,6 +247,30 @@ final class BusinessMessageFlowTest extends TestCase
         $this->assertSame(0, ChatModel::query()->count());
     }
 
+    public function test_business_owner_outgoing_message_is_ignored_and_does_not_create_chat(): void
+    {
+        Log::spy();
+        $source = $this->createTgSource([
+            'telegram_mode' => 'business',
+            'business_connection_user_id' => '999001',
+        ]);
+        $messenger = $this->mockMessenger();
+
+        app(ProcessInboundWebhook::class)->run($source->id, $messenger, [
+            'business_message' => [
+                'message_id' => 321,
+                'business_connection_id' => 'bc-1',
+                'from' => ['id' => 999001],
+                'text' => 'Это мое исходящее сообщение из личного аккаунта',
+            ],
+        ]);
+
+        $this->assertSame(0, ChatModel::query()->count());
+        Log::shouldHaveReceived('info')
+            ->withArgs(fn (string $m, array $ctx): bool => $m === 'business owner outgoing message ignored'
+                && ($ctx['source_id'] ?? null) === $source->id);
+    }
+
     public function test_send_message_system_delivery_includes_business_connection_id(): void
     {
         $source = $this->createTgSource([
