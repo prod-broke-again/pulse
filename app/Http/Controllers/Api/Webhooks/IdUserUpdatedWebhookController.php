@@ -46,11 +46,17 @@ final class IdUserUpdatedWebhookController extends Controller
             ], 422);
         }
 
+        $socialAccounts = null;
+        if (array_key_exists('social_accounts', $data)) {
+            $socialAccounts = IdUserProfileDto::normalizeSocialAccounts($data['social_accounts']);
+        }
+
         $dto = new IdUserProfileDto(
             id: $uuid,
             name: $name,
             email: $email,
             avatarUrl: $avatarUrl,
+            socialAccounts: $socialAccounts,
         );
 
         $upsert->upsert($dto);

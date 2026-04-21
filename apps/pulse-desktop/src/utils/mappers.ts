@@ -104,6 +104,11 @@ export function mapRealtimePayloadToMessageItem(p: NewChatMessagePayload): Messa
         )
       : undefined
 
+  const deliveryChannel =
+    typeof p.delivery_channel === 'string' && p.delivery_channel !== ''
+      ? p.delivery_channel
+      : undefined
+
   return {
     id: p.messageId,
     from,
@@ -112,6 +117,7 @@ export function mapRealtimePayloadToMessageItem(p: NewChatMessagePayload): Messa
     createdAtIso: new Date().toISOString(),
     attachments: mapWsAttachmentsToMessageItemAttachments(p.attachments),
     ...(pendingNorm ? { pending_attachments: pendingNorm } : {}),
+    ...(deliveryChannel ? { delivery_channel: deliveryChannel } : {}),
   }
 }
 
@@ -130,6 +136,10 @@ export function mapApiMessage(msg: ApiMessage): MessageItem {
         )
       : undefined
 
+  const dchRaw = msg.payload?.delivery_channel
+  const deliveryChannel =
+    typeof dchRaw === 'string' && dchRaw !== '' ? dchRaw : undefined
+
   return {
     id: msg.id,
     from: senderType,
@@ -142,5 +152,6 @@ export function mapApiMessage(msg: ApiMessage): MessageItem {
     reply_to: msg.reply_to ?? undefined,
     is_read: msg.is_read,
     pending: msg.id < 0,
+    ...(deliveryChannel ? { delivery_channel: deliveryChannel } : {}),
   }
 }

@@ -71,6 +71,13 @@ function moderatorLabel(): string {
   return props.moderatorName?.trim() || 'Модератор'
 }
 
+function moderatorBubbleLabel(item: MessageItem): string {
+  if (item.from === 'moderator' && item.delivery_channel === 'telegram_app') {
+    return 'Telegram'
+  }
+  return moderatorLabel()
+}
+
 function isMsgSelected(id: number): boolean {
   return selectedIds.value.includes(id)
 }
@@ -625,7 +632,7 @@ defineExpose({
           @contextmenu.prevent="onContextMessage(item)"
         >
           <div class="msg-sender">
-            Модератор
+            {{ moderatorBubbleLabel(item) }}
           </div>
           <div
             class="msg-bubble"

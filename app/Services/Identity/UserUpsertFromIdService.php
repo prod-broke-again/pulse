@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Identity;
 
 use App\Domains\Identity\DTOs\IdUserProfileDto;
+use App\Models\SocialAccount;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -26,7 +27,7 @@ final class UserUpsertFromIdService
         }
 
         if ($user === null) {
-            return User::query()->create([
+            $user = User::query()->create([
                 'name' => $profile->name,
                 'email' => $profile->email,
                 'password' => Hash::make(Str::random(64)),
@@ -35,6 +36,9 @@ final class UserUpsertFromIdService
                 'avatar_url' => $profile->avatarUrl,
                 'id_profile_synced_at' => now(),
             ]);
+            $this->syncSocialAccountsFromId($user, $profile);
+
+            return $user->fresh() ?? $user;
         }
 
         $user->forceFill([
@@ -48,6 +52,43 @@ final class UserUpsertFromIdService
 
         $user->save();
 
+        $this->syncSocialAccountsFromId($user, $profile);
+
         return $user->fresh() ?? $user;
+    }
+
+    /**
+     * @param  list<array{provider: string, provider_user_id: string}>|null  $incoming
+     */
+    private function syncSocialAccountsFromId(User $user, IdUserProfileDto $profile): void
+    {
+        if ($profile->socialAccounts === null) {
+            return;
+        }
+
+        $incomingRows = $profile->socialAccounts;
+        $incomingKeys = collect($incomingRows)->mapWithKeys(
+            fn (array $r): array => [$r['provider'].'|'.$r['provider_user_id'] => true],
+        );
+
+        foreach ($incomingRows as $row) {
+            SocialAccount::query()->updateOrCreate(
+                [
+                    'provider' => $row['provider'],
+                    'provider_user_id' => $row['provider_user_id'],
+                ],
+                [
+                    'user_id' => $user->id,
+                ],
+            );
+        }
+
+        $user->load('socialAccounts');
+        foreach ($user->socialAccounts as $existing) {
+            $key = $existing->provider.'|'.$existing->provider_user_id;
+            if (! isset($incomingKeys[$key])) {
+                $existing->delete();
+            }
+        }
     }
 }

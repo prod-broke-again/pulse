@@ -311,6 +311,7 @@ final class BusinessMessageFlowTest extends TestCase
         $this->assertSame('moderator', $msg->sender_type);
         $this->assertSame($moderator->id, $msg->sender_id);
         $this->assertSame('Ответ с телефона', $msg->text);
+        $this->assertSame('telegram_app', $msg->payload['delivery_channel'] ?? null);
     }
 
     public function test_business_owner_outgoing_webhook_retry_does_not_duplicate_message(): void

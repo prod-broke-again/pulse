@@ -84,7 +84,12 @@ final readonly class AssignChatToModerator
         $model = MessageModel::query()->with('replyTo')->find($persistedMessage->id);
         $extras = $model !== null
             ? NewChatMessageBroadcastExtras::fromMessage($model)
-            : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
+            : [
+                'attachments' => [],
+                'reply_to' => null,
+                'pending_attachments' => [],
+                'delivery_channel' => null,
+            ];
 
         $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
 
@@ -100,6 +105,7 @@ final readonly class AssignChatToModerator
             assignedModeratorUserId: $assignedToUserId,
             sourceId: $sourceId,
             isNewChat: $isNewChat,
+            deliveryChannel: $extras['delivery_channel'] ?? null,
         ));
     }
 }

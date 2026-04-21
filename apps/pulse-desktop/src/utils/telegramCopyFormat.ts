@@ -79,7 +79,12 @@ export function formatMessagesTelegramStyle(
     if (!selectedIds.has(m.id)) {
       continue
     }
-    const who = m.from === 'client' ? peerName : moderatorName
+    const who =
+      m.from === 'client'
+        ? peerName
+        : m.delivery_channel === 'telegram_app'
+          ? 'Telegram'
+          : moderatorName
     const prefix = formatRuDateTimeBracket(m.createdAtIso)
     const body = messageBodyLine(m)
     lines.push(`${prefix} ${who}: ${body}`)

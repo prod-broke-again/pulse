@@ -399,12 +399,15 @@ final readonly class ProcessInboundWebhook
             $payload['pending_attachments'] = PendingInboundAttachments::fromDownloadDescriptors($attachments);
         }
 
+        $messagePayload = $payload;
+        $messagePayload['delivery_channel'] = 'telegram_app';
+
         $message = $this->createMessage->run(
             chatId: $chat->id,
             text: $text,
             senderType: SenderType::Moderator,
             senderId: $user->id,
-            payload: $payload,
+            payload: $messagePayload,
             externalMessageId: $externalMessageId,
             replyToMessageId: $replyToInternalId,
         );

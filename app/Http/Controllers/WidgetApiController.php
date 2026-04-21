@@ -264,6 +264,7 @@ final class WidgetApiController extends Controller
             assignedModeratorUserId: $chat->assigned_to,
             sourceId: (int) $chat->source_id,
             isNewChat: $isNewChat,
+            deliveryChannel: $extras['delivery_channel'] ?? null,
         ));
 
         $clientMessageCount = MessageModel::where('chat_id', $chat->id)

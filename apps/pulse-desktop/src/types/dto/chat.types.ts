@@ -41,7 +41,7 @@ export interface ApiMessage {
   sender_id: number | null
   sender_type: 'client' | 'moderator' | 'system'
   text: string
-  payload: Record<string, unknown>
+  payload: Record<string, unknown> & { delivery_channel?: string }
   reply_markup?: Array<{ text: string; url: string }> | null
   reply_to?: { id: number | null; text: string; sender_type: string } | null
   attachments: ApiAttachment[]

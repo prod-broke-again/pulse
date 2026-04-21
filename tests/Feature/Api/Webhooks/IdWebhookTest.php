@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\Webhooks;
 
+use App\Models\SocialAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -84,6 +85,71 @@ final class IdWebhookTest extends TestCase
             'id_user_uuid' => $uuid,
             'name' => 'New Name',
             'email' => 'new@example.com',
+        ]);
+    }
+
+    public function test_user_updated_syncs_social_accounts_when_present_in_payload(): void
+    {
+        $uuid = 'c0000000-0000-4000-8000-000000000099';
+        $user = User::factory()->create([
+            'id_user_uuid' => $uuid,
+            'email' => 'soc@example.com',
+            'name' => 'Soc',
+        ]);
+        $user->assignRole('moderator');
+
+        $body = json_encode([
+            'id_user_uuid' => $uuid,
+            'name' => 'Soc',
+            'email' => 'soc@example.com',
+            'avatar_url' => null,
+            'social_accounts' => [
+                ['provider' => 'telegram', 'provider_user_id' => '123456789'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $server = $this->signedServerVars($body);
+
+        $response = $this->call('POST', '/api/webhooks/id/user-updated', [], [], [], $server, $body);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('social_accounts', [
+            'user_id' => $user->id,
+            'provider' => 'telegram',
+            'provider_user_id' => '123456789',
+        ]);
+    }
+
+    public function test_user_updated_does_not_sync_social_accounts_when_key_omitted(): void
+    {
+        $uuid = 'd0000000-0000-4000-8000-000000000099';
+        $user = User::factory()->create([
+            'id_user_uuid' => $uuid,
+            'email' => 'keep@example.com',
+            'name' => 'Keep',
+        ]);
+        $user->assignRole('moderator');
+
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'telegram',
+            'provider_user_id' => '999888777',
+        ]);
+
+        $body = json_encode([
+            'id_user_uuid' => $uuid,
+            'name' => 'Keep Updated',
+            'email' => 'keep@example.com',
+            'avatar_url' => null,
+        ], JSON_THROW_ON_ERROR);
+        $server = $this->signedServerVars($body);
+
+        $response = $this->call('POST', '/api/webhooks/id/user-updated', [], [], [], $server, $body);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('social_accounts', [
+            'user_id' => $user->id,
+            'provider' => 'telegram',
+            'provider_user_id' => '999888777',
         ]);
     }
 }

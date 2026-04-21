@@ -17,6 +17,7 @@ final class NewChatMessageBroadcastExtras
      *     attachments: list<array<string, mixed>>,
      *     reply_to: ?array{id: int, text: string, sender_type: string},
      *     pending_attachments: list<array<string, mixed>>,
+     *     delivery_channel: ?string,
      * }
      */
     public static function fromMessage(MessageModel $message): array
@@ -51,10 +52,16 @@ final class NewChatMessageBroadcastExtras
             ];
         }
 
+        $deliveryChannel = $message->payload['delivery_channel'] ?? null;
+        if (! is_string($deliveryChannel) || $deliveryChannel === '') {
+            $deliveryChannel = null;
+        }
+
         return [
             'attachments' => $attachments,
             'reply_to' => $replyTo,
             'pending_attachments' => array_values($pending),
+            'delivery_channel' => $deliveryChannel,
         ];
     }
 }

@@ -79,7 +79,12 @@ final readonly class SendMessage
         $model = MessageModel::query()->with('replyTo')->find($persisted->id);
         $extras = $model !== null
             ? NewChatMessageBroadcastExtras::fromMessage($model)
-            : ['attachments' => [], 'reply_to' => null, 'pending_attachments' => []];
+            : [
+                'attachments' => [],
+                'reply_to' => null,
+                'pending_attachments' => [],
+                'delivery_channel' => null,
+            ];
 
         $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
 
@@ -95,6 +100,7 @@ final readonly class SendMessage
             assignedModeratorUserId: $chat->assignedTo,
             sourceId: $chat->sourceId,
             isNewChat: $isNewChat,
+            deliveryChannel: $extras['delivery_channel'] ?? null,
         ));
 
         $source = $this->sourceRepository->findById($chat->sourceId);

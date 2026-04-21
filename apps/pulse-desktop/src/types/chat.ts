@@ -53,4 +53,6 @@ export interface MessageItem {
     kind?: string
   }>
   reply_to?: { id: number | null; text: string; sender_type: string }
+  /** From message payload (e.g. business owner wrote from Telegram app). */
+  delivery_channel?: string
 }

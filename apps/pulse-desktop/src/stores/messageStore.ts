@@ -204,15 +204,20 @@ export const useMessageStore = defineStore('message', () => {
               if (messages.value.some((m) => m.id === item.id)) {
                 return
               }
+              const pl: Record<string, unknown> =
+                item.pending_attachments?.length
+                  ? { pending_attachments: item.pending_attachments }
+                  : {}
+              if (item.delivery_channel) {
+                pl.delivery_channel = item.delivery_channel
+              }
               const apiLike: ApiMessage = {
                 id: item.id,
                 chat_id: chatId,
                 sender_id: payload.sender_id,
                 sender_type: item.from,
                 text: item.text,
-                payload: item.pending_attachments?.length
-                  ? { pending_attachments: item.pending_attachments }
-                  : {},
+                payload: pl,
                 attachments: item.attachments ?? [],
                 is_read: item.from !== 'client',
                 created_at: new Date().toISOString(),
@@ -226,15 +231,20 @@ export const useMessageStore = defineStore('message', () => {
             if (messages.value.some((m) => m.id === item.id)) {
               return
             }
+            const pl2: Record<string, unknown> =
+              item.pending_attachments?.length
+                ? { pending_attachments: item.pending_attachments }
+                : {}
+            if (item.delivery_channel) {
+              pl2.delivery_channel = item.delivery_channel
+            }
             const apiLike: ApiMessage = {
               id: item.id,
               chat_id: chatId,
               sender_id: payload.sender_id,
               sender_type: item.from,
               text: item.text,
-              payload: item.pending_attachments?.length
-                ? { pending_attachments: item.pending_attachments }
-                : {},
+              payload: pl2,
               attachments: item.attachments ?? [],
               is_read: item.from !== 'client',
               created_at: new Date().toISOString(),
