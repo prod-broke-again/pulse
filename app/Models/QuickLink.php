@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
- * @property int|null $source_id
+ * @property int|null $owner_user_id
+ * @property string|null $scope_type
+ * @property int|null $scope_id
  * @property string $title
  * @property string $url
  * @property bool $is_active
@@ -21,7 +23,9 @@ class QuickLink extends Model
     protected $table = 'quick_links';
 
     protected $fillable = [
-        'source_id',
+        'owner_user_id',
+        'scope_type',
+        'scope_id',
         'title',
         'url',
         'is_active',
@@ -37,8 +41,13 @@ class QuickLink extends Model
         ];
     }
 
-    public function source(): BelongsTo
+    public function owner(): BelongsTo
     {
-        return $this->belongsTo(SourceModel::class, 'source_id');
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function sourceForScope(): BelongsTo
+    {
+        return $this->belongsTo(SourceModel::class, 'scope_id');
     }
 }

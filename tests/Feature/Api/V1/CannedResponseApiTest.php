@@ -40,14 +40,18 @@ final class CannedResponseApiTest extends TestCase
     public function test_list_canned_responses_returns_active_only(): void
     {
         CannedResponse::create([
-            'source_id' => $this->source->id,
+            'scope_type' => 'source',
+            'scope_id' => $this->source->id,
+            'owner_user_id' => null,
             'code' => 'greet',
             'title' => 'Greeting',
             'text' => 'Hello! How can I help you?',
             'is_active' => true,
         ]);
         CannedResponse::create([
-            'source_id' => $this->source->id,
+            'scope_type' => 'source',
+            'scope_id' => $this->source->id,
+            'owner_user_id' => null,
             'code' => 'inactive',
             'title' => 'Inactive template',
             'text' => 'Should not appear',
@@ -60,7 +64,7 @@ final class CannedResponseApiTest extends TestCase
         $response->assertOk()
             ->assertJsonStructure([
                 'data' => [
-                    '*' => ['id', 'source_id', 'code', 'title', 'text', 'is_active'],
+                    '*' => ['id', 'source_id', 'scope_type', 'scope_id', 'is_shared', 'code', 'title', 'text', 'is_active'],
                 ],
             ]);
 
@@ -80,21 +84,27 @@ final class CannedResponseApiTest extends TestCase
         ]);
 
         CannedResponse::create([
-            'source_id' => $this->source->id,
+            'scope_type' => 'source',
+            'scope_id' => $this->source->id,
+            'owner_user_id' => null,
             'code' => 'src1',
             'title' => 'Source 1 template',
             'text' => 'For source 1',
             'is_active' => true,
         ]);
         CannedResponse::create([
-            'source_id' => $otherSource->id,
+            'scope_type' => 'source',
+            'scope_id' => $otherSource->id,
+            'owner_user_id' => null,
             'code' => 'src2',
             'title' => 'Source 2 template',
             'text' => 'For source 2',
             'is_active' => true,
         ]);
         CannedResponse::create([
-            'source_id' => null,
+            'scope_type' => null,
+            'scope_id' => null,
+            'owner_user_id' => null,
             'code' => 'global',
             'title' => 'Global template',
             'text' => 'For everyone',
@@ -115,14 +125,18 @@ final class CannedResponseApiTest extends TestCase
     public function test_list_canned_responses_filters_by_search_query(): void
     {
         CannedResponse::create([
-            'source_id' => null,
+            'scope_type' => null,
+            'scope_id' => null,
+            'owner_user_id' => null,
             'code' => 'delivery',
             'title' => 'Delivery info',
             'text' => 'Your order will be delivered in 3-5 days.',
             'is_active' => true,
         ]);
         CannedResponse::create([
-            'source_id' => null,
+            'scope_type' => null,
+            'scope_id' => null,
+            'owner_user_id' => null,
             'code' => 'refund',
             'title' => 'Refund policy',
             'text' => 'We can issue a refund within 14 days.',

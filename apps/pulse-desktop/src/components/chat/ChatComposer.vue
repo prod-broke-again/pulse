@@ -49,8 +49,14 @@ watch(() => chatStore.selectedChatId, (chatId) => {
   pendingReplyMarkup.value = []
   if (chatId) {
     const chat = chatStore.selectedChat
-    cannedStore.loadResponses({ source_id: chat?.source_id })
-    void quickLinkStore.loadLinks({ source_id: chat?.source_id })
+    const deptId = chat?.department_id ?? chat?.department?.id
+    const params = {
+      source_id: chat?.source_id,
+      department_id: deptId,
+      chat_context: true,
+    }
+    cannedStore.loadResponses(params)
+    void quickLinkStore.loadLinks({ ...params, include_inactive: false })
   }
 }, { immediate: true })
 

@@ -11,6 +11,9 @@ export async function fetchQuickLinks(params?: SourceListQueryParams): Promise<A
 
 export async function createQuickLink(body: {
   source_id?: number | null
+  scope_type?: 'source' | 'department' | null
+  scope_id?: number | null
+  is_shared?: boolean
   title: string
   url: string
   is_active?: boolean
@@ -24,6 +27,9 @@ export async function updateQuickLink(
   id: number,
   body: Partial<{
     source_id: number | null
+    scope_type: 'source' | 'department' | null
+    scope_id: number | null
+    is_shared: boolean
     title: string
     url: string
     is_active: boolean

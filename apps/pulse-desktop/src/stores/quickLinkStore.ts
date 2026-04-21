@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { fetchQuickLinks } from '../api/quick-links'
+import type { SourceListQueryParams } from '../api/sourceListQuery'
 import type { ApiQuickLink } from '../types/dto/quick-link.types'
 
 export const useQuickLinkStore = defineStore('quickLink', () => {
   const links = ref<ApiQuickLink[]>([])
   const isLoading = ref(false)
 
-  async function loadLinks(params: { source_id?: number; q?: string } = {}) {
+  async function loadLinks(params: SourceListQueryParams = {}) {
     isLoading.value = true
     try {
       links.value = await fetchQuickLinks({ ...params, include_inactive: false })

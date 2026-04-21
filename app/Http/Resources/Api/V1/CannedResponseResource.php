@@ -13,9 +13,15 @@ final class CannedResponseResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
+        $isShared = $this->owner_user_id === null;
+
         return [
             'id' => $this->id,
-            'source_id' => $this->source_id,
+            'owner_user_id' => $this->owner_user_id,
+            'is_shared' => $isShared,
+            'scope_type' => $this->scope_type,
+            'scope_id' => $this->scope_id,
+            'source_id' => $this->scope_type === 'source' ? $this->scope_id : null,
             'code' => $this->code,
             'title' => $this->title,
             'text' => $this->text,

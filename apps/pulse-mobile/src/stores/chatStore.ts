@@ -167,12 +167,24 @@ export const useChatStore = defineStore('chat', () => {
         aiApi.fetchAiSummary(id).catch(() => null),
         cannedApi
           .fetchCannedResponses(
-            chat.source_id != null ? { source_id: chat.source_id } : undefined,
+            chat.source_id != null
+              ? {
+                  source_id: chat.source_id,
+                  department_id: chat.department_id ?? chat.department?.id ?? undefined,
+                  chat_context: true,
+                }
+              : undefined,
           )
           .catch(() => []),
         quickLinkApi
           .fetchQuickLinks(
-            chat.source_id != null ? { source_id: chat.source_id } : undefined,
+            chat.source_id != null
+              ? {
+                  source_id: chat.source_id,
+                  department_id: chat.department_id ?? chat.department?.id ?? undefined,
+                  chat_context: true,
+                }
+              : undefined,
           )
           .catch(() => []),
       ])

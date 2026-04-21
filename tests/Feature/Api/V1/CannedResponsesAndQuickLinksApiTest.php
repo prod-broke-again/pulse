@@ -94,7 +94,9 @@ final class CannedResponsesAndQuickLinksApiTest extends TestCase
                 'text' => 'Body',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.code', 'mod_tpl');
+            ->assertJsonPath('data.code', 'mod_tpl')
+            ->assertJsonPath('data.is_shared', false)
+            ->assertJsonPath('data.owner_user_id', $this->moderator->id);
     }
 
     public function test_admin_can_crud_quick_links_and_reorder(): void

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Loader2, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import {
   fetchCannedResponses,
@@ -7,6 +7,8 @@ import {
   updateCannedResponse,
   deleteCannedResponse,
 } from '../../api/canned-responses'
+import { fetchDepartments } from '../../api/departments'
+import type { SourceListQueryParams } from '../../api/sourceListQuery'
 import { useAuthStore } from '../../stores/authStore'
 import type { ApiCannedResponse } from '../../types/dto/canned-response.types'
 import ModeratorGuideCard from '../common/ModeratorGuideCard.vue'
@@ -16,32 +18,83 @@ const items = ref<ApiCannedResponse[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const sourceFilter = ref<number | 'all'>('all')
+const visibilityFilter = ref<'all' | 'mine' | 'shared'>('all')
 const q = ref('')
 
 const formOpen = ref(false)
 const editing = ref<ApiCannedResponse | null>(null)
 const form = ref({
-  source_id: '' as string,
+  scope_kind: 'source' as 'global' | 'source' | 'department',
+  scope_source_id: '' as string,
+  /** Source used to load department list when scope_kind === department */
+  scope_dept_parent_source_id: '' as string,
+  scope_department_id: '' as string,
+  is_shared: false,
   code: '',
   title: '',
   text: '',
   is_active: true,
 })
 
-const sourceOptions = computed(() => {
-  const ids = authStore.user?.source_ids ?? []
-  return ids
-})
+const departmentOptions = ref<{ id: number; name: string }[]>([])
+
+const sourceOptions = computed(() => authStore.user?.source_ids ?? [])
 
 const isAdmin = computed(() => authStore.user?.roles?.includes('admin'))
+
+async function loadDepartmentOptions(sourceId: number) {
+  try {
+    const rows = await fetchDepartments(sourceId)
+    departmentOptions.value = rows.map((d) => ({ id: d.id, name: d.name }))
+  } catch {
+    departmentOptions.value = []
+  }
+}
+
+watch(
+  () => form.value.scope_dept_parent_source_id,
+  (sid) => {
+    if (form.value.scope_kind !== 'department') return
+    const n = sid === '' ? NaN : Number(sid)
+    if (!Number.isFinite(n)) {
+      departmentOptions.value = []
+      return
+    }
+    void loadDepartmentOptions(n)
+  },
+)
+
+watch(
+  () => form.value.scope_kind,
+  (k) => {
+    if (k === 'department' && form.value.scope_dept_parent_source_id !== '') {
+      const n = Number(form.value.scope_dept_parent_source_id)
+      if (Number.isFinite(n)) void loadDepartmentOptions(n)
+    }
+  },
+)
+
+function scopeLabel(row: ApiCannedResponse): string {
+  if (row.scope_type == null && row.scope_id == null) {
+    return isAdmin.value ? 'Глобально' : '—'
+  }
+  if (row.scope_type === 'source') {
+    return `Источник #${row.scope_id}`
+  }
+  if (row.scope_type === 'department') {
+    return `Отдел #${row.scope_id}`
+  }
+  return '—'
+}
 
 async function load() {
   loading.value = true
   error.value = null
   try {
-    const params: { source_id?: number; q?: string; include_inactive: boolean } = {
+    const params: SourceListQueryParams = {
       include_inactive: true,
       q: q.value.trim() || undefined,
+      visibility: visibilityFilter.value === 'all' ? undefined : visibilityFilter.value,
     }
     if (sourceFilter.value !== 'all') {
       params.source_id = sourceFilter.value
@@ -64,52 +117,82 @@ function openCreate() {
       ? (sourceOptions.value[0] != null ? String(sourceOptions.value[0]) : '')
       : String(sourceFilter.value)
   form.value = {
-    source_id: sid,
+    scope_kind: isAdmin.value ? 'global' : 'source',
+    scope_source_id: sid,
+    scope_dept_parent_source_id: sid,
+    scope_department_id: '',
+    is_shared: false,
     code: '',
     title: '',
     text: '',
     is_active: true,
+  }
+  departmentOptions.value = []
+  if (!isAdmin.value && sid !== '') {
+    void loadDepartmentOptions(Number(sid))
   }
   formOpen.value = true
 }
 
 function openEdit(row: ApiCannedResponse) {
   editing.value = row
+  let kind: 'global' | 'source' | 'department' = 'global'
+  if (row.scope_type === 'source') kind = 'source'
+  if (row.scope_type === 'department') kind = 'department'
+
+  const src =
+    sourceOptions.value[0] != null ? String(sourceOptions.value[0]) : ''
   form.value = {
-    source_id: row.source_id == null ? '' : String(row.source_id),
+    scope_kind: kind,
+    scope_source_id: row.scope_type === 'source' && row.scope_id != null ? String(row.scope_id) : src,
+    scope_dept_parent_source_id: src,
+    scope_department_id: row.scope_type === 'department' && row.scope_id != null ? String(row.scope_id) : '',
+    is_shared: row.is_shared,
     code: row.code,
     title: row.title,
     text: row.text,
     is_active: row.is_active,
   }
+  departmentOptions.value = []
+  if (kind === 'department' && row.scope_id != null) {
+    const parent = form.value.scope_dept_parent_source_id === '' ? src : form.value.scope_dept_parent_source_id
+    if (parent !== '') {
+      void loadDepartmentOptions(Number(parent))
+    }
+  }
   formOpen.value = true
 }
 
-function parsedSourceId(): number | null {
-  const s = form.value.source_id
-  return s === '' ? null : Number(s)
+function buildScopePayload(): { scope_type: 'source' | 'department' | null; scope_id: number | null } {
+  if (form.value.scope_kind === 'global') {
+    return { scope_type: null, scope_id: null }
+  }
+  if (form.value.scope_kind === 'source') {
+    const id = form.value.scope_source_id === '' ? NaN : Number(form.value.scope_source_id)
+    return { scope_type: 'source', scope_id: Number.isFinite(id) ? id : null }
+  }
+  const id = form.value.scope_department_id === '' ? NaN : Number(form.value.scope_department_id)
+  return { scope_type: 'department', scope_id: Number.isFinite(id) ? id : null }
 }
 
 async function saveForm() {
   loading.value = true
   error.value = null
   try {
+    const scope = buildScopePayload()
+    const body = {
+      scope_type: scope.scope_type,
+      scope_id: scope.scope_id,
+      is_shared: form.value.is_shared,
+      code: form.value.code,
+      title: form.value.title,
+      text: form.value.text,
+      is_active: form.value.is_active,
+    }
     if (editing.value) {
-      await updateCannedResponse(editing.value.id, {
-        source_id: parsedSourceId(),
-        code: form.value.code,
-        title: form.value.title,
-        text: form.value.text,
-        is_active: form.value.is_active,
-      })
+      await updateCannedResponse(editing.value.id, body)
     } else {
-      await createCannedResponse({
-        source_id: parsedSourceId(),
-        code: form.value.code,
-        title: form.value.title,
-        text: form.value.text,
-        is_active: form.value.is_active,
-      })
+      await createCannedResponse(body)
     }
     formOpen.value = false
     await load()
@@ -149,10 +232,15 @@ async function remove(row: ApiCannedResponse) {
       </div>
       <button
         type="button"
-        class="btn btn-primary inline-flex items-center gap-2"
+        class="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold shadow-lg ring-2 transition hover:opacity-95 active:scale-[0.99]"
+        style="
+          background: linear-gradient(135deg, var(--color-brand) 0%, #7c3a86 100%);
+          color: white;
+          ring-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+        "
         @click="openCreate"
       >
-        <Plus class="h-4 w-4" />
+        <Plus class="h-5 w-5" aria-hidden="true" />
         Новый шаблон
       </button>
     </div>
@@ -162,9 +250,9 @@ async function remove(row: ApiCannedResponse) {
       title="Инструкция: шаблоны ответов"
       purpose="Готовые тексты, которые модератор вставляет в чат одним кликом. Это экономит время, выдерживает единый тон общения и снижает ошибки в формулировках."
       :tips="[
-        'Создавайте шаблоны под частые ситуации: приветствие, уточнение данных, инструкция, завершение диалога.',
+        'По умолчанию шаблон личный — видите только вы. Включите «Общий», чтобы коллеги в том же источнике/отделе тоже видели шаблон.',
+        'Область: источник (проект) или отдел. Глобальные шаблоны может создавать только администратор.',
         'Поле «Код» — короткий идентификатор (латиница/цифры), удобный для поиска в списке.',
-        '«Источник»: привязка к проекту; пусто — глобально (доступно только администраторам).',
         'Деактивируйте устаревшие шаблоны, чтобы они не попадали в выбор в чате.',
       ]"
       :examples="[
@@ -188,6 +276,25 @@ async function remove(row: ApiCannedResponse) {
           </option>
           <option v-for="sid in sourceOptions" :key="sid" :value="sid">
             Проект #{{ sid }}
+          </option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+        Видимость
+        <select
+          v-model="visibilityFilter"
+          class="h-10 min-w-[160px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
+          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
+          @change="load"
+        >
+          <option value="all">
+            Все
+          </option>
+          <option value="mine">
+            Мои
+          </option>
+          <option value="shared">
+            Общие
           </option>
         </select>
       </label>
@@ -224,7 +331,7 @@ async function remove(row: ApiCannedResponse) {
     </div>
 
     <div v-else class="overflow-x-auto rounded-[var(--radius-md)] border" style="border-color: var(--border-light)">
-      <table class="w-full min-w-[720px] text-left text-sm">
+      <table class="w-full min-w-[860px] text-left text-sm">
         <thead style="background: var(--bg-inbox); color: var(--text-secondary)">
           <tr>
             <th class="px-4 py-3 font-semibold">
@@ -234,7 +341,10 @@ async function remove(row: ApiCannedResponse) {
               Название
             </th>
             <th class="px-4 py-3 font-semibold">
-              Источник
+              Область
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              Общий
             </th>
             <th class="px-4 py-3 font-semibold">
               Активен
@@ -256,7 +366,10 @@ async function remove(row: ApiCannedResponse) {
               {{ row.title }}
             </td>
             <td class="px-4 py-2">
-              {{ row.source_id == null ? (isAdmin ? 'Глобально' : '—') : `#${row.source_id}` }}
+              {{ scopeLabel(row) }}
+            </td>
+            <td class="px-4 py-2">
+              {{ row.is_shared ? 'Да' : 'Нет' }}
             </td>
             <td class="px-4 py-2">
               {{ row.is_active ? 'Да' : 'Нет' }}
@@ -290,21 +403,73 @@ async function remove(row: ApiCannedResponse) {
           {{ editing ? 'Редактировать шаблон' : 'Новый шаблон' }}
         </h3>
         <div class="space-y-4">
+          <label class="flex items-center gap-2 text-sm" style="color: var(--text-primary)">
+            <input v-model="form.is_shared" type="checkbox" class="rounded border" style="border-color: var(--border-light)">
+            Общий (виден коллегам в этой области)
+          </label>
           <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Источник (пусто = глобально, только админ)
+            Область
             <select
-              v-model="form.source_id"
+              v-model="form.scope_kind"
               class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
               style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
             >
-              <option value="">
-                Глобально
+              <option v-if="isAdmin" value="global">
+                Глобально (все источники)
               </option>
+              <option value="source">
+                Источник (проект)
+              </option>
+              <option value="department">
+                Отдел
+              </option>
+            </select>
+          </label>
+          <label
+            v-if="form.scope_kind === 'source'"
+            class="block text-xs font-bold uppercase tracking-wide"
+            style="color: var(--text-secondary)"
+          >
+            Источник *
+            <select
+              v-model="form.scope_source_id"
+              class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
+              style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
+            >
               <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
                 Проект #{{ sid }}
               </option>
             </select>
           </label>
+          <template v-if="form.scope_kind === 'department'">
+            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Проект для списка отделов *
+              <select
+                v-model="form.scope_dept_parent_source_id"
+                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
+                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
+              >
+                <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
+                  Проект #{{ sid }}
+                </option>
+              </select>
+            </label>
+            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Отдел *
+              <select
+                v-model="form.scope_department_id"
+                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
+                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
+              >
+                <option value="">
+                  Выберите…
+                </option>
+                <option v-for="d in departmentOptions" :key="d.id" :value="String(d.id)">
+                  {{ d.name }}
+                </option>
+              </select>
+            </label>
+          </template>
           <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
             Код *
             <input v-model="form.code" type="text" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">

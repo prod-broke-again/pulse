@@ -10,7 +10,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
- * @property int|null $source_id
+ * @property int|null $owner_user_id
+ * @property string|null $scope_type
+ * @property int|null $scope_id
  * @property string $code
  * @property string $title
  * @property string $text
@@ -21,7 +23,9 @@ class CannedResponse extends Model
     protected $table = 'canned_responses';
 
     protected $fillable = [
-        'source_id',
+        'owner_user_id',
+        'scope_type',
+        'scope_id',
         'code',
         'title',
         'text',
@@ -36,8 +40,14 @@ class CannedResponse extends Model
         ];
     }
 
-    public function source(): BelongsTo
+    public function owner(): BelongsTo
     {
-        return $this->belongsTo(SourceModel::class, 'source_id');
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    /** When {@see $scope_type} is `source`, the related source row. */
+    public function sourceForScope(): BelongsTo
+    {
+        return $this->belongsTo(SourceModel::class, 'scope_id');
     }
 }

@@ -11,6 +11,9 @@ export async function fetchCannedResponses(params?: SourceListQueryParams): Prom
 
 export async function createCannedResponse(body: {
   source_id?: number | null
+  scope_type?: 'source' | 'department' | null
+  scope_id?: number | null
+  is_shared?: boolean
   code: string
   title: string
   text: string
@@ -24,6 +27,9 @@ export async function updateCannedResponse(
   id: number,
   body: Partial<{
     source_id: number | null
+    scope_type: 'source' | 'department' | null
+    scope_id: number | null
+    is_shared: boolean
     code: string
     title: string
     text: string
