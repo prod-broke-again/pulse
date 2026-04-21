@@ -368,6 +368,7 @@ if (process.platform === 'darwin') {
 }
 
 function registerWindowManagementIpc(): void {
+  ipcMain.handle('app:get-version', () => app.getVersion())
   ipcMain.handle('windowPrefs:get', (): { closeButtonBehavior: CloseButtonBehavior } => ({
     closeButtonBehavior,
   }))

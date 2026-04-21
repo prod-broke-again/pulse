@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 })
 
 contextBridge.exposeInMainWorld('appWindow', {
+  getVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize') as Promise<boolean>,
   /** Крестик: учитывает настройку «выход / трей / спросить». */

@@ -103,6 +103,7 @@ const activeView = ref<SidebarView>('chats')
 const themeMode = ref<ThemeMode>(readStoredThemeMode())
 const isDark = ref(resolveDarkByMode(themeMode.value))
 const soundEnabled = ref(typeof localStorage !== 'undefined' ? desktopSoundEnabled() : true)
+const appVersion = ref('')
 const toastMessage = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null)
@@ -330,6 +331,13 @@ onMounted(async () => {
 
   window.addEventListener('online', onBrowserOnline)
   window.addEventListener('offline', onBrowserOffline)
+  if (window.appWindow?.getVersion) {
+    try {
+      appVersion.value = await window.appWindow.getVersion()
+    } catch {
+      appVersion.value = ''
+    }
+  }
 
   if (window.appWindow) {
     window.appWindow.isMaximized().then((value: boolean) => {
@@ -647,6 +655,14 @@ async function onAiInsertComposerText(text: string): Promise<void> {
           <Activity class="h-3 w-3 text-white" />
         </div>
         <span class="text-xs font-semibold tracking-wide" style="color: #c4b8d4">Pulse — АЧПП</span>
+        <span
+          v-if="appVersion"
+          class="text-[10px] font-medium tracking-wide opacity-55"
+          style="color: #bcaecc"
+          :title="`Версия ${appVersion}`"
+        >
+          v{{ appVersion }}
+        </span>
       </div>
 
       <div class="no-drag-region flex items-center gap-0.5">
@@ -681,8 +697,7 @@ async function onAiInsertComposerText(text: string): Promise<void> {
           </button>
           <button
             type="button"
-            class="flex h-[26px] w-8 items-center justify-center rounded text-[11px] transition hover:bg-[#ef4444] hover:text-white"
-            style="color: #8b7a9e"
+            class="flex h-[26px] w-8 items-center justify-center rounded text-[11px] text-[#8b7a9e] transition hover:bg-[#ef4444] hover:text-white"
             title="Закрыть"
             @click="closeWindow"
           >

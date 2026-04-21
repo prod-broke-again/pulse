@@ -3,6 +3,7 @@
 type CloseButtonBehavior = 'ask' | 'quit' | 'hide-to-tray'
 
 interface AppWindowApi {
+  getVersion: () => Promise<string>
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
   requestClose: () => Promise<void>
