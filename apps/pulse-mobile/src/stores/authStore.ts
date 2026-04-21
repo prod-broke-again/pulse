@@ -13,6 +13,7 @@ export type PulseUser = {
   email: string
   avatar_url?: string | null
   roles: string[]
+  is_admin?: boolean
   source_ids: number[]
   department_ids: number[]
   notification_sound_prefs?: NotificationSoundPrefs | null

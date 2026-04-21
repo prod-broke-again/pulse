@@ -7,6 +7,8 @@ export interface ApiUser {
   /** Может отсутствовать в старом кэше localStorage. */
   avatar_url?: string | null
   roles: string[]
+  /** С сервера; при отсутствии в кэше — не полагаться на это поле. */
+  is_admin?: boolean
   source_ids: number[]
   department_ids: number[]
   /** С сервера; при отсутствии в кэше клиент подставляет дефолты. */

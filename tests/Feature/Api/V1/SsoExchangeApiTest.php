@@ -58,7 +58,7 @@ final class SsoExchangeApiTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'token',
-                    'user' => ['id', 'name', 'email', 'roles', 'source_ids', 'department_ids'],
+                    'user' => ['id', 'name', 'email', 'roles', 'is_admin', 'source_ids', 'department_ids'],
                 ],
             ]);
 

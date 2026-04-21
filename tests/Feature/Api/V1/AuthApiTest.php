@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
+use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -50,7 +51,7 @@ final class AuthApiTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'token',
-                    'user' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
+                    'user' => ['id', 'name', 'email', 'avatar_url', 'roles', 'is_admin', 'source_ids', 'department_ids'],
                 ],
             ]);
 
@@ -143,10 +144,11 @@ final class AuthApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
+                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'is_admin', 'source_ids', 'department_ids'],
             ])
             ->assertJsonPath('data.id', $user->id)
-            ->assertJsonPath('data.email', $user->email);
+            ->assertJsonPath('data.email', $user->email)
+            ->assertJsonPath('data.is_admin', true);
     }
 
     public function test_me_returns_401_without_token(): void
@@ -154,6 +156,55 @@ final class AuthApiTest extends TestCase
         $response = $this->getJson('/api/v1/auth/me');
 
         $response->assertUnauthorized();
+    }
+
+    public function test_me_includes_all_source_ids_for_admin_without_pivot_sources(): void
+    {
+        $alpha = SourceModel::query()->create([
+            'name' => 'Alpha',
+            'type' => 'web',
+            'identifier' => 'src-admin-'.uniqid('', true),
+        ]);
+        $bravo = SourceModel::query()->create([
+            'name' => 'Bravo',
+            'type' => 'web',
+            'identifier' => 'src-admin-'.uniqid('', true),
+        ]);
+
+        $admin = $this->createAdmin();
+
+        $response = $this->actingAs($admin, 'sanctum')->getJson('/api/v1/auth/me');
+
+        $response->assertOk()
+            ->assertJsonPath('data.is_admin', true);
+
+        $this->assertEqualsCanonicalizing(
+            [$alpha->id, $bravo->id],
+            $response->json('data.source_ids'),
+        );
+    }
+
+    public function test_me_includes_only_assigned_sources_for_moderator(): void
+    {
+        $assigned = SourceModel::query()->create([
+            'name' => 'Assigned',
+            'type' => 'web',
+            'identifier' => 'src-mod-'.uniqid('', true),
+        ]);
+        SourceModel::query()->create([
+            'name' => 'Other',
+            'type' => 'web',
+            'identifier' => 'src-mod-'.uniqid('', true),
+        ]);
+
+        $moderator = $this->createModerator();
+        $moderator->sources()->sync([$assigned->id]);
+
+        $response = $this->actingAs($moderator, 'sanctum')->getJson('/api/v1/auth/me');
+
+        $response->assertOk()
+            ->assertJsonPath('data.is_admin', false)
+            ->assertJsonPath('data.source_ids', [$assigned->id]);
     }
 
     // --- LOGOUT ---
@@ -195,8 +246,9 @@ final class AuthApiTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'source_ids', 'department_ids'],
-            ]);
+                'data' => ['id', 'name', 'email', 'avatar_url', 'roles', 'is_admin', 'source_ids', 'department_ids'],
+            ])
+            ->assertJsonPath('data.is_admin', false);
 
         $avatarUrl = $response->json('data.avatar_url');
         $this->assertIsString($avatarUrl);
