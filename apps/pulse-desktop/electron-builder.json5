@@ -44,8 +44,10 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": false,
     "deleteAppDataOnUninstall": false,
-    // Установка в защищённые каталоги и корректное завершение мастера (как в типичных NSIS-сборках).
-    "allowElevation": true,
+    // Для per-user установки избегаем повышения прав: это снижает конфликты удаления/замены файлов.
+    "allowElevation": false,
+    // Перед установкой принудительно завершаем висящие процессы Pulse, если они есть.
+    "include": "build/installer.nsh",
     "runAfterFinish": true
   },
   "linux": {

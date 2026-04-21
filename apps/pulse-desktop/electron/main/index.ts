@@ -100,16 +100,31 @@ function setupAutoUpdate(): void {
    * Нужна и для кнопки «Установить», и для `autoInstallOnAppQuit` внутри electron-updater.
    */
   const quitAndInstallOriginal = autoUpdater.quitAndInstall.bind(autoUpdater)
-  autoUpdater.quitAndInstall = (isSilent?: boolean, isForceRunAfter?: boolean): void => {
+  const prepareForInstall = (): void => {
     isAppQuitting = true
     destroyTray()
     closeLocalDb()
+    for (const w of BrowserWindow.getAllWindows()) {
+      try {
+        w.removeAllListeners('close')
+        if (!w.isDestroyed()) {
+          w.close()
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  autoUpdater.quitAndInstall = (isSilent?: boolean, isForceRunAfter?: boolean): void => {
+    prepareForInstall()
     try {
       win?.webContents.closeDevTools()
     } catch {
       /* ignore */
     }
-    quitAndInstallOriginal(isSilent ?? false, isForceRunAfter ?? true)
+    setTimeout(() => {
+      quitAndInstallOriginal(isSilent ?? false, isForceRunAfter ?? true)
+    }, 200)
   }
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
