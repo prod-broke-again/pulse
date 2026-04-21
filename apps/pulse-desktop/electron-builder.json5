@@ -43,7 +43,10 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": false,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    // Установка в защищённые каталоги и корректное завершение мастера (как в типичных NSIS-сборках).
+    "allowElevation": true,
+    "runAfterFinish": true
   },
   "linux": {
     "target": [

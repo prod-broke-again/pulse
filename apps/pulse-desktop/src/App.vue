@@ -100,12 +100,6 @@ const replyToPreview = computed(() => {
   return { id: m.id, text: (m.text ?? '').slice(0, 500) }
 })
 
-const updateDialogNotesLines = computed(() => {
-  const raw = updateDialogNotes.value?.trim()
-  if (!raw) return []
-  return raw.split('\n').map((line) => line.trim()).filter((line) => line !== '')
-})
-
 function onReplyToMessage(messageId: number): void {
   replyToMessageId.value = messageId
 }
@@ -801,18 +795,15 @@ async function onAiInsertComposerText(text: string): Promise<void> {
           </p>
 
           <div
-            v-if="updateDialogNotesLines.length > 0"
+            v-if="updateDialogNotes?.trim()"
             class="mt-4 rounded-[var(--radius-md)] border p-3"
             style="border-color: var(--border-light); background: var(--bg-inbox)"
           >
             <p class="mb-2 text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
               Что нового
             </p>
-            <ul class="space-y-1 text-sm" style="color: var(--text-secondary)">
-              <li v-for="(line, idx) in updateDialogNotesLines" :key="idx">
-                {{ line }}
-              </li>
-            </ul>
+            <!-- GitHub / electron-updater отдают release notes как HTML -->
+            <div class="update-release-notes text-sm" v-html="updateDialogNotes" />
           </div>
 
           <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
@@ -901,3 +892,47 @@ async function onAiInsertComposerText(text: string): Promise<void> {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.update-release-notes :deep(h1),
+.update-release-notes :deep(h2),
+.update-release-notes :deep(h3) {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.update-release-notes :deep(p) {
+  margin: 0 0 0.5rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.update-release-notes :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.update-release-notes :deep(ul),
+.update-release-notes :deep(ol) {
+  margin: 0.35rem 0 0.5rem;
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.update-release-notes :deep(li) {
+  margin: 0.2rem 0;
+}
+
+.update-release-notes :deep(strong) {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.update-release-notes :deep(a) {
+  color: var(--color-brand-200);
+  text-decoration: underline;
+}
+</style>

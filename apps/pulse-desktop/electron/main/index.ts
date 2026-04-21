@@ -76,6 +76,15 @@ function registerOAuthProtocol(): void {
 
 registerOAuthProtocol()
 
+/** Windows: без код-подписи проверка подписи апдейта часто ломает установку (как в Aquila Launcher). */
+function configureWindowsAutoUpdater(): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const wu = autoUpdater as unknown as { verifyUpdateCodeSignature?: boolean }
+  wu.verifyUpdateCodeSignature = process.env.PULSE_VERIFY_UPDATE_SIGNATURE === '1'
+}
+
 /** GitHub Releases в публичном репо (см. electron-builder.json5 → publish). */
 function setupAutoUpdate(): void {
   if (!app.isPackaged) {
@@ -85,6 +94,23 @@ function setupAutoUpdate(): void {
     return
   }
   updateListenersAttached = true
+  configureWindowsAutoUpdater()
+  /**
+   * Обёртка как у Aquila Launcher: `quitAndInstall(false, true)` и освобождение ресурсов до выхода.
+   * Нужна и для кнопки «Установить», и для `autoInstallOnAppQuit` внутри electron-updater.
+   */
+  const quitAndInstallOriginal = autoUpdater.quitAndInstall.bind(autoUpdater)
+  autoUpdater.quitAndInstall = (isSilent?: boolean, isForceRunAfter?: boolean): void => {
+    isAppQuitting = true
+    destroyTray()
+    closeLocalDb()
+    try {
+      win?.webContents.closeDevTools()
+    } catch {
+      /* ignore */
+    }
+    quitAndInstallOriginal(isSilent ?? false, isForceRunAfter ?? true)
+  }
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('checking-for-update', () => {
@@ -360,8 +386,7 @@ function registerWindowManagementIpc(): void {
     if (!app.isPackaged) {
       return
     }
-    isAppQuitting = true
-    autoUpdater.quitAndInstall()
+    autoUpdater.quitAndInstall(false, true)
   })
   ipcMain.handle(
     'window:confirm-close',
