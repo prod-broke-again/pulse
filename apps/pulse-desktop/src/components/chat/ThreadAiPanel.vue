@@ -13,6 +13,8 @@ import { useMessageStore } from '../../stores/messageStore'
 
 const props = defineProps<{
   chatId: number | null
+  /** Секция треда показывает панель (v-show); при true — разворачиваем тело панели. */
+  reveal?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -163,6 +165,16 @@ watch(
       || summaryText.value === 'Не удалось загрузить резюме'
       || (insertableSummary.value == null && suggestions.value.length === 0)
     void runAiFetch(id, needsFull ? 'full' : 'quiet')
+  },
+)
+
+watch(
+  () => props.reveal,
+  (v) => {
+    if (v == null) {
+      return
+    }
+    open.value = v
   },
 )
 

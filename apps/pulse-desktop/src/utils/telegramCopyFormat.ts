@@ -63,6 +63,30 @@ function messageBodyLine(m: MessageItem): string {
 }
 
 /**
+ * Plain text only: body line per message (or attachment summary), in timeline order.
+ * No names, dates, or bracket prefixes.
+ */
+export function formatMessagesPlainText(
+  timeline: MessageItem[],
+  selectedIds: ReadonlySet<number>,
+): string {
+  const lines: string[] = []
+  for (const m of timeline) {
+    if (m.from === 'system') {
+      continue
+    }
+    if (!selectedIds.has(m.id)) {
+      continue
+    }
+    const body = messageBodyLine(m)
+    if (body !== '') {
+      lines.push(body)
+    }
+  }
+  return lines.join('\n\n')
+}
+
+/**
  * Multi-line string like Telegram desktop paste: one block per message.
  */
 export function formatMessagesTelegramStyle(
@@ -83,7 +107,7 @@ export function formatMessagesTelegramStyle(
       m.from === 'client'
         ? peerName
         : m.delivery_channel === 'telegram_app'
-          ? 'Отправлено из Telegram'
+          ? 'Telegram'
           : moderatorName
     const prefix = formatRuDateTimeBracket(m.createdAtIso)
     const body = messageBodyLine(m)

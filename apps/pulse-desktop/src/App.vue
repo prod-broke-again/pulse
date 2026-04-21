@@ -39,6 +39,46 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const messageStore = useMessageStore()
 
+const THEME_MODE_KEY = 'app-theme-mode'
+const LEGACY_THEME_DARK_KEY = 'app-theme-dark'
+type ThemeMode = 'light' | 'dark' | 'system'
+
+function detectSystemDark(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function readStoredThemeMode(): ThemeMode {
+  if (typeof localStorage === 'undefined') {
+    return 'system'
+  }
+  const raw = localStorage.getItem(THEME_MODE_KEY)
+  if (raw === 'light' || raw === 'dark' || raw === 'system') {
+    return raw
+  }
+  // Backward compatibility for old boolean flag.
+  const legacy = localStorage.getItem(LEGACY_THEME_DARK_KEY)
+  if (legacy === '1') {
+    return 'dark'
+  }
+  if (legacy === '0') {
+    return 'light'
+  }
+  return 'system'
+}
+
+function resolveDarkByMode(mode: ThemeMode): boolean {
+  if (mode === 'dark') {
+    return true
+  }
+  if (mode === 'light') {
+    return false
+  }
+  return detectSystemDark()
+}
+
 const conversations = computed<Conversation[]>(() =>
   chatStore.chats.map((chat) => mapChatToConversation(chat, chatStore.selectedChatId)),
 )
@@ -60,12 +100,15 @@ const currentConversation = computed<Conversation | null>(() => {
 })
 
 const activeView = ref<SidebarView>('chats')
-const isDark = ref(false)
+const themeMode = ref<ThemeMode>(readStoredThemeMode())
+const isDark = ref(resolveDarkByMode(themeMode.value))
 const soundEnabled = ref(typeof localStorage !== 'undefined' ? desktopSoundEnabled() : true)
 const toastMessage = ref<string | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 const chatMessagesRef = ref<InstanceType<typeof ChatMessages> | null>(null)
 const chatComposerRef = ref<InstanceType<typeof ChatComposer> | null>(null)
+/** Панель AI скрыта по умолчанию; открытие с кнопки Sparkles в композере. */
+const showThreadAiPanel = ref(false)
 const isElectron = typeof window !== 'undefined' && typeof window.appWindow !== 'undefined'
 const isMaximized = ref(false)
 const isDevtoolsOpen = ref(false)
@@ -107,6 +150,17 @@ function onReplyToMessage(messageId: number): void {
 function clearReplyTarget(): void {
   replyToMessageId.value = null
 }
+
+function toggleThreadAiPanel(): void {
+  showThreadAiPanel.value = !showThreadAiPanel.value
+}
+
+watch(
+  () => chatStore.selectedChatId,
+  () => {
+    showThreadAiPanel.value = false
+  },
+)
 
 function setupModeratorRealtime(): void {
   unsubscribeModeratorChannel?.()
@@ -276,7 +330,6 @@ onMounted(async () => {
 
   window.addEventListener('online', onBrowserOnline)
   window.addEventListener('offline', onBrowserOffline)
-  isDark.value = localStorage.getItem('app-theme-dark') === '1'
 
   if (window.appWindow) {
     window.appWindow.isMaximized().then((value: boolean) => {
@@ -344,11 +397,34 @@ onBeforeUnmount(() => {
 watch(isDark, (value) => {
   document.documentElement.dataset.theme = value ? 'dark' : 'light'
   document.documentElement.classList.toggle('dark', value)
-  localStorage.setItem('app-theme-dark', value ? '1' : '0')
 }, { immediate: true })
 
+watch(themeMode, (mode) => {
+  isDark.value = resolveDarkByMode(mode)
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(THEME_MODE_KEY, mode)
+    localStorage.removeItem(LEGACY_THEME_DARK_KEY)
+  }
+}, { immediate: true })
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  const mm = window.matchMedia('(prefers-color-scheme: dark)')
+  const onSystemThemeChange = (): void => {
+    if (themeMode.value === 'system') {
+      isDark.value = mm.matches
+    }
+  }
+  if (typeof mm.addEventListener === 'function') {
+    mm.addEventListener('change', onSystemThemeChange)
+    onBeforeUnmount(() => mm.removeEventListener('change', onSystemThemeChange))
+  } else if (typeof mm.addListener === 'function') {
+    mm.addListener(onSystemThemeChange)
+    onBeforeUnmount(() => mm.removeListener(onSystemThemeChange))
+  }
+}
+
 function toggleTheme(): void {
-  isDark.value = !isDark.value
+  themeMode.value = isDark.value ? 'light' : 'dark'
 }
 
 async function minimizeWindow(): Promise<void> {
@@ -713,6 +789,8 @@ async function onAiInsertComposerText(text: string): Promise<void> {
                 @toast="showToast"
               />
               <ThreadAiPanel
+                v-show="showThreadAiPanel"
+                :reveal="showThreadAiPanel"
                 :chat-id="chatStore.selectedChatId"
                 @insert-composer-text="onAiInsertComposerText"
                 @notify="showToast"
@@ -723,7 +801,9 @@ async function onAiInsertComposerText(text: string): Promise<void> {
                 :reply-to-preview="replyToPreview"
                 :composer-locked="composerLocked"
                 :composer-lock-hint="composerLockHint"
+                :thread-ai-panel-open="showThreadAiPanel"
                 @clear-reply="clearReplyTarget"
+                @toggle-thread-ai="toggleThreadAiPanel"
                 @send="sendMsg"
               />
             </div>

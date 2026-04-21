@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineExpose, ref, watch } from 'vue'
-import { Paperclip, Zap, Sparkles, Type, SendHorizontal, Loader2, X, FileIcon, Save, Link2 } from 'lucide-vue-next'
+import { Paperclip, Zap, Sparkles, SendHorizontal, Loader2, X, FileIcon, Save, Link2 } from 'lucide-vue-next'
 import { sendTypingIndicator } from '../../api/chats'
 import { uploadFile } from '../../api/uploads'
 import { useChatStore } from '../../stores/chatStore'
@@ -15,6 +15,8 @@ const props = defineProps<{
   /** Чат назначен другому модератору — ввод недоступен до перехвата. */
   composerLocked?: boolean
   composerLockHint?: string
+  /** Панель AI-ассистента открыта в треде. */
+  threadAiPanelOpen?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +28,7 @@ const emit = defineEmits<{
     replyToMessageId?: number,
   ): void
   (e: 'clear-reply'): void
+  (e: 'toggle-thread-ai'): void
 }>()
 
 const chatStore = useChatStore()
@@ -371,18 +374,12 @@ defineExpose({ insertFromAi, focusComposer })
             <button
               type="button"
               class="composer-tool"
-              title="AI-черновик"
-              disabled
+              :class="{ 'composer-tool--active': props.threadAiPanelOpen }"
+              title="AI-черновик: показать и скрыть панель"
+              :disabled="!chatStore.selectedChatId || props.composerLocked"
+              @click="emit('toggle-thread-ai')"
             >
               <Sparkles class="h-[14px] w-[14px]" />
-            </button>
-            <button
-              type="button"
-              class="composer-tool"
-              title="Форматирование"
-              disabled
-            >
-              <Type class="h-[14px] w-[14px]" />
             </button>
           </div>
           <div class="composer-send">

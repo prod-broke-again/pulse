@@ -5,7 +5,6 @@ import {
   Loader2,
   ChevronUp,
   ChevronDown,
-  Reply,
 } from 'lucide-vue-next'
 import {
   nextTick,
@@ -19,7 +18,7 @@ import type { MessageItem } from '../../types/chat'
 import type { ApiMessage } from '../../types/dto/chat.types'
 import { fetchMessageContext } from '../../api/messages'
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue'
-import { formatMessagesTelegramStyle } from '../../utils/telegramCopyFormat'
+import { formatMessagesPlainText } from '../../utils/telegramCopyFormat'
 
 /** FAB / «рядом с низом» — широкий порог. */
 const NEAR_BOTTOM_PX = 140
@@ -31,7 +30,6 @@ const props = defineProps<{
   isLoading?: boolean
   canLoadMore?: boolean
   peerName: string
-  /** Имя модератора для копирования в стиле Telegram */
   moderatorName?: string
   chatId?: number | null
   clientTyping?: boolean
@@ -67,13 +65,98 @@ const selectionMode = ref(false)
 const selectedIds = ref<number[]>([])
 const anchorId = ref<number | null>(null)
 
+const contextMenu = ref<{ x: number; y: number; messageId: number } | null>(null)
+const contextMenuRef = ref<HTMLElement | null>(null)
+const EST_CTX_MENU_W = 200
+const EST_CTX_MENU_H = 100
+
+let contextMenuDocCleanup: (() => void) | null = null
+
+function closeContextMenu(): void {
+  contextMenu.value = null
+  contextMenuDocCleanup?.()
+  contextMenuDocCleanup = null
+}
+
+function openContextMenu(e: MouseEvent, item: MessageItem): void {
+  if (item.from === 'system') {
+    return
+  }
+  e.preventDefault()
+  closeContextMenu()
+  const pad = 4
+  let x = e.clientX
+  let y = e.clientY
+  const maxX = window.innerWidth - EST_CTX_MENU_W - pad
+  const maxY = window.innerHeight - EST_CTX_MENU_H - pad
+  x = Math.max(pad, Math.min(x, maxX))
+  y = Math.max(pad, Math.min(y, maxY))
+  contextMenu.value = { x, y, messageId: item.id }
+
+  const onKey = (ke: KeyboardEvent): void => {
+    if (ke.key === 'Escape') {
+      closeContextMenu()
+    }
+  }
+  const onDown = (me: MouseEvent): void => {
+    const t = me.target as Node
+    if (contextMenuRef.value?.contains(t)) {
+      return
+    }
+    closeContextMenu()
+  }
+  const root = scrollRoot.value
+  const onScroll = (): void => {
+    closeContextMenu()
+  }
+  document.addEventListener('keydown', onKey)
+  document.addEventListener('mousedown', onDown)
+  if (root) {
+    root.addEventListener('scroll', onScroll, { passive: true })
+  }
+  contextMenuDocCleanup = (): void => {
+    document.removeEventListener('keydown', onKey)
+    document.removeEventListener('mousedown', onDown)
+    if (root) {
+      root.removeEventListener('scroll', onScroll)
+    }
+  }
+}
+
+function contextMenuReply(): void {
+  const id = contextMenu.value?.messageId
+  closeContextMenu()
+  if (id != null) {
+    emit('reply', id)
+  }
+}
+
+async function contextMenuCopyPlain(): Promise<void> {
+  const id = contextMenu.value?.messageId
+  if (id == null) {
+    return
+  }
+  const text = formatMessagesPlainText(props.timeline, new Set([id]))
+  closeContextMenu()
+  if (text.trim() === '') {
+    emit('toast', 'Нечего копировать')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    emit('toast', 'Скопировано')
+  } catch {
+    emit('toast', 'Не удалось скопировать')
+  }
+}
+
 function moderatorLabel(): string {
   return props.moderatorName?.trim() || 'Модератор'
 }
 
 function moderatorBubbleLabel(item: MessageItem): string {
   if (item.from === 'moderator' && item.delivery_channel === 'telegram_app') {
-    return 'Отправлено из Telegram'
+    return 'Telegram'
   }
   return moderatorLabel()
 }
@@ -128,13 +211,11 @@ function toggleSelectMessage(id: number, shiftKey: boolean): void {
   selectedIds.value = [...s]
 }
 
-function onContextMessage(item: MessageItem): void {
+function onContextMessage(e: MouseEvent, item: MessageItem): void {
   if (item.from === 'system') {
     return
   }
-  enterSelectionMode()
-  selectedIds.value = [item.id]
-  anchorId.value = item.id
+  openContextMenu(e, item)
 }
 
 function onBubbleSelectClick(item: MessageItem, e: MouseEvent): void {
@@ -149,12 +230,11 @@ async function copySelectedToClipboard(): Promise<void> {
   if (selectedIds.value.length === 0) {
     return
   }
-  const text = formatMessagesTelegramStyle(
-    props.timeline,
-    new Set(selectedIds.value),
-    props.peerName,
-    moderatorLabel(),
-  )
+  const text = formatMessagesPlainText(props.timeline, new Set(selectedIds.value))
+  if (text.trim() === '') {
+    emit('toast', 'Нечего копировать')
+    return
+  }
   try {
     await navigator.clipboard.writeText(text)
     emit('toast', 'Скопировано')
@@ -169,12 +249,12 @@ function onGlobalCopy(e: ClipboardEvent): void {
     return
   }
   e.preventDefault()
-  const text = formatMessagesTelegramStyle(
-    props.timeline,
-    new Set(selectedIds.value),
-    props.peerName,
-    moderatorLabel(),
-  )
+  const text = formatMessagesPlainText(props.timeline, new Set(selectedIds.value))
+  if (text.trim() === '') {
+    emit('toast', 'Нечего копировать')
+    exitSelectionMode()
+    return
+  }
   e.clipboardData?.setData('text/plain', text)
   emit('toast', 'Скопировано')
   exitSelectionMode()
@@ -225,6 +305,7 @@ function attachThreadResizeObserver(): void {
 
 onBeforeUnmount(() => {
   document.removeEventListener('copy', onGlobalCopy)
+  closeContextMenu()
   detachThreadResizeObserver()
 })
 
@@ -352,6 +433,7 @@ onUpdated(() => {
 watch(
   () => props.chatId,
   () => {
+    closeContextMenu()
     exitSelectionMode()
     pendingBelowCount.value = 0
     isNearBottom.value = true
@@ -560,16 +642,25 @@ defineExpose({
 
         <div
           v-else-if="item.from === 'client'"
-          class="msg-group user"
+          class="msg-group user group"
           :data-message-id="item.id"
           :class="{
             'msg-jump-highlight': highlightMessageId === item.id,
             'msg--selected': selectionMode && isMsgSelected(item.id),
           }"
-          @contextmenu.prevent="onContextMessage(item)"
+          @contextmenu.prevent="onContextMessage($event, item)"
         >
-          <div class="msg-sender">
-            {{ peerName }}
+          <div class="flex w-full max-w-[520px] items-center justify-between self-start px-1">
+            <div class="msg-sender m-0 p-0">
+              {{ peerName }}
+            </div>
+            <button
+              type="button"
+              class="invisible border-none bg-transparent p-0 text-[11px] font-semibold text-[var(--text-primary)] opacity-0 underline-offset-2 transition-opacity duration-150 hover:text-[var(--text-secondary)] hover:underline group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              @click.stop="emit('reply', item.id)"
+            >
+              Ответить
+            </button>
           </div>
           <div class="msg-bubble" @click="onBubbleSelectClick(item, $event)">
             <div
@@ -607,32 +698,33 @@ defineExpose({
                 @click.stop
               >{{ btn.text }}</a>
             </div>
-          </div>
+            </div>
           <div class="msg-time inline-flex items-center gap-1">
-            <button
-              type="button"
-              class="rounded p-0.5 opacity-50 hover:opacity-100"
-              title="Ответить"
-              @click.stop="emit('reply', item.id)"
-            >
-              <Reply class="h-3 w-3" />
-            </button>
             {{ item.time }}
           </div>
         </div>
 
         <div
           v-else-if="item.from === 'moderator'"
-          class="msg-group mod"
+          class="msg-group mod group"
           :data-message-id="item.id"
           :class="{
             'msg-jump-highlight': highlightMessageId === item.id,
             'msg--selected': selectionMode && isMsgSelected(item.id),
           }"
-          @contextmenu.prevent="onContextMessage(item)"
+          @contextmenu.prevent="onContextMessage($event, item)"
         >
-          <div class="msg-sender">
-            {{ moderatorBubbleLabel(item) }}
+          <div class="flex w-full max-w-[520px] items-center justify-between self-end px-1">
+            <button
+              type="button"
+              class="invisible border-none bg-transparent p-0 text-[11px] font-semibold text-[var(--text-primary)] opacity-0 underline-offset-2 transition-opacity duration-150 hover:text-[var(--text-secondary)] hover:underline group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              @click.stop="emit('reply', item.id)"
+            >
+              Ответить
+            </button>
+            <div class="msg-sender m-0 p-0 text-right">
+              {{ moderatorBubbleLabel(item) }}
+            </div>
           </div>
           <div
             class="msg-bubble"
@@ -673,16 +765,8 @@ defineExpose({
                 @click.stop
               >{{ btn.text }}</a>
             </div>
-          </div>
+            </div>
           <div class="msg-time inline-flex items-center gap-1">
-            <button
-              type="button"
-              class="rounded p-0.5 opacity-50 hover:opacity-100"
-              title="Ответить"
-              @click.stop="emit('reply', item.id)"
-            >
-              <Reply class="h-3 w-3 text-white/80" />
-            </button>
             <Loader2
               v-if="item.from === 'moderator' && item.pending"
               class="h-3 w-3 shrink-0 animate-spin"
@@ -754,6 +838,35 @@ defineExpose({
         {{ pendingBelowCount > 99 ? '99+' : pendingBelowCount }}
       </span>
     </button>
+
+    <Teleport to="body">
+      <div
+        v-if="contextMenu"
+        ref="contextMenuRef"
+        class="pointer-events-auto fixed z-[100] min-w-[180px] overflow-hidden rounded-lg border py-1 text-[13px] shadow-lg"
+        style="background: var(--bg-inbox); border-color: var(--border-light); color: var(--text-primary)"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        role="menu"
+        @click.stop
+      >
+        <button
+          type="button"
+          class="block w-full cursor-pointer px-3 py-2.5 text-left text-[13px] hover:bg-[var(--bg-card-hover)]"
+          role="menuitem"
+          @click="contextMenuReply"
+        >
+          Ответить
+        </button>
+        <button
+          type="button"
+          class="block w-full cursor-pointer px-3 py-2.5 text-left text-[13px] hover:bg-[var(--bg-card-hover)]"
+          role="menuitem"
+          @click="contextMenuCopyPlain"
+        >
+          Копировать
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
