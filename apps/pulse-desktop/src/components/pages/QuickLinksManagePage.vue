@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-vue-next'
+import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown, X, ArrowUpRight, Globe, Folder, Users } from 'lucide-vue-next'
 import {
   fetchQuickLinks,
   createQuickLink,
@@ -13,6 +13,7 @@ import type { SourceListQueryParams } from '../../api/sourceListQuery'
 import { useAuthStore } from '../../stores/authStore'
 import type { ApiQuickLink } from '../../types/dto/quick-link.types'
 import ModeratorGuideCard from '../common/ModeratorGuideCard.vue'
+import CustomSelect from '../common/CustomSelect.vue'
 
 const authStore = useAuthStore()
 const items = ref<ApiQuickLink[]>([])
@@ -47,6 +48,39 @@ const sourceNamesById = computed(() => {
   return map
 })
 const isAdmin = computed(() => authStore.user?.roles?.includes('admin'))
+
+const filterSourceOptions = computed(() => [
+  { label: 'Все доступные', value: 'all' as const },
+  ...sourceOptions.value.map((sid) => ({ label: sourceLabel(sid), value: sid })),
+])
+
+const visibilityOptions = [
+  { label: 'Все', value: 'all' as const },
+  { label: 'Мои', value: 'mine' as const },
+  { label: 'Общие', value: 'shared' as const },
+]
+
+const scopeKindOptions = computed(() => {
+  const rows: Array<{ label: string; value: 'global' | 'source' | 'department' }> = []
+  if (isAdmin.value) {
+    rows.push({ label: 'Глобально (все источники)', value: 'global' })
+  }
+  rows.push({ label: 'Источник (проект)', value: 'source' })
+  rows.push({ label: 'Отдел', value: 'department' })
+  return rows
+})
+
+const formSourceOptions = computed(() => sourceOptions.value.map((sid) => ({
+  label: sourceLabel(sid),
+  value: String(sid),
+})))
+
+const formDepartmentOptions = computed(() => [
+  { label: 'Выберите…', value: '' },
+  ...departmentOptions.value.map((d) => ({ label: d.name, value: String(d.id) })),
+])
+
+const previewTitle = computed(() => form.value.title.trim() || 'Подпись кнопки')
 
 function sourceLabel(sourceId: number): string {
   return sourceNamesById.value.get(sourceId) ?? `Проект #${sourceId}`
@@ -270,7 +304,7 @@ async function move(index: number, dir: -1 | 1) {
         style="
           background: linear-gradient(135deg, var(--color-brand) 0%, #7c3a86 100%);
           color: white;
-          ring-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 35%, transparent);
         "
         @click="openCreate"
       >
@@ -296,57 +330,38 @@ async function move(index: number, dir: -1 | 1) {
       ]"
     />
 
-    <div class="mb-4 flex flex-wrap gap-3">
-      <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+    <div class="ql-filters">
+      <label class="ql-filter-group">
         Источник
-        <select
+        <CustomSelect
           v-model="sourceFilter"
-          class="h-10 min-w-[180px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
-          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
+          :options="filterSourceOptions"
           @change="load"
-        >
-          <option value="all">
-            Все доступные
-          </option>
-          <option v-for="sid in sourceOptions" :key="sid" :value="sid">
-            {{ sourceLabel(sid) }}
-          </option>
-        </select>
+        />
       </label>
-      <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+      <label class="ql-filter-group">
         Видимость
-        <select
+        <CustomSelect
           v-model="visibilityFilter"
-          class="h-10 min-w-[160px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
-          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
+          :options="visibilityOptions"
           @change="load"
-        >
-          <option value="all">
-            Все
-          </option>
-          <option value="mine">
-            Мои
-          </option>
-          <option value="shared">
-            Общие
-          </option>
-        </select>
+        />
       </label>
-      <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+      <label class="ql-filter-group">
         Поиск
-        <input
-          v-model="q"
-          type="search"
-          class="h-10 min-w-[200px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
-          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
-          placeholder="Текст или URL"
-          @keydown.enter="load"
-        >
+        <div class="ql-search-wrap">
+          <input
+            v-model="q"
+            type="search"
+            class="ql-input ql-input-search"
+            placeholder="Текст или URL"
+            @keydown.enter="load"
+          >
+        </div>
       </label>
       <button
         type="button"
-        class="mt-auto h-10 rounded-[var(--radius-md)] border px-4 text-sm font-semibold transition hover:bg-white/5"
-        style="border-color: var(--border-light); color: var(--text-primary)"
+        class="ql-btn ql-btn-ghost"
         @click="load"
       >
         Обновить
@@ -364,69 +379,75 @@ async function move(index: number, dir: -1 | 1) {
       <Loader2 class="h-8 w-8 animate-spin" style="color: var(--color-brand)" />
     </div>
 
-    <div v-else class="overflow-x-auto rounded-[var(--radius-md)] border" style="border-color: var(--border-light)">
+    <div v-else class="ql-table-wrap">
+      <div class="overflow-x-auto">
       <table class="w-full min-w-[900px] text-left text-sm">
-        <thead style="background: var(--bg-inbox); color: var(--text-secondary)">
+        <thead class="ql-thead">
           <tr>
-            <th class="px-2 py-3 w-24 font-semibold">
+            <th class="w-24">
               Порядок
             </th>
-            <th class="px-4 py-3 font-semibold">
+            <th>
               Подпись
             </th>
-            <th class="px-4 py-3 font-semibold">
+            <th>
               URL
             </th>
-            <th class="px-4 py-3 font-semibold">
+            <th>
               Область
             </th>
-            <th class="px-4 py-3 font-semibold">
-              Общая
+            <th>
+              Статус
             </th>
-            <th class="px-4 py-3 font-semibold">
-              Активна
-            </th>
-            <th class="px-4 py-3 font-semibold w-36" />
+            <th class="w-36 text-right" />
           </tr>
         </thead>
         <tbody>
           <tr
             v-for="(row, index) in items"
             :key="row.id"
-            class="border-t transition hover:bg-white/5"
-            style="border-color: var(--border-light); color: var(--text-primary)"
+            class="ql-tr"
           >
             <td class="px-2 py-2">
-              <div class="flex flex-col gap-0.5">
-                <button type="button" class="rounded p-1 hover:bg-white/10" title="Выше" @click="move(index, -1)">
+              <div class="ql-order-btns">
+                <button type="button" class="ql-icon-btn" title="Выше" @click="move(index, -1)">
                   <ChevronUp class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1 hover:bg-white/10" title="Ниже" @click="move(index, 1)">
+                <button type="button" class="ql-icon-btn" title="Ниже" @click="move(index, 1)">
                   <ChevronDown class="h-4 w-4" />
                 </button>
               </div>
             </td>
-            <td class="px-4 py-2 max-w-[200px] truncate">
+            <td class="px-4 py-2 max-w-[220px] truncate font-semibold">
               {{ row.title }}
             </td>
-            <td class="px-4 py-2 max-w-[280px] truncate font-mono text-xs" style="color: var(--text-secondary)">
+            <td class="px-4 py-2 max-w-[320px] truncate font-mono text-xs" style="color: var(--text-secondary)">
               {{ row.url }}
             </td>
             <td class="px-4 py-2">
-              {{ scopeLabel(row) }}
+              <span class="ql-badge ql-badge-scope">
+                <Globe v-if="row.scope_type == null" class="h-3 w-3" />
+                <Folder v-else-if="row.scope_type === 'source'" class="h-3 w-3" />
+                <Users v-else class="h-3 w-3" />
+                {{ scopeLabel(row) }}
+              </span>
             </td>
             <td class="px-4 py-2">
-              {{ row.is_shared ? 'Да' : 'Нет' }}
+              <div class="flex flex-wrap gap-2">
+                <span class="ql-badge" :class="row.is_active ? 'ql-badge-active' : 'ql-badge-inactive'">
+                  {{ row.is_active ? 'Активна' : 'Выкл.' }}
+                </span>
+                <span v-if="row.is_shared" class="ql-badge ql-badge-shared">
+                  Общая
+                </span>
+              </div>
             </td>
-            <td class="px-4 py-2">
-              {{ row.is_active ? 'Да' : 'Нет' }}
-            </td>
-            <td class="px-4 py-2">
-              <div class="flex gap-2">
-                <button type="button" class="rounded p-1.5 hover:bg-white/10" title="Изменить" @click="openEdit(row)">
+            <td class="px-4 py-2 text-right">
+              <div class="ql-row-actions">
+                <button type="button" class="ql-icon-btn ql-row-action-btn" title="Изменить" @click="openEdit(row)">
                   <Pencil class="h-4 w-4" />
                 </button>
-                <button type="button" class="rounded p-1.5 text-red-400 hover:bg-red-500/10" title="Удалить" @click="remove(row)">
+                <button type="button" class="ql-icon-btn ql-row-action-btn ql-icon-btn-danger" title="Удалить" @click="remove(row)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </div>
@@ -434,116 +455,142 @@ async function move(index: number, dir: -1 | 1) {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <div
       v-if="formOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      class="ql-modal-overlay"
       role="dialog"
       aria-modal="true"
+      @click.self="formOpen = false"
     >
-      <div
-        class="custom-scroll max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--radius-md)] border p-6 shadow-xl"
-        style="border-color: var(--border-light); background: var(--bg-inbox)"
-      >
-        <h3 class="mb-4 text-lg font-bold" style="color: var(--text-primary)">
-          {{ editing ? 'Редактировать ссылку' : 'Новая ссылка' }}
-        </h3>
-        <div class="space-y-4">
-          <label class="flex items-center gap-2 text-sm" style="color: var(--text-primary)">
-            <input v-model="form.is_shared" type="checkbox" class="rounded border" style="border-color: var(--border-light)">
-            Общая (видна коллегам в этой области)
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Область
-            <select
-              v-model="form.scope_kind"
-              class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-              style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-            >
-              <option v-if="isAdmin" value="global">
-                Глобально (все источники)
-              </option>
-              <option value="source">
-                Источник (проект)
-              </option>
-              <option value="department">
-                Отдел
-              </option>
-            </select>
-          </label>
-          <label
-            v-if="form.scope_kind === 'source'"
-            class="block text-xs font-bold uppercase tracking-wide"
-            style="color: var(--text-secondary)"
-          >
-            Источник *
-            <select
-              v-model="form.scope_source_id"
-              class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-              style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-            >
-              <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                {{ sourceLabel(sid) }}
-              </option>
-            </select>
-          </label>
-          <template v-if="form.scope_kind === 'department'">
-            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Проект для списка отделов *
-              <select
-                v-model="form.scope_dept_parent_source_id"
-                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-              >
-                <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                  {{ sourceLabel(sid) }}
-                </option>
-              </select>
-            </label>
-            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Отдел *
-              <select
-                v-model="form.scope_department_id"
-                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-              >
-                <option value="">
-                  Выберите…
-                </option>
-                <option v-for="d in departmentOptions" :key="d.id" :value="String(d.id)">
-                  {{ d.name }}
-                </option>
-              </select>
-            </label>
-          </template>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Подпись кнопки *
-            <input v-model="form.title" type="text" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            URL *
-            <input v-model="form.url" type="url" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Порядок
-            <input v-model.number="form.sort_order" type="number" min="0" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">
-          </label>
-          <label class="flex items-center gap-2 text-sm" style="color: var(--text-primary)">
-            <input v-model="form.is_active" type="checkbox" class="rounded border" style="border-color: var(--border-light)">
-            Активна
-          </label>
+      <div class="ql-modal custom-scroll">
+        <div class="ql-modal-header">
+          <div>
+            <h2 class="ql-modal-title">
+              {{ editing ? 'Редактировать ссылку' : 'Новая ссылка' }}
+            </h2>
+            <p class="ql-modal-sub">
+              Настройте область показа и параметры inline-кнопки.
+            </p>
+          </div>
+          <button type="button" class="ql-modal-close" aria-label="Закрыть" @click="formOpen = false">
+            <X class="h-4 w-4" />
+          </button>
         </div>
-        <div class="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            class="rounded-[var(--radius-md)] border px-4 py-2 text-sm font-semibold"
-            style="border-color: var(--border-light); color: var(--text-primary)"
-            @click="formOpen = false"
-          >
+
+        <div class="ql-modal-body">
+          <div class="ql-form-section">
+            <div class="ql-section-title">
+              Видимость
+            </div>
+            <div class="ql-switch-row">
+              <div class="ql-switch-text">
+                <span class="ql-switch-title">Общая ссылка</span>
+                <span class="ql-switch-desc">Видна коллегам в этой же области</span>
+              </div>
+              <label class="ql-switch">
+                <input v-model="form.is_shared" type="checkbox">
+                <span class="ql-switch-slider" />
+              </label>
+            </div>
+          </div>
+
+          <div class="ql-form-section">
+            <div class="ql-section-title">
+              Область действия
+            </div>
+            <div class="ql-form-grid">
+              <label class="ql-field ql-field-full">
+                <span class="ql-field-label">Тип области</span>
+                <CustomSelect v-model="form.scope_kind" :options="scopeKindOptions" />
+              </label>
+              <label v-if="form.scope_kind === 'source'" class="ql-field ql-field-full">
+                <span class="ql-field-label">Источник<span class="ql-req">*</span></span>
+                <CustomSelect v-model="form.scope_source_id" :options="formSourceOptions" />
+              </label>
+              <template v-if="form.scope_kind === 'department'">
+                <label class="ql-field">
+                  <span class="ql-field-label">Проект<span class="ql-req">*</span></span>
+                  <CustomSelect v-model="form.scope_dept_parent_source_id" :options="formSourceOptions" />
+                </label>
+                <label class="ql-field">
+                  <span class="ql-field-label">Отдел<span class="ql-req">*</span></span>
+                  <CustomSelect v-model="form.scope_department_id" :options="formDepartmentOptions" />
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <div class="ql-form-section">
+            <div class="ql-section-title">
+              Параметры кнопки
+            </div>
+            <div class="ql-form-grid">
+              <label class="ql-field ql-field-full">
+                <span class="ql-field-label">Подпись кнопки<span class="ql-req">*</span></span>
+                <input
+                  v-model="form.title"
+                  type="text"
+                  class="ql-input"
+                  placeholder="Например, «Оплатить заказ»"
+                >
+              </label>
+              <label class="ql-field ql-field-full">
+                <span class="ql-field-label">URL<span class="ql-req">*</span></span>
+                <input
+                  v-model="form.url"
+                  type="url"
+                  class="ql-input"
+                  placeholder="https://example.com/pay"
+                >
+              </label>
+              <label class="ql-field">
+                <span class="ql-field-label">Порядок</span>
+                <input
+                  v-model.number="form.sort_order"
+                  type="number"
+                  min="0"
+                  class="ql-input"
+                >
+              </label>
+              <div class="ql-field">
+                <span class="ql-field-label">Статус</span>
+                <div class="ql-switch-row ql-switch-row-compact">
+                  <span class="ql-switch-title">Активна</span>
+                  <label class="ql-switch">
+                    <input v-model="form.is_active" type="checkbox">
+                    <span class="ql-switch-slider" />
+                  </label>
+                </div>
+              </div>
+              <div class="ql-field ql-field-full">
+                <span class="ql-field-label">Предпросмотр</span>
+                <div class="ql-url-preview">
+                  <div class="ql-url-preview-label">
+                    Так кнопка будет выглядеть в чате:
+                  </div>
+                  <span class="ql-url-preview-btn">
+                    <ArrowUpRight class="h-3.5 w-3.5" />
+                    {{ previewTitle }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ql-modal-footer">
+          <button type="button" class="ql-btn ql-btn-ghost" @click="formOpen = false">
             Отмена
           </button>
-          <button type="button" class="btn btn-primary px-4" :disabled="loading" @click="saveForm">
+          <button
+            type="button"
+            class="ql-btn ql-btn-primary"
+            :disabled="loading"
+            @click="saveForm"
+          >
             Сохранить
           </button>
         </div>
@@ -551,3 +598,416 @@ async function move(index: number, dir: -1 | 1) {
     </div>
   </section>
 </template>
+
+<style scoped>
+.ql-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.ql-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.ql-search-wrap {
+  width: 100%;
+}
+
+.ql-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-inbox);
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 0 12px;
+  outline: none;
+}
+
+.ql-input-search {
+  min-width: 240px;
+  padding-left: 34px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='11' cy='11' r='8'%3e%3c/circle%3e%3cline x1='21' y1='21' x2='16.65' y2='16.65'%3e%3c/line%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  background-size: 14px;
+}
+
+.ql-btn {
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.ql-btn-ghost {
+  background: var(--bg-inbox);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.ql-btn-ghost:hover {
+  border-color: var(--border-medium);
+}
+
+.ql-btn-primary {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: var(--text-primary);
+}
+
+.ql-btn-primary:hover:not(:disabled) {
+  opacity: 0.95;
+}
+
+.ql-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ql-table-wrap {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-inbox);
+  overflow: hidden;
+}
+
+.ql-thead th {
+  padding: 14px 18px;
+  background: var(--bg-thread);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  white-space: nowrap;
+}
+
+.ql-tr td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.ql-tr:last-child td {
+  border-bottom: none;
+}
+
+.ql-tr:hover {
+  background: color-mix(in srgb, var(--bg-thread) 85%, transparent);
+}
+
+.ql-order-btns {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ql-icon-btn {
+  width: 28px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.ql-icon-btn:hover {
+  border-color: var(--border-light);
+  background: color-mix(in srgb, var(--bg-thread) 90%, transparent);
+  color: var(--text-primary);
+}
+
+.ql-icon-btn-danger:hover {
+  border-color: #b84646;
+  color: #b84646;
+  background: rgba(184, 70, 70, 0.1);
+}
+
+.ql-row-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ql-row-action-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.ql-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border-light);
+  background: var(--bg-thread);
+  color: var(--text-secondary);
+}
+
+.ql-badge-scope {
+  color: var(--text-primary);
+  background: var(--bg-inbox);
+}
+
+.ql-badge-active {
+  color: #2d5f3f;
+  background: color-mix(in srgb, #2d5f3f 16%, transparent);
+  border-color: transparent;
+}
+
+.ql-badge-inactive {
+  color: var(--text-secondary);
+}
+
+.ql-badge-shared {
+  color: #8a5a00;
+  background: rgba(253, 244, 227, 0.8);
+  border-color: transparent;
+}
+
+.ql-section-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-secondary);
+}
+
+.ql-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-thread);
+}
+
+.ql-switch-row-compact {
+  padding: 10px 12px;
+}
+
+.ql-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ql-switch-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.ql-switch-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.ql-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.ql-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ql-switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border-medium);
+  border-radius: 22px;
+  transition: 0.2s;
+}
+
+.ql-switch-slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.2s;
+}
+
+.ql-switch input:checked + .ql-switch-slider {
+  background: var(--color-brand);
+}
+
+.ql-switch input:checked + .ql-switch-slider::before {
+  transform: translateX(18px);
+}
+
+.ql-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(20, 20, 20, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ql-modal {
+  width: 100%;
+  max-width: 620px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--bg-inbox);
+  box-shadow: var(--shadow-lg);
+}
+
+.ql-modal-header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ql-modal-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.ql-modal-sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.ql-modal-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ql-modal-close:hover {
+  background: color-mix(in srgb, var(--bg-thread) 80%, transparent);
+  color: var(--text-primary);
+}
+
+.ql-modal-body {
+  padding: 24px 28px;
+}
+
+.ql-modal-footer {
+  padding: 16px 28px 22px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: var(--bg-thread);
+}
+
+.ql-form-section {
+  margin-bottom: 24px;
+}
+
+.ql-form-section:last-child {
+  margin-bottom: 0;
+}
+
+.ql-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.ql-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ql-field-full {
+  grid-column: 1 / -1;
+}
+
+.ql-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.ql-req {
+  color: #b84646;
+  margin-left: 2px;
+}
+
+.ql-url-preview {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-thread);
+}
+
+.ql-url-preview-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ql-url-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .ql-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

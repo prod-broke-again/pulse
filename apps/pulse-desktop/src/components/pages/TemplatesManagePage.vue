@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Loader2, Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import { Loader2, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import {
   fetchCannedResponses,
   createCannedResponse,
@@ -12,6 +12,7 @@ import type { SourceListQueryParams } from '../../api/sourceListQuery'
 import { useAuthStore } from '../../stores/authStore'
 import type { ApiCannedResponse } from '../../types/dto/canned-response.types'
 import ModeratorGuideCard from '../common/ModeratorGuideCard.vue'
+import CustomSelect from '../common/CustomSelect.vue'
 
 const authStore = useAuthStore()
 const items = ref<ApiCannedResponse[]>([])
@@ -48,6 +49,37 @@ const sourceNamesById = computed(() => {
 })
 
 const isAdmin = computed(() => authStore.user?.roles?.includes('admin'))
+
+const filterSourceOptions = computed(() => [
+  { label: 'Все доступные', value: 'all' as const },
+  ...sourceOptions.value.map((sid) => ({ label: sourceLabel(sid), value: sid })),
+])
+
+const visibilityOptions = [
+  { label: 'Все', value: 'all' as const },
+  { label: 'Мои', value: 'mine' as const },
+  { label: 'Общие', value: 'shared' as const },
+]
+
+const scopeKindOptions = computed(() => {
+  const rows: Array<{ label: string; value: 'global' | 'source' | 'department' }> = []
+  if (isAdmin.value) {
+    rows.push({ label: 'Глобально (все источники)', value: 'global' })
+  }
+  rows.push({ label: 'Источник (проект)', value: 'source' })
+  rows.push({ label: 'Отдел', value: 'department' })
+  return rows
+})
+
+const formSourceOptions = computed(() => sourceOptions.value.map((sid) => ({
+  label: sourceLabel(sid),
+  value: String(sid),
+})))
+
+const formDepartmentOptions = computed(() => [
+  { label: 'Выберите…', value: '' },
+  ...departmentOptions.value.map((d) => ({ label: d.name, value: String(d.id) })),
+])
 
 function sourceLabel(sourceId: number): string {
   return sourceNamesById.value.get(sourceId) ?? `Проект #${sourceId}`
@@ -247,7 +279,7 @@ async function remove(row: ApiCannedResponse) {
         style="
           background: linear-gradient(135deg, var(--color-brand) 0%, #7c3a86 100%);
           color: white;
-          ring-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 35%, transparent);
         "
         @click="openCreate"
       >
@@ -276,38 +308,19 @@ async function remove(row: ApiCannedResponse) {
     <div class="mb-4 flex flex-wrap gap-3">
       <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
         Источник
-        <select
+        <CustomSelect
           v-model="sourceFilter"
-          class="h-10 min-w-[180px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
-          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
+          :options="filterSourceOptions"
           @change="load"
-        >
-          <option value="all">
-            Все доступные
-          </option>
-          <option v-for="sid in sourceOptions" :key="sid" :value="sid">
-            {{ sourceLabel(sid) }}
-          </option>
-        </select>
+        />
       </label>
       <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
         Видимость
-        <select
+        <CustomSelect
           v-model="visibilityFilter"
-          class="h-10 min-w-[160px] rounded-[var(--radius-md)] border px-3 font-medium outline-none"
-          style="border-color: var(--border-light); background: var(--bg-inbox); color: var(--text-primary)"
+          :options="visibilityOptions"
           @change="load"
-        >
-          <option value="all">
-            Все
-          </option>
-          <option value="mine">
-            Мои
-          </option>
-          <option value="shared">
-            Общие
-          </option>
-        </select>
+        />
       </label>
       <label class="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
         Поиск
@@ -402,112 +415,105 @@ async function remove(row: ApiCannedResponse) {
 
     <div
       v-if="formOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      class="tm-modal-overlay"
       role="dialog"
       aria-modal="true"
+      @click.self="formOpen = false"
     >
-      <div
-        class="custom-scroll max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--radius-md)] border p-6 shadow-xl"
-        style="border-color: var(--border-light); background: var(--bg-inbox)"
-      >
-        <h3 class="mb-4 text-lg font-bold" style="color: var(--text-primary)">
-          {{ editing ? 'Редактировать шаблон' : 'Новый шаблон' }}
-        </h3>
-        <div class="space-y-4">
-          <label class="flex items-center gap-2 text-sm" style="color: var(--text-primary)">
-            <input v-model="form.is_shared" type="checkbox" class="rounded border" style="border-color: var(--border-light)">
-            Общий (виден коллегам в этой области)
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Область
-            <select
-              v-model="form.scope_kind"
-              class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-              style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-            >
-              <option v-if="isAdmin" value="global">
-                Глобально (все источники)
-              </option>
-              <option value="source">
-                Источник (проект)
-              </option>
-              <option value="department">
-                Отдел
-              </option>
-            </select>
-          </label>
-          <label
-            v-if="form.scope_kind === 'source'"
-            class="block text-xs font-bold uppercase tracking-wide"
-            style="color: var(--text-secondary)"
-          >
-            Источник *
-            <select
-              v-model="form.scope_source_id"
-              class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-              style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-            >
-              <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                {{ sourceLabel(sid) }}
-              </option>
-            </select>
-          </label>
-          <template v-if="form.scope_kind === 'department'">
-            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Проект для списка отделов *
-              <select
-                v-model="form.scope_dept_parent_source_id"
-                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-              >
-                <option v-for="sid in sourceOptions" :key="sid" :value="String(sid)">
-                  {{ sourceLabel(sid) }}
-                </option>
-              </select>
-            </label>
-            <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Отдел *
-              <select
-                v-model="form.scope_department_id"
-                class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3"
-                style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-              >
-                <option value="">
-                  Выберите…
-                </option>
-                <option v-for="d in departmentOptions" :key="d.id" :value="String(d.id)">
-                  {{ d.name }}
-                </option>
-              </select>
-            </label>
-          </template>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Код *
-            <input v-model="form.code" type="text" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Название *
-            <input v-model="form.title" type="text" class="mt-1 h-10 w-full rounded-[var(--radius-md)] border px-3" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)">
-          </label>
-          <label class="block text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-            Текст *
-            <textarea v-model="form.text" rows="6" class="mt-1 w-full rounded-[var(--radius-md)] border px-3 py-2" style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)" />
-          </label>
-          <label class="flex items-center gap-2 text-sm" style="color: var(--text-primary)">
-            <input v-model="form.is_active" type="checkbox" class="rounded border" style="border-color: var(--border-light)">
-            Активен
-          </label>
+      <div class="tm-modal custom-scroll">
+        <div class="tm-modal-header">
+          <div>
+            <h2 class="tm-modal-title">
+              {{ editing ? 'Редактировать шаблон' : 'Новый шаблон' }}
+            </h2>
+            <p class="tm-modal-sub">
+              Настройте область видимости и содержание шаблона.
+            </p>
+          </div>
+          <button type="button" class="tm-modal-close" aria-label="Закрыть" @click="formOpen = false">
+            <X class="h-4 w-4" />
+          </button>
         </div>
-        <div class="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            class="rounded-[var(--radius-md)] border px-4 py-2 text-sm font-semibold"
-            style="border-color: var(--border-light); color: var(--text-primary)"
-            @click="formOpen = false"
-          >
+
+        <div class="tm-modal-body">
+          <div class="tm-form-section">
+            <div class="tm-section-title">
+              Видимость
+            </div>
+            <div class="tm-switch-row">
+              <div class="tm-switch-text">
+                <span class="tm-switch-title">Общий шаблон</span>
+                <span class="tm-switch-desc">Виден коллегам в этой же области</span>
+              </div>
+              <label class="tm-switch">
+                <input v-model="form.is_shared" type="checkbox">
+                <span class="tm-switch-slider" />
+              </label>
+            </div>
+          </div>
+
+          <div class="tm-form-section">
+            <div class="tm-section-title">
+              Область действия
+            </div>
+            <div class="tm-form-grid">
+              <label class="tm-field tm-field-full">
+                <span class="tm-field-label">Тип области</span>
+                <CustomSelect v-model="form.scope_kind" :options="scopeKindOptions" />
+              </label>
+              <label v-if="form.scope_kind === 'source'" class="tm-field tm-field-full">
+                <span class="tm-field-label">Источник<span class="tm-req">*</span></span>
+                <CustomSelect v-model="form.scope_source_id" :options="formSourceOptions" />
+              </label>
+              <template v-if="form.scope_kind === 'department'">
+                <label class="tm-field">
+                  <span class="tm-field-label">Проект<span class="tm-req">*</span></span>
+                  <CustomSelect v-model="form.scope_dept_parent_source_id" :options="formSourceOptions" />
+                </label>
+                <label class="tm-field">
+                  <span class="tm-field-label">Отдел<span class="tm-req">*</span></span>
+                  <CustomSelect v-model="form.scope_department_id" :options="formDepartmentOptions" />
+                </label>
+              </template>
+            </div>
+          </div>
+
+          <div class="tm-form-section">
+            <div class="tm-section-title">
+              Параметры шаблона
+            </div>
+            <div class="tm-form-grid">
+              <label class="tm-field tm-field-full">
+                <span class="tm-field-label">Код<span class="tm-req">*</span></span>
+                <input v-model="form.code" type="text" class="tm-input">
+              </label>
+              <label class="tm-field tm-field-full">
+                <span class="tm-field-label">Название<span class="tm-req">*</span></span>
+                <input v-model="form.title" type="text" class="tm-input">
+              </label>
+              <label class="tm-field tm-field-full">
+                <span class="tm-field-label">Текст<span class="tm-req">*</span></span>
+                <textarea v-model="form.text" rows="7" class="tm-input tm-textarea" />
+              </label>
+              <div class="tm-field">
+                <span class="tm-field-label">Статус</span>
+                <div class="tm-switch-row tm-switch-row-compact">
+                  <span class="tm-switch-title">Активен</span>
+                  <label class="tm-switch">
+                    <input v-model="form.is_active" type="checkbox">
+                    <span class="tm-switch-slider" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tm-modal-footer">
+          <button type="button" class="tm-btn tm-btn-ghost" @click="formOpen = false">
             Отмена
           </button>
-          <button type="button" class="btn btn-primary px-4" :disabled="loading" @click="saveForm">
+          <button type="button" class="tm-btn tm-btn-primary" :disabled="loading" @click="saveForm">
             Сохранить
           </button>
         </div>
@@ -515,3 +521,247 @@ async function remove(row: ApiCannedResponse) {
     </div>
   </section>
 </template>
+
+<style scoped>
+.tm-section-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-secondary);
+}
+
+.tm-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-thread);
+}
+
+.tm-switch-row-compact {
+  padding: 10px 12px;
+}
+
+.tm-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tm-switch-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tm-switch-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.tm-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.tm-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.tm-switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border-medium);
+  border-radius: 22px;
+  transition: 0.2s;
+}
+
+.tm-switch-slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.2s;
+}
+
+.tm-switch input:checked + .tm-switch-slider {
+  background: var(--color-brand);
+}
+
+.tm-switch input:checked + .tm-switch-slider::before {
+  transform: translateX(18px);
+}
+
+.tm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(20, 20, 20, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.tm-modal {
+  width: 100%;
+  max-width: 620px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: var(--bg-inbox);
+  box-shadow: var(--shadow-lg);
+}
+
+.tm-modal-header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tm-modal-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.tm-modal-sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.tm-modal-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tm-modal-close:hover {
+  background: color-mix(in srgb, var(--bg-thread) 80%, transparent);
+  color: var(--text-primary);
+}
+
+.tm-modal-body {
+  padding: 24px 28px;
+}
+
+.tm-modal-footer {
+  padding: 16px 28px 22px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: var(--bg-thread);
+}
+
+.tm-form-section {
+  margin-bottom: 24px;
+}
+
+.tm-form-section:last-child {
+  margin-bottom: 0;
+}
+
+.tm-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.tm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tm-field-full {
+  grid-column: 1 / -1;
+}
+
+.tm-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tm-req {
+  color: #b84646;
+  margin-left: 2px;
+}
+
+.tm-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-inbox);
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 0 12px;
+  outline: none;
+}
+
+.tm-textarea {
+  min-height: 132px;
+  height: auto;
+  padding: 10px 12px;
+}
+
+.tm-btn {
+  height: 42px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tm-btn-ghost {
+  background: var(--bg-inbox);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.tm-btn-primary {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: var(--text-primary);
+}
+
+.tm-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .tm-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
