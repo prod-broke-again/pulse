@@ -189,6 +189,65 @@ final readonly class WebhookPayloadExtractor
         return $id;
     }
 
+    /**
+     * Private-chat peer (client) Telegram user id when {@see Message::$chat} is the dialog with the customer.
+     * Used when {@see Message::$from} is the business account owner — routing must use peer, not sender.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function extractTelegramBusinessMessagePrivateChatPeerExternalUserId(array $payload): ?string
+    {
+        $bm = $payload['business_message'] ?? null;
+        if (! is_array($bm)) {
+            return null;
+        }
+        $chat = $bm['chat'] ?? null;
+        if (! is_array($chat)) {
+            return null;
+        }
+        if (($chat['type'] ?? null) !== 'private') {
+            return null;
+        }
+        $chatId = $chat['id'] ?? null;
+        if ($chatId === null) {
+            return null;
+        }
+        if (! is_int($chatId) && ! (is_string($chatId) && ctype_digit((string) $chatId))) {
+            return null;
+        }
+
+        return (string) $chatId;
+    }
+
+    /**
+     * Metadata for the private-chat peer (client) from {@see Message::$chat}, not {@see Message::$from}.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function extractTelegramBusinessMessageChatPeerUserMetadata(array $payload): array
+    {
+        $bm = $payload['business_message'] ?? null;
+        if (! is_array($bm)) {
+            return [];
+        }
+        $chat = $bm['chat'] ?? null;
+        if (! is_array($chat) || ($chat['type'] ?? null) !== 'private') {
+            return [];
+        }
+        $id = $chat['id'] ?? null;
+        if ($id === null) {
+            return [];
+        }
+        $meta = ['id' => $id];
+        $name = $this->extractDisplayName($chat);
+        if ($name !== null) {
+            $meta['name'] = $name;
+        }
+
+        return $meta;
+    }
+
     /** @param array<string, mixed> $payload */
     public function extractExternalMessageId(array $payload): ?string
     {

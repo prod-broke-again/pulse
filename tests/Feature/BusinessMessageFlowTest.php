@@ -15,6 +15,8 @@ use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
+use App\Models\SocialAccount;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -247,7 +249,7 @@ final class BusinessMessageFlowTest extends TestCase
         $this->assertSame(0, ChatModel::query()->count());
     }
 
-    public function test_business_owner_outgoing_message_is_ignored_and_does_not_create_chat(): void
+    public function test_business_owner_outgoing_without_pulse_telegram_link_is_ignored(): void
     {
         Log::spy();
         $source = $this->createTgSource([
@@ -261,6 +263,7 @@ final class BusinessMessageFlowTest extends TestCase
                 'message_id' => 321,
                 'business_connection_id' => 'bc-1',
                 'from' => ['id' => 999001],
+                'chat' => ['id' => 555888, 'type' => 'private', 'first_name' => 'Client'],
                 'text' => 'Это мое исходящее сообщение из личного аккаунта',
             ],
         ]);
@@ -269,6 +272,45 @@ final class BusinessMessageFlowTest extends TestCase
         Log::shouldHaveReceived('info')
             ->withArgs(fn (string $m, array $ctx): bool => $m === 'business owner outgoing message ignored'
                 && ($ctx['source_id'] ?? null) === $source->id);
+    }
+
+    public function test_business_owner_outgoing_with_social_account_recorded_as_moderator_in_client_chat(): void
+    {
+        $source = $this->createTgSource([
+            'telegram_mode' => 'business',
+            'business_connection_user_id' => '999001',
+        ]);
+        $moderator = User::factory()->create();
+        $moderator->assignRole('moderator');
+        $moderator->sources()->attach($source->id);
+
+        SocialAccount::query()->create([
+            'user_id' => $moderator->id,
+            'provider' => 'telegram',
+            'provider_user_id' => '999001',
+        ]);
+
+        $messenger = $this->mockMessenger();
+
+        app(ProcessInboundWebhook::class)->run($source->id, $messenger, [
+            'business_message' => [
+                'message_id' => 321,
+                'business_connection_id' => 'bc-1',
+                'from' => ['id' => 999001, 'first_name' => 'Owner'],
+                'chat' => ['id' => 555888, 'type' => 'private', 'first_name' => 'Клиент', 'username' => 'cli'],
+                'text' => 'Ответ с телефона',
+            ],
+        ]);
+
+        $chat = ChatModel::query()->first();
+        $this->assertNotNull($chat);
+        $this->assertSame('555888', $chat->external_user_id);
+
+        $msg = MessageModel::query()->where('chat_id', $chat->id)->first();
+        $this->assertNotNull($msg);
+        $this->assertSame('moderator', $msg->sender_type);
+        $this->assertSame($moderator->id, $msg->sender_id);
+        $this->assertSame('Ответ с телефона', $msg->text);
     }
 
     public function test_send_message_system_delivery_includes_business_connection_id(): void

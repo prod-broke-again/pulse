@@ -79,4 +79,38 @@ final class WebhookPayloadExtractorBusinessTest extends TestCase
         $meta = $extractor->extractUserMetadata($payload);
         $this->assertSame('Ann Bee', $meta['name'] ?? null);
     }
+
+    public function test_extract_private_chat_peer_id_for_business_message(): void
+    {
+        $extractor = app(WebhookPayloadExtractor::class);
+
+        $payload = [
+            'business_message' => [
+                'from' => ['id' => 100],
+                'chat' => [
+                    'id' => 200,
+                    'type' => 'private',
+                    'first_name' => 'Peer',
+                ],
+            ],
+        ];
+
+        $this->assertSame('200', $extractor->extractTelegramBusinessMessagePrivateChatPeerExternalUserId($payload));
+        $meta = $extractor->extractTelegramBusinessMessageChatPeerUserMetadata($payload);
+        $this->assertSame(200, $meta['id'] ?? null);
+        $this->assertSame('Peer', $meta['name'] ?? null);
+    }
+
+    public function test_extract_private_chat_peer_null_for_non_private(): void
+    {
+        $extractor = app(WebhookPayloadExtractor::class);
+
+        $payload = [
+            'business_message' => [
+                'chat' => ['id' => -100123, 'type' => 'supergroup', 'title' => 'X'],
+            ],
+        ];
+
+        $this->assertNull($extractor->extractTelegramBusinessMessagePrivateChatPeerExternalUserId($payload));
+    }
 }
