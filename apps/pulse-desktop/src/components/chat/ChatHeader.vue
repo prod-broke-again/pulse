@@ -239,8 +239,8 @@ onBeforeUnmount(() => {
           {{ activeConversation.name }}
         </div>
         <div class="thread-user-meta">
-          <span class="inline-flex items-center gap-1">
-            <Hash class="h-3 w-3 shrink-0" />
+          <span class="inline-flex items-center gap-0">
+            <Hash class="h-3 w-3 shrink-0 -mr-px" />
             {{ activeConversation.id }}
           </span>
           <span

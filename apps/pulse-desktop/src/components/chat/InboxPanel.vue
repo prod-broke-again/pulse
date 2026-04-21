@@ -243,7 +243,7 @@ function unreadBadgeClass(count: number): string {
           <span>Мои</span>
           <span
             v-if="tabCounts && tabCounts.my > 0"
-            class="min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
+            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
             style="background: var(--color-brand-50); color: var(--color-brand-200)"
           >{{ tabCounts.my > 99 ? '99+' : tabCounts.my }}</span>
         </button>
@@ -259,7 +259,7 @@ function unreadBadgeClass(count: number): string {
           <span>Свободные</span>
           <span
             v-if="tabCounts && tabCounts.unassigned > 0"
-            class="min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
+            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
             style="background: var(--color-brand-50); color: var(--color-brand-200)"
           >{{ tabCounts.unassigned > 99 ? '99+' : tabCounts.unassigned }}</span>
         </button>
@@ -274,7 +274,7 @@ function unreadBadgeClass(count: number): string {
           <span>Все</span>
           <span
             v-if="tabCounts && tabCounts.all > 0"
-            class="min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
+            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
             style="background: var(--color-brand-50); color: var(--color-brand-200)"
           >{{ tabCounts.all > 99 ? '99+' : tabCounts.all }}</span>
         </button>
@@ -397,7 +397,7 @@ function unreadBadgeClass(count: number): string {
             <div class="flex shrink-0 items-center gap-2">
               <span
                 v-if="(chat.unreadCount ?? 0) > 0"
-                class="inline-grid shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums tracking-tight text-white shadow-sm ring-1 ring-inset ring-white/20 [line-height:1]"
+                class="unread-count-badge inline-grid shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums tracking-tight text-white shadow-sm ring-1 ring-inset ring-white/20 [line-height:1]"
                 :class="unreadBadgeClass(chat.unreadCount ?? 0)"
                 style="background: var(--color-brand-200)"
                 :title="`Непрочитанных сообщений: ${chat.unreadCount}`"
@@ -555,6 +555,16 @@ function unreadBadgeClass(count: number): string {
 }
 [data-theme="dark"] .chat-item-closed.chat-item-m:hover {
   background: color-mix(in srgb, #000000 18%, var(--bg-card-hover));
+}
+
+[data-theme="dark"] .tab-count-badge {
+  background: color-mix(in srgb, var(--color-brand-200) 28%, transparent) !important;
+  color: #d6b7f5 !important;
+}
+
+[data-theme="dark"] .unread-count-badge {
+  background: color-mix(in srgb, var(--color-brand-200) 46%, #1f1230) !important;
+  color: #f3e8ff !important;
 }
 
 .inbox-meta-chip {
