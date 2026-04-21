@@ -20,10 +20,23 @@ interface PulseWindowSettingsApi {
   confirmClose: (opts: { action: 'quit' | 'hide-to-tray'; remember: boolean }) => Promise<void>
 }
 
+interface DesktopUpdaterApi {
+  checkNow: () => Promise<{ ok: true } | { ok: false; reason: string }>
+  installNow: () => Promise<void>
+  onStatus: (listener: (payload: {
+    level: 'info' | 'ready' | 'error'
+    code: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+    message: string
+    version?: string
+    releaseNotes?: string
+  }) => void) => () => void
+}
+
 declare global {
   interface Window {
     appWindow?: AppWindowApi
     pulseWindowSettings?: PulseWindowSettingsApi
+    desktopUpdater?: DesktopUpdaterApi
     electronOAuth?: {
       onCallback: (listener: (url: string) => void) => () => void
     }

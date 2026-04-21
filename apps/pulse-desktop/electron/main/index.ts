@@ -22,6 +22,14 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const { autoUpdater } = electronUpdater
 
+type DesktopUpdateStatusPayload = {
+  level: 'info' | 'ready' | 'error'
+  code: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+  message: string
+  version?: string
+  releaseNotes?: string
+}
+
 /** Deep link for ACHPP ID OAuth callback (must match IdP client redirect URI). */
 const OAUTH_PROTOCOL = 'pulse-desktop'
 
@@ -73,9 +81,53 @@ function setupAutoUpdate(): void {
   if (!app.isPackaged) {
     return
   }
+  if (updateListenersAttached) {
+    return
+  }
+  updateListenersAttached = true
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
-  void autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+  autoUpdater.on('checking-for-update', () => {
+    emitDesktopUpdateStatus({
+      level: 'info',
+      code: 'checking',
+      message: 'Проверяем наличие обновлений…',
+    })
+  })
+  autoUpdater.on('update-available', (info) => {
+    emitDesktopUpdateStatus({
+      level: 'info',
+      code: 'available',
+      message: `Доступна новая версия ${info.version}. Загружаем обновление…`,
+      version: info.version,
+      releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+    })
+  })
+  autoUpdater.on('update-not-available', (info) => {
+    emitDesktopUpdateStatus({
+      level: 'info',
+      code: 'not-available',
+      message: `Установлена актуальная версия${info?.version ? ` (${info.version})` : ''}.`,
+      version: info?.version,
+    })
+  })
+  autoUpdater.on('update-downloaded', (info) => {
+    emitDesktopUpdateStatus({
+      level: 'ready',
+      code: 'downloaded',
+      message: `Обновление ${info.version} загружено. Перезапустите приложение, чтобы установить его.`,
+      version: info.version,
+      releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+    })
+  })
+  autoUpdater.on('error', (error) => {
+    emitDesktopUpdateStatus({
+      level: 'error',
+      code: 'error',
+      message: `Ошибка обновления: ${error?.message ?? 'неизвестная ошибка'}`,
+    })
+  })
+  void autoUpdater.checkForUpdates().catch(() => {})
 }
 
 const argvOAuthUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}:`))
@@ -92,11 +144,41 @@ let win: BrowserWindow | null = null
 let tray: Tray | null = null
 /** True when user chose «Выйти» / из меню трея — иначе закрытие окна сворачивает в трей. */
 let isAppQuitting = false
+let updateListenersAttached = false
 
 let closeButtonBehavior: CloseButtonBehavior = 'ask'
 
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+
+function emitDesktopUpdateStatus(payload: DesktopUpdateStatusPayload): void {
+  if (!win || win.isDestroyed()) {
+    return
+  }
+  win.webContents.send('desktop-update:status', payload)
+}
+
+function normalizeReleaseNotes(
+  raw:
+    | string
+    | Array<{ note?: string; version?: string }>
+    | null
+    | undefined,
+): string | undefined {
+  if (!raw) {
+    return undefined
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    return trimmed === '' ? undefined : trimmed
+  }
+  const merged = raw
+    .map((x) => x.note?.trim() ?? '')
+    .filter((x) => x !== '')
+    .join('\n\n')
+    .trim()
+  return merged === '' ? undefined : merged
+}
 
 function trayIcon(): Electron.NativeImage {
   const iconPath = path.join(process.env.VITE_PUBLIC ?? '', 'logo.png')
@@ -263,6 +345,24 @@ function registerWindowManagementIpc(): void {
   ipcMain.handle('window:request-user-close', () => {
     win?.close()
   })
+  ipcMain.handle('desktop-update:check', async () => {
+    if (!app.isPackaged) {
+      return { ok: false as const, reason: 'not-packaged' as const }
+    }
+    try {
+      await autoUpdater.checkForUpdates()
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, reason: (e as Error)?.message ?? 'update-check-failed' }
+    }
+  })
+  ipcMain.handle('desktop-update:install', () => {
+    if (!app.isPackaged) {
+      return
+    }
+    isAppQuitting = true
+    autoUpdater.quitAndInstall()
+  })
   ipcMain.handle(
     'window:confirm-close',
     (
@@ -315,6 +415,8 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  // Important for installer/auto-update: allow window close handlers to pass through.
+  isAppQuitting = true
   destroyTray()
   closeLocalDb()
 })

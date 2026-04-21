@@ -26,6 +26,12 @@ import {
   startModeratorPresenceForDesktop,
   stopModeratorPresenceForDesktop,
 } from './lib/moderatorPresenceDesktop'
+import {
+  installDesktopUpdateNow,
+  maybeCheckDesktopUpdate,
+  onDesktopUpdaterStatus,
+  type DesktopUpdateStatus,
+} from './lib/desktopUpdater'
 import type { ApiMessage } from './types/dto/chat.types'
 import type { Conversation, MessageItem } from './types/chat'
 
@@ -65,9 +71,17 @@ const isMaximized = ref(false)
 const isDevtoolsOpen = ref(false)
 const oauthExchangeError = ref<string | null>(null)
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+const updateDialogOpen = ref(false)
+const updateDialogVersion = ref<string | null>(null)
+const updateDialogNotes = ref<string | null>(null)
+const updateDialogMessage = ref<string>('Обновление загружено и готово к установке.')
+const updateDialogCustomMessage = ref(
+  'В этом обновлении улучшены стабильность, установка и интерфейс. Рекомендуем установить сейчас.',
+)
 let detachWindowListener: (() => void) | null = null
 let detachDevtoolsListener: (() => void) | null = null
 let detachOAuthListener: (() => void) | null = null
+let detachDesktopUpdaterListener: (() => void) | null = null
 let unsubscribeModeratorChannel: (() => void) | null = null
 /** Unsubscribe all `source-inbox.{id}` channels for current user. */
 let teardownSourceInboxRealtime: (() => void) | null = null
@@ -84,6 +98,12 @@ const replyToPreview = computed(() => {
     return null
   }
   return { id: m.id, text: (m.text ?? '').slice(0, 500) }
+})
+
+const updateDialogNotesLines = computed(() => {
+  const raw = updateDialogNotes.value?.trim()
+  if (!raw) return []
+  return raw.split('\n').map((line) => line.trim()).filter((line) => line !== '')
 })
 
 function onReplyToMessage(messageId: number): void {
@@ -177,13 +197,39 @@ watch(
   () => [authStore.isAuthenticated, authStore.user] as const,
   ([auth, user]) => {
     if (auth && isModeratorStaffUser(user)) {
-      startModeratorPresenceForDesktop()
+      startModeratorPresenceForDesktop({
+        onHeartbeatTick: () => {
+          void maybeCheckDesktopUpdate()
+        },
+      })
     } else {
       stopModeratorPresenceForDesktop()
     }
   },
   { immediate: true },
 )
+
+function onDesktopUpdateStatus(payload: DesktopUpdateStatus): void {
+  if (payload.code === 'downloaded') {
+    updateDialogVersion.value = payload.version ?? null
+    updateDialogNotes.value = payload.releaseNotes ?? null
+    updateDialogMessage.value = payload.message
+    updateDialogOpen.value = true
+    return
+  }
+  if (payload.code === 'available' || payload.code === 'error') {
+    showToast(payload.message)
+  }
+}
+
+function closeUpdateDialog(): void {
+  updateDialogOpen.value = false
+}
+
+function installUpdateFromDialog(): void {
+  updateDialogOpen.value = false
+  void installDesktopUpdateNow()
+}
 
 function onBrowserOnline(): void {
   isOnline.value = true
@@ -225,6 +271,8 @@ async function toggleSoundFromHeader(): Promise<void> {
 }
 
 onMounted(async () => {
+  detachDesktopUpdaterListener = onDesktopUpdaterStatus(onDesktopUpdateStatus)
+
   if (window.pulseWindowSettings?.onCloseRequested) {
     detachCloseRequestedListener = window.pulseWindowSettings.onCloseRequested(() => {
       closeChoiceRemember.value = false
@@ -265,6 +313,7 @@ onMounted(async () => {
   }
 
   try {
+    void maybeCheckDesktopUpdate(true)
     await authStore.fetchMe()
     if (authStore.isAuthenticated) {
       getEcho()
@@ -282,6 +331,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   detachCloseRequestedListener?.()
   detachCloseRequestedListener = null
+  detachDesktopUpdaterListener?.()
+  detachDesktopUpdaterListener = null
   window.removeEventListener('online', onBrowserOnline)
   window.removeEventListener('offline', onBrowserOffline)
   detachWindowListener?.()
@@ -721,6 +772,67 @@ async function onAiInsertComposerText(text: string): Promise<void> {
     </div>
 
     <Teleport to="body">
+      <div
+        v-if="updateDialogOpen && isElectron"
+        class="fixed inset-0 z-[290] flex items-center justify-center px-4 py-8"
+        style="background: rgba(15, 10, 25, 0.55); backdrop-filter: blur(4px)"
+        role="presentation"
+        @click.self="closeUpdateDialog"
+      >
+        <div
+          class="no-drag-region w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+          style="background: var(--bg-thread); border-color: var(--border-light)"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pulse-update-title"
+          @click.stop
+        >
+          <h2 id="pulse-update-title" class="text-lg font-bold leading-snug" style="color: var(--text-primary)">
+            Доступно обновление{{ updateDialogVersion ? ` ${updateDialogVersion}` : '' }}
+          </h2>
+          <p class="mt-3 text-sm leading-relaxed" style="color: var(--text-secondary)">
+            {{ updateDialogCustomMessage }}
+          </p>
+          <p class="mt-2 text-sm leading-relaxed" style="color: var(--text-secondary)">
+            {{ updateDialogMessage }}
+          </p>
+
+          <div
+            v-if="updateDialogNotesLines.length > 0"
+            class="mt-4 rounded-[var(--radius-md)] border p-3"
+            style="border-color: var(--border-light); background: var(--bg-inbox)"
+          >
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide" style="color: var(--text-muted)">
+              Что нового
+            </p>
+            <ul class="space-y-1 text-sm" style="color: var(--text-secondary)">
+              <li v-for="(line, idx) in updateDialogNotesLines" :key="idx">
+                {{ line }}
+              </li>
+            </ul>
+          </div>
+
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              class="rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold transition hover:opacity-90"
+              style="border: 1px solid var(--border-light); color: var(--text-primary); background: transparent"
+              @click="closeUpdateDialog"
+            >
+              Позже
+            </button>
+            <button
+              type="button"
+              class="rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+              style="background: var(--color-brand)"
+              @click="installUpdateFromDialog"
+            >
+              Установить сейчас
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div
         v-if="closeChoiceDialogOpen && isElectron"
         class="fixed inset-0 z-[300] flex items-center justify-center px-4 py-8"

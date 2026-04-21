@@ -63,6 +63,34 @@ contextBridge.exposeInMainWorld('electronShell', {
   openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url) as Promise<void>,
 })
 
+contextBridge.exposeInMainWorld('desktopUpdater', {
+  checkNow: () =>
+    ipcRenderer.invoke('desktop-update:check') as Promise<{ ok: true } | { ok: false; reason: string }>,
+  installNow: () => ipcRenderer.invoke('desktop-update:install') as Promise<void>,
+  onStatus: (
+    listener: (payload: {
+      level: 'info' | 'ready' | 'error'
+      code: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+      message: string
+      version?: string
+      releaseNotes?: string
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        level: 'info' | 'ready' | 'error'
+        code: 'checking' | 'available' | 'not-available' | 'downloaded' | 'error'
+        message: string
+        version?: string
+        releaseNotes?: string
+      },
+    ) => listener(payload)
+    ipcRenderer.on('desktop-update:status', handler)
+    return () => ipcRenderer.removeListener('desktop-update:status', handler)
+  },
+})
+
 contextBridge.exposeInMainWorld('electronOAuth', {
   onCallback: (listener: (url: string) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, oauthUrl: string) => listener(oauthUrl)

@@ -10,6 +10,7 @@ const HEARTBEAT_MS = 30_000
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let cancelled = false
 let initPromise: Promise<void> | null = null
+let heartbeatTickHook: (() => void | Promise<void>) | null = null
 
 export function isModeratorStaffUser(user: ApiUser | null): boolean {
   if (!user?.roles?.length) {
@@ -22,7 +23,10 @@ export function isModeratorStaffUser(user: ApiUser | null): boolean {
  * Пока открыт десктоп, считаем модератора/админа «на смене» и шлём heartbeat — иначе
  * сервер не видит онлайн и шлёт гостям автоответ «модераторы не в сети».
  */
-export function startModeratorPresenceForDesktop(): void {
+export function startModeratorPresenceForDesktop(opts?: {
+  onHeartbeatTick?: () => void | Promise<void>
+}): void {
+  heartbeatTickHook = opts?.onHeartbeatTick ?? null
   if (heartbeatTimer !== null || initPromise !== null) {
     return
   }
@@ -32,6 +36,7 @@ export function startModeratorPresenceForDesktop(): void {
       await fetchModeratorPresenceMe()
       await toggleModeratorPresence(true)
       await sendModeratorPresenceHeartbeat()
+      await heartbeatTickHook?.()
     } catch (e) {
       console.warn('moderator presence: start failed', e)
       return
@@ -43,6 +48,7 @@ export function startModeratorPresenceForDesktop(): void {
       void sendModeratorPresenceHeartbeat().catch(() => {
         /* best-effort */
       })
+      void heartbeatTickHook?.()
     }, HEARTBEAT_MS)
   })()
   void initPromise.finally(() => {
@@ -52,6 +58,7 @@ export function startModeratorPresenceForDesktop(): void {
 
 export function stopModeratorPresenceForDesktop(): void {
   cancelled = true
+  heartbeatTickHook = null
   if (heartbeatTimer !== null) {
     clearInterval(heartbeatTimer)
     heartbeatTimer = null
