@@ -134,6 +134,7 @@ final class GenerateChatTopicJob implements ShouldQueue
             aiDepartmentConfidence: $latest->aiDepartmentConfidence,
             aiDepartmentAssignedAt: $latest->aiDepartmentAssignedAt,
             departmentReassignedByUserId: $latest->departmentReassignedByUserId,
+            externalBusinessConnectionId: $latest->externalBusinessConnectionId,
         ));
 
         event(new ChatTopicGenerated(
@@ -206,6 +207,7 @@ final class GenerateChatTopicJob implements ShouldQueue
             aiDepartmentConfidence: $confidence,
             aiDepartmentAssignedAt: $chat->aiDepartmentAssignedAt,
             departmentReassignedByUserId: $chat->departmentReassignedByUserId,
+            externalBusinessConnectionId: $chat->externalBusinessConnectionId,
         ));
 
         $threshold = (float) config('features.ai_department_confidence_threshold', 0.7);
@@ -236,6 +238,7 @@ final class GenerateChatTopicJob implements ShouldQueue
                     aiDepartmentConfidence: $afterMove->aiDepartmentConfidence,
                     aiDepartmentAssignedAt: \DateTimeImmutable::createFromInterface(now()),
                     departmentReassignedByUserId: $afterMove->departmentReassignedByUserId,
+                    externalBusinessConnectionId: $afterMove->externalBusinessConnectionId,
                 ));
             } catch (\Throwable $e) {
                 Log::warning('AI dept auto-assign: persist ai_department_assigned_at failed after department move', [

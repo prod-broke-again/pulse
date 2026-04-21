@@ -59,6 +59,7 @@ final class EloquentChatRepository implements ChatRepositoryInterface
             : new ChatModel;
 
         $model->source_id = $chat->sourceId;
+        $model->external_business_connection_id = $chat->externalBusinessConnectionId;
         $model->department_id = $chat->departmentId;
         $model->external_user_id = $chat->externalUserId;
         $model->user_metadata = $chat->userMetadata;
@@ -91,6 +92,7 @@ final class EloquentChatRepository implements ChatRepositoryInterface
                 : null,
             aiDepartmentAssignedAt: $model->ai_department_assigned_at?->toDateTimeImmutable(),
             departmentReassignedByUserId: $model->department_reassigned_by_user_id,
+            externalBusinessConnectionId: $model->external_business_connection_id,
         );
     }
 }

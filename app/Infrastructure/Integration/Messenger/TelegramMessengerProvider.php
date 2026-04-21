@@ -74,6 +74,10 @@ final class TelegramMessengerProvider implements MessengerProviderInterface
         return isset($payload['message'])
             || isset($payload['callback_query'])
             || isset($payload['edited_message'])
-            || isset($payload['channel_post']);
+            || isset($payload['channel_post'])
+            || isset($payload['business_connection'])
+            || isset($payload['business_message'])
+            || isset($payload['edited_business_message'])
+            || isset($payload['deleted_business_messages']);
     }
 }

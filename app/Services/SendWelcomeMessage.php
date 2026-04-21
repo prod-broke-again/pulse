@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Application\Integration\ResolveMessengerProvider;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
+use App\Support\TelegramOutboundBusinessOptions;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Log;
 
@@ -33,7 +34,8 @@ final readonly class SendWelcomeMessage
 
         try {
             $messenger = $this->resolveMessenger->run($source->id);
-            $messenger->sendMessage($externalUserId, $text);
+            $options = TelegramOutboundBusinessOptions::fromSourceSettingsOnly($settings);
+            $messenger->sendMessage($externalUserId, $text, $options);
         } catch (\Throwable $exception) {
             Log::warning('Welcome message send failed', [
                 'source_id' => $source->id,

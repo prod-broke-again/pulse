@@ -43,6 +43,7 @@ final readonly class AssignChatToModerator
             status: ChatStatus::Active,
             assignedTo: $userId,
             topic: $chat->topic,
+            externalBusinessConnectionId: $chat->externalBusinessConnectionId,
         );
 
         $persisted = $this->chatRepository->persist($updated);

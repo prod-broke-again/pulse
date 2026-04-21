@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property int $source_id
+ * @property string|null $external_business_connection_id
  * @property int $department_id
  * @property string $external_user_id
  * @property array|null $user_metadata
@@ -33,6 +34,7 @@ class ChatModel extends Model
 
     protected $fillable = [
         'source_id',
+        'external_business_connection_id',
         'department_id',
         'external_user_id',
         'user_metadata',

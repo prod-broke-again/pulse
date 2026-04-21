@@ -16,6 +16,7 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
 use App\Domains\Integration\ValueObject\SourceType;
+use App\Domains\Integration\ValueObject\TelegramMode;
 use App\Infrastructure\Integration\Client\TelegramApiClient;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
@@ -40,6 +41,7 @@ final readonly class ProcessInboundWebhook
         private SendWelcomeMessage $sendWelcomeMessage,
         private MessageRepositoryInterface $messageRepository,
         private TelegramMediaGroupInboundBuffer $telegramMediaGroupInboundBuffer,
+        private HandleBusinessConnectionEvent $handleBusinessConnectionEvent,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -55,6 +57,34 @@ final readonly class ProcessInboundWebhook
         $source = $this->sourceRepository->findById($sourceId);
         if ($source === null) {
             throw new \InvalidArgumentException("Source not found: {$sourceId}");
+        }
+
+        if (isset($payload['business_connection'])) {
+            $this->handleBusinessConnectionEvent->run($sourceId, $payload);
+
+            return;
+        }
+
+        if (isset($payload['edited_business_message']) || isset($payload['deleted_business_messages'])) {
+            Log::info('Business edit/delete event ignored', ['source_id' => $sourceId]);
+
+            return;
+        }
+
+        if ($source->type === SourceType::Tg) {
+            $mode = TelegramMode::fromSettings($source->settings);
+
+            if (isset($payload['business_message']) && $mode !== TelegramMode::Business) {
+                Log::warning('business_message arrived on non-business source', ['source_id' => $sourceId]);
+
+                return;
+            }
+
+            if (isset($payload['message']) && $mode === TelegramMode::Business) {
+                Log::warning('direct message arrived on business source', ['source_id' => $sourceId]);
+
+                return;
+            }
         }
 
         $externalUserId = $this->webhookPayloadExtractor->extractExternalUserId($payload);
@@ -85,11 +115,14 @@ final readonly class ProcessInboundWebhook
         );
         $externalMessageId = $this->webhookPayloadExtractor->extractExternalMessageId($payload);
 
+        $businessConnectionId = $this->webhookPayloadExtractor->extractBusinessConnectionId($payload);
+
         $chat = $this->inboundChatUpsert->resolve(
             $sourceId,
             $departmentId,
             $externalUserId,
             $userMetadata,
+            $businessConnectionId,
         );
 
         $attachments = $this->resolveTelegramFileUrls($attachments, $source->type, $source->settings, $sourceId);

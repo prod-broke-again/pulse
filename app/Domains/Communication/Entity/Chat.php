@@ -22,5 +22,6 @@ final readonly class Chat
         public ?float $aiDepartmentConfidence = null,
         public ?\DateTimeImmutable $aiDepartmentAssignedAt = null,
         public ?int $departmentReassignedByUserId = null,
+        public ?string $externalBusinessConnectionId = null,
     ) {}
 }

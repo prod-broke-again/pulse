@@ -7,6 +7,8 @@ namespace App\Application\Communication\Action;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Infrastructure\Persistence\Eloquent\SourceModel;
+use App\Support\TelegramOutboundBusinessOptions;
 
 /**
  * Sends a persisted moderator message (including local media) to the external messenger.
@@ -46,6 +48,10 @@ final readonly class DeliverOutboundMessageToMessenger
         if ($paths !== []) {
             $options['local_attachment_paths'] = $paths;
         }
+
+        $source = SourceModel::query()->find($chat->source_id);
+        $sourceSettings = is_array($source?->settings) ? $source->settings : [];
+        $options = TelegramOutboundBusinessOptions::mergeInto($options, $chat, $sourceSettings);
 
         $messenger->sendMessage($chat->external_user_id, (string) $message->text, $options);
     }

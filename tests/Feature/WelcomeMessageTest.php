@@ -38,7 +38,7 @@ final class WelcomeMessageTest extends TestCase
         $messenger = $this->mockMessenger();
         $messenger->expects($this->once())
             ->method('sendMessage')
-            ->with('777888', 'Здравствуйте!');
+            ->with('777888', 'Здравствуйте!', []);
 
         $this->bindMessengerFactory($messenger);
         $this->runWebhook($source->id, $messenger, [
@@ -94,7 +94,7 @@ final class WelcomeMessageTest extends TestCase
         $messenger = $this->mockMessenger();
         $messenger->expects($this->exactly(2))
             ->method('sendMessage')
-            ->with('777888', 'Здравствуйте!');
+            ->with('777888', 'Здравствуйте!', []);
 
         $this->bindMessengerFactory($messenger);
 
@@ -151,7 +151,7 @@ final class WelcomeMessageTest extends TestCase
             'welcome_text' => 'Здравствуйте!',
         ]);
         $messenger = $this->mockMessenger();
-        $messenger->expects($this->once())->method('sendMessage')->with('777888', 'Здравствуйте!');
+        $messenger->expects($this->once())->method('sendMessage')->with('777888', 'Здравствуйте!', []);
 
         $this->bindMessengerFactory($messenger);
 
@@ -203,7 +203,7 @@ final class WelcomeMessageTest extends TestCase
         $messenger = $this->mockMessenger();
         $messenger->expects($this->once())
             ->method('sendMessage')
-            ->with('777888', 'Здравствуйте!')
+            ->with('777888', 'Здравствуйте!', [])
             ->willThrowException(new \RuntimeException('Network down'));
 
         Log::spy();

@@ -19,6 +19,15 @@ final class StartCommandDetectorTest extends TestCase
         ]));
     }
 
+    public function test_tg_start_in_business_message_detected(): void
+    {
+        $detector = new StartCommandDetector;
+
+        $this->assertTrue($detector->isStartCommand(SourceType::Tg, [
+            'business_message' => ['text' => '/start'],
+        ]));
+    }
+
     public function test_tg_start_with_payload_detected(): void
     {
         $detector = new StartCommandDetector;

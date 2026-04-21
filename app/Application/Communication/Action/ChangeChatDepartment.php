@@ -100,6 +100,7 @@ final class ChangeChatDepartment
             aiDepartmentConfidence: $domainChat->aiDepartmentConfidence,
             aiDepartmentAssignedAt: $domainChat->aiDepartmentAssignedAt,
             departmentReassignedByUserId: $departmentReassignedByUserId,
+            externalBusinessConnectionId: $domainChat->externalBusinessConnectionId,
         ));
     }
 }

@@ -27,12 +27,14 @@ trait MapsSourceConnectionSettings
             $data['offline_auto_reply_text'] = (string) ($settings['offline_auto_reply_text'] ?? '');
             $data['welcome_enabled'] = (bool) ($settings['welcome_enabled'] ?? false);
             $data['welcome_text'] = (string) ($settings['welcome_text'] ?? '');
+            $data['telegram_mode'] = (string) ($settings['telegram_mode'] ?? 'direct');
             $conn = $settings;
             unset(
                 $conn['offline_auto_reply_enabled'],
                 $conn['offline_auto_reply_text'],
                 $conn['welcome_enabled'],
                 $conn['welcome_text'],
+                $conn['telegram_mode'],
             );
             $data['connection_settings'] = $conn;
         }
@@ -53,11 +55,15 @@ trait MapsSourceConnectionSettings
             $data['settings']['offline_auto_reply_text'] = trim((string) ($data['offline_auto_reply_text'] ?? ''));
             $data['settings']['welcome_enabled'] = (bool) ($data['welcome_enabled'] ?? false);
             $data['settings']['welcome_text'] = trim((string) ($data['welcome_text'] ?? ''));
+            if (($data['type'] ?? '') === 'tg') {
+                $data['settings']['telegram_mode'] = (string) ($data['telegram_mode'] ?? 'direct');
+            }
             unset(
                 $data['offline_auto_reply_enabled'],
                 $data['offline_auto_reply_text'],
                 $data['welcome_enabled'],
                 $data['welcome_text'],
+                $data['telegram_mode'],
             );
         }
 

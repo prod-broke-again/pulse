@@ -18,7 +18,7 @@ final class InboundAttachmentExtractor
     public function extract(array $payload): array
     {
         $attachments = [];
-        $message = $payload['message'] ?? $payload['edited_message'] ?? $payload['channel_post'] ?? $payload;
+        $message = $payload['message'] ?? $payload['edited_message'] ?? $payload['channel_post'] ?? $payload['business_message'] ?? $payload;
 
         $attachments = array_merge($attachments, $this->extractTelegramAttachments($message));
         $attachments = array_merge($attachments, $this->extractVkAttachments($payload));

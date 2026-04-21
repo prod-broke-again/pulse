@@ -145,6 +145,27 @@ class SourceModelResource extends Resource
                 ->hidden(fn (callable $get): bool => $get('type') === 'vk')
                 ->dehydrated(fn (callable $get): bool => $get('type') !== 'vk'),
             Group::make([
+                Select::make('telegram_mode')
+                    ->label('Режим Telegram-интеграции')
+                    ->options([
+                        'direct' => 'Direct — пользователи пишут боту напрямую',
+                        'business' => 'Business Mode — бот подключён к личному аккаунту модератора',
+                    ])
+                    ->default('direct')
+                    ->visible(fn (callable $get): bool => $get('type') === 'tg')
+                    ->dehydrated(fn (callable $get): bool => $get('type') === 'tg')
+                    ->helperText('В режиме Business нужен Telegram Premium на аккаунте-хосте и ручное подключение бота в настройках Telegram (Settings → Business → Chatbots).')
+                    ->required(fn (callable $get): bool => $get('type') === 'tg'),
+                Placeholder::make('business_connection_status')
+                    ->label('Статус business-подключения')
+                    ->visible(fn (callable $get): bool => $get('type') === 'tg' && $get('telegram_mode') === 'business')
+                    ->content(function (?SourceModel $record): string {
+                        $cid = $record?->settings['business_connection_id'] ?? null;
+
+                        return $cid
+                            ? 'Активно (id: '.substr((string) $cid, 0, 8).'...)'
+                            : 'Не подключено. Добавьте бота в Telegram Business.';
+                    }),
                 Toggle::make('offline_auto_reply_enabled')
                     ->label('Автоответ при отсутствии модераторов онлайн')
                     ->helperText('Не чаще 1 раза в 30 минут на чат, только если никто из модераторов не в сети (heartbeat + переключатель).')

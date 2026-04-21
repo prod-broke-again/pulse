@@ -21,7 +21,7 @@ final readonly class StartCommandDetector
     /** @param array<string, mixed> $payload */
     private function isTelegramLikeStart(array $payload): bool
     {
-        $text = $payload['message']['text'] ?? null;
+        $text = $payload['message']['text'] ?? $payload['business_message']['text'] ?? null;
         if (! is_string($text)) {
             return false;
         }

@@ -16,6 +16,7 @@ use App\Events\ChatAssigned as ChatAssignedEvent;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Support\NewChatMessageBroadcastExtras;
+use App\Support\TelegramOutboundBusinessOptions;
 use Illuminate\Contracts\Events\Dispatcher;
 
 final readonly class SendMessage
@@ -54,6 +55,7 @@ final readonly class SendMessage
                 status: ChatStatus::Active,
                 assignedTo: $senderId,
                 topic: $chat->topic,
+                externalBusinessConnectionId: $chat->externalBusinessConnectionId,
             );
             $chat = $this->chatRepository->persist($updated);
             $this->events->dispatch(new ChatAssignedEvent(chatId: $chat->id, assignedToUserId: $senderId));
@@ -108,6 +110,9 @@ final readonly class SendMessage
                     && $replySource->external_message_id !== '') {
                     $options['reply_to_external_message_id'] = $replySource->external_message_id;
                 }
+            }
+            foreach (TelegramOutboundBusinessOptions::fromDomainChat($chat, $source->settings) as $key => $value) {
+                $options[$key] = $value;
             }
             $messenger->sendMessage($chat->externalUserId, $text, $options);
         }

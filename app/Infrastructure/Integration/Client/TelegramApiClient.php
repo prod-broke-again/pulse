@@ -54,6 +54,10 @@ final class TelegramApiClient
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         }
 
+        if (isset($params['business_connection_id']) && is_string($params['business_connection_id']) && $params['business_connection_id'] !== '') {
+            $body['business_connection_id'] = $params['business_connection_id'];
+        }
+
         $response = Http::timeout(60)->post($this->apiBase().'/sendMessage', $body);
 
         if (! $response->successful()) {
@@ -125,6 +129,10 @@ final class TelegramApiClient
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         }
 
+        $businessConnectionId = isset($params['business_connection_id']) && is_string($params['business_connection_id']) && $params['business_connection_id'] !== ''
+            ? $params['business_connection_id']
+            : null;
+
         /** @var list<array{contents: string, filename: string, is_image: bool}> $prepared */
         $prepared = [];
         foreach ($absolutePaths as $path) {
@@ -145,7 +153,7 @@ final class TelegramApiClient
 
         if ($prepared !== [] && count($prepared) >= 2 && count($prepared) <= 10
             && array_reduce($prepared, static fn (bool $carry, array $row): bool => $carry && $row['is_image'], true)) {
-            return $this->sendMediaGroupLocalPhotos($chatId, $text, $prepared, $replyTo, $replyMarkup);
+            return $this->sendMediaGroupLocalPhotos($chatId, $text, $prepared, $replyTo, $replyMarkup, $businessConnectionId);
         }
 
         $firstId = null;
@@ -168,6 +176,10 @@ final class TelegramApiClient
             $multipart = [
                 ['name' => 'chat_id', 'contents' => $chatId],
             ];
+
+            if ($businessConnectionId !== null) {
+                $multipart[] = ['name' => 'business_connection_id', 'contents' => $businessConnectionId];
+            }
 
             if ($first && $replyTo !== null) {
                 $multipart[] = ['name' => 'reply_to_message_id', 'contents' => (string) $replyTo];
@@ -230,10 +242,14 @@ final class TelegramApiClient
         array $photos,
         ?int $replyTo,
         ?string $replyMarkup,
+        ?string $businessConnectionId = null,
     ): ?string {
         $multipart = [
             ['name' => 'chat_id', 'contents' => $chatId],
         ];
+        if ($businessConnectionId !== null) {
+            $multipart[] = ['name' => 'business_connection_id', 'contents' => $businessConnectionId];
+        }
         if ($replyTo !== null) {
             $multipart[] = ['name' => 'reply_to_message_id', 'contents' => (string) $replyTo];
         }
