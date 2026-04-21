@@ -72,12 +72,21 @@ Optional:
 `)
 }
 
+/**
+ * On Windows, only npm needs `shell: true` (npm.cmd). Git/gh with `shell: true` break
+ * multiline `git commit -m` (e.g. "1.1.7" becomes a stray pathspec).
+ */
+function useShellForCmd(cmd) {
+  return process.platform === 'win32' && cmd === 'npm'
+}
+
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
+    const shell = opts.shell !== undefined ? opts.shell : useShellForCmd(cmd)
     const child = spawn(cmd, args, {
       cwd: opts.cwd ?? process.cwd(),
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      shell,
       env: process.env,
     })
     child.on('exit', (code) => {
@@ -95,7 +104,7 @@ function runCapture(cmd, args, cwd) {
     const child = spawn(cmd, args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
+      shell: useShellForCmd(cmd),
       env: process.env,
     })
     let out = ''
