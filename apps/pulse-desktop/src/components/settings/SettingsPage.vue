@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { Camera, ChevronDown, ChevronRight, Loader2, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/authStore'
 import { uploadAvatar } from '../../api/auth'
@@ -164,11 +164,31 @@ function toggleSourceExpanded(sourceId: number): void {
   expandedSourceIds.value = next
 }
 
+function setsEqual(a: Set<number>, b: Set<number>): boolean {
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const x of a) {
+    if (!b.has(x)) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Снимок triState по источникам активной площадки — без deep watch по дереву (избегаем циклов). */
+const inboxActivePanelSourceTriKey = computed(() => {
+  const p = inboxActivePlatform.value
+  if (!p) {
+    return ''
+  }
+  return p.sources.map((s) => `${s.id}:${s.triState}`).join(',')
+})
+
 /** Раскрыть источники с частичным выбором, чтобы было видно рубрики. */
 watch(
-  () => inboxGroupedPlatforms.value,
-  async () => {
-    await nextTick()
+  inboxActivePanelSourceTriKey,
+  () => {
     const p = inboxActivePlatform.value
     if (!p) {
       return
@@ -179,27 +199,41 @@ watch(
         next.add(s.id)
       }
     }
-    expandedSourceIds.value = next
+    if (!setsEqual(next, expandedSourceIds.value)) {
+      expandedSourceIds.value = next
+    }
   },
-  { deep: true },
+  { flush: 'post' },
 )
 
 const platformMasterCheckboxEls = shallowRef(new Map<string, HTMLInputElement>())
 
 function registerPlatformMasterCheckbox(platformType: string, el: unknown): void {
-  const m = new Map(platformMasterCheckboxEls.value)
+  const cur = platformMasterCheckboxEls.value
   if (el instanceof HTMLInputElement) {
+    if (cur.get(platformType) === el) {
+      return
+    }
+    const m = new Map(cur)
     m.set(platformType, el)
-  } else {
-    m.delete(platformType)
+    platformMasterCheckboxEls.value = m
+    return
   }
+  if (!cur.has(platformType)) {
+    return
+  }
+  const m = new Map(cur)
+  m.delete(platformType)
   platformMasterCheckboxEls.value = m
 }
 
+const platformTriStateSignature = computed(() =>
+  inboxGroupedPlatforms.value.map((p) => `${p.type}:${p.triState}`).join('|'),
+)
+
 watch(
-  [inboxGroupedPlatforms, platformMasterCheckboxEls],
-  async () => {
-    await nextTick()
+  [platformTriStateSignature, platformMasterCheckboxEls],
+  () => {
     for (const p of inboxGroupedPlatforms.value) {
       const el = platformMasterCheckboxEls.value.get(p.type)
       if (el) {
@@ -207,25 +241,33 @@ watch(
       }
     }
   },
-  { deep: true },
+  { flush: 'post' },
 )
 
 const sourceMasterCheckboxEls = shallowRef(new Map<number, HTMLInputElement>())
 
 function registerSourceMasterCheckbox(sourceId: number, el: unknown): void {
-  const m = new Map(sourceMasterCheckboxEls.value)
+  const cur = sourceMasterCheckboxEls.value
   if (el instanceof HTMLInputElement) {
+    if (cur.get(sourceId) === el) {
+      return
+    }
+    const m = new Map(cur)
     m.set(sourceId, el)
-  } else {
-    m.delete(sourceId)
+    sourceMasterCheckboxEls.value = m
+    return
   }
+  if (!cur.has(sourceId)) {
+    return
+  }
+  const m = new Map(cur)
+  m.delete(sourceId)
   sourceMasterCheckboxEls.value = m
 }
 
 watch(
-  [inboxActivePlatform, sourceMasterCheckboxEls],
-  async () => {
-    await nextTick()
+  [inboxActivePanelSourceTriKey, sourceMasterCheckboxEls],
+  () => {
     const panel = inboxActivePlatform.value
     if (!panel) {
       return
@@ -237,7 +279,7 @@ watch(
       }
     }
   },
-  { deep: true },
+  { flush: 'post' },
 )
 
 const localPrefs = ref(mergeNotificationSoundPrefs(null))
