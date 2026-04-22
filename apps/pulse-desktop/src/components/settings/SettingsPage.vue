@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { Camera, Loader2, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
+import { Camera, ChevronDown, ChevronRight, Loader2, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/authStore'
 import { uploadAvatar } from '../../api/auth'
 import { patchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
@@ -14,7 +14,7 @@ import {
 } from '../../lib/notificationSoundPresets'
 import { playIncomingToneFromPrefs, setLocalCustomSoundDataUrl, getLocalCustomSoundDataUrl } from '../../lib/desktopNotifications'
 import { fetchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
-import { useInboxFilterPrefsForm, INBOX_CHANNEL_LABELS } from '../../lib/useInboxFilterPrefsForm'
+import { useInboxFilterPrefsForm } from '../../lib/useInboxFilterPrefsForm'
 
 defineProps<{
   isDark: boolean
@@ -113,29 +113,132 @@ const isStaff = computed(
 )
 
 const {
-  userSources: inboxUserSources,
-  channelTypesInSources: inboxChannelTypes,
-  departments: inboxDepartments,
+  groupedPlatforms: inboxGroupedPlatforms,
+  prefsSummaryLines: inboxPrefsSummaryLines,
   departmentsLoading: inboxDeptsLoading,
-  prefEnabledSources,
-  prefEnabledChannels,
   prefEnabledDepartments,
   prefsSaving: inboxPrefsSaving,
   prefsSaveError: inboxPrefsSaveError,
   ensureDepartmentsLoaded,
   saveInboxPrefsDefaults,
-  togglePrefId: inboxToggleId,
-  togglePrefStr: inboxToggleStr,
+  setPlatformFullyEnabled,
+  onPlatformMasterClick,
+  onSourceMasterClick,
+  toggleDepartmentPref,
 } = useInboxFilterPrefsForm()
 
-function inboxChannelLabel(t: string): string {
-  return INBOX_CHANNEL_LABELS[t] ?? t
+const inboxActivePlatformTab = ref('')
+
+const inboxActivePlatform = computed(
+  () => inboxGroupedPlatforms.value.find((p) => p.type === inboxActivePlatformTab.value) ?? null,
+)
+
+watch(
+  () => inboxGroupedPlatforms.value.map((p) => p.type),
+  (types) => {
+    if (types.length === 0) {
+      inboxActivePlatformTab.value = ''
+      return
+    }
+    if (!types.includes(inboxActivePlatformTab.value)) {
+      inboxActivePlatformTab.value = types[0]!
+    }
+  },
+  { immediate: true },
+)
+
+/** Раскрытые источники (рубрики внутри). */
+const expandedSourceIds = ref<Set<number>>(new Set())
+
+function isSourceExpanded(sourceId: number): boolean {
+  return expandedSourceIds.value.has(sourceId)
 }
 
-function departmentLabel(d: { name: string; source_name?: string | null }): string {
-  const src = d.source_name?.trim()
-  return src ? `${d.name} — ${src}` : d.name
+function toggleSourceExpanded(sourceId: number): void {
+  const next = new Set(expandedSourceIds.value)
+  if (next.has(sourceId)) {
+    next.delete(sourceId)
+  } else {
+    next.add(sourceId)
+  }
+  expandedSourceIds.value = next
 }
+
+/** Раскрыть источники с частичным выбором, чтобы было видно рубрики. */
+watch(
+  () => inboxGroupedPlatforms.value,
+  async () => {
+    await nextTick()
+    const p = inboxActivePlatform.value
+    if (!p) {
+      return
+    }
+    const next = new Set(expandedSourceIds.value)
+    for (const s of p.sources) {
+      if (s.triState === 'partial') {
+        next.add(s.id)
+      }
+    }
+    expandedSourceIds.value = next
+  },
+  { deep: true },
+)
+
+const platformMasterCheckboxEls = shallowRef(new Map<string, HTMLInputElement>())
+
+function registerPlatformMasterCheckbox(platformType: string, el: unknown): void {
+  const m = new Map(platformMasterCheckboxEls.value)
+  if (el instanceof HTMLInputElement) {
+    m.set(platformType, el)
+  } else {
+    m.delete(platformType)
+  }
+  platformMasterCheckboxEls.value = m
+}
+
+watch(
+  [inboxGroupedPlatforms, platformMasterCheckboxEls],
+  async () => {
+    await nextTick()
+    for (const p of inboxGroupedPlatforms.value) {
+      const el = platformMasterCheckboxEls.value.get(p.type)
+      if (el) {
+        el.indeterminate = p.triState === 'partial'
+      }
+    }
+  },
+  { deep: true },
+)
+
+const sourceMasterCheckboxEls = shallowRef(new Map<number, HTMLInputElement>())
+
+function registerSourceMasterCheckbox(sourceId: number, el: unknown): void {
+  const m = new Map(sourceMasterCheckboxEls.value)
+  if (el instanceof HTMLInputElement) {
+    m.set(sourceId, el)
+  } else {
+    m.delete(sourceId)
+  }
+  sourceMasterCheckboxEls.value = m
+}
+
+watch(
+  [inboxActivePlatform, sourceMasterCheckboxEls],
+  async () => {
+    await nextTick()
+    const panel = inboxActivePlatform.value
+    if (!panel) {
+      return
+    }
+    for (const s of panel.sources) {
+      const el = sourceMasterCheckboxEls.value.get(s.id)
+      if (el) {
+        el.indeterminate = s.triState === 'partial'
+      }
+    }
+  },
+  { deep: true },
+)
 
 const localPrefs = ref(mergeNotificationSoundPrefs(null))
 const soundSaveBusy = ref(false)
@@ -600,7 +703,7 @@ function clearCustomSound(): void {
               Фильтры инбокса по умолчанию
             </h4>
             <p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary)">
-              Какие источники, площадки (тип: Telegram, VK, сайт…) и рубрики учитывать в списке обращений при входе. Быстрый фильтр по статусу, источнику и площадке — в кнопке с иконкой у строки поиска; без сохранения он действует только в этой сессии.
+              Выберите площадку (Telegram, VK, сайт…), затем источники и рубрики. Сохранённые ограничения применяются к списку обращений при входе. Быстрый фильтр без сохранения — в кнопке с иконкой у строки поиска в инбоксе.
             </p>
           </div>
           <p v-if="inboxPrefsSaveError" class="text-xs font-medium text-red-500" role="alert">
@@ -610,66 +713,161 @@ function clearCustomSound(): void {
             <Loader2 class="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
             Загрузка рубрик…
           </div>
-          <div class="space-y-3 text-sm">
-            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Источники
-            </p>
-            <ul v-if="inboxUserSources.length" class="space-y-2">
-              <li v-for="s in inboxUserSources" :key="'set-src-' + s.id" class="flex items-start gap-2">
-                <input
-                  :id="'set-src-' + s.id"
-                  type="checkbox"
-                  class="mt-1 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledSources.includes(s.id)"
-                  @change="prefEnabledSources = inboxToggleId(prefEnabledSources, s.id)"
-                >
-                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-src-' + s.id">{{ s.name }}</label>
+          <div class="space-y-4 text-sm">
+            <ul class="space-y-1 rounded-[var(--radius-md)] border px-3 py-2" style="border-color: var(--border-light); background: var(--bg-thread)">
+              <li
+                v-for="(line, idx) in inboxPrefsSummaryLines"
+                :key="'summary-' + idx"
+                class="text-[11px] leading-snug"
+                style="color: var(--text-muted)"
+              >
+                {{ line }}
               </li>
             </ul>
-            <p v-else class="text-xs" style="color: var(--text-muted)">
-              Нет доступных источников.
+
+            <p v-if="!inboxGroupedPlatforms.length" class="text-xs" style="color: var(--text-muted)">
+              Нет привязанных площадок или источников.
             </p>
-            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Площадки
-            </p>
-            <ul v-if="inboxChannelTypes.length" class="space-y-2">
-              <li v-for="t in inboxChannelTypes" :key="'set-ch-' + t" class="flex items-start gap-2">
-                <input
-                  :id="'set-ch-' + t"
-                  type="checkbox"
-                  class="mt-1 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledChannels.includes(t)"
-                  @change="prefEnabledChannels = inboxToggleStr(prefEnabledChannels, t)"
+
+            <template v-else>
+              <div
+                class="thin-scroll flex min-w-0 gap-1 overflow-x-auto pb-1"
+                role="tablist"
+                aria-label="Площадки"
+              >
+                <button
+                  v-for="p in inboxGroupedPlatforms"
+                  :key="'tab-' + p.type"
+                  type="button"
+                  role="tab"
+                  class="shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                  :aria-selected="inboxActivePlatformTab === p.type"
+                  :style="inboxActivePlatformTab === p.type
+                    ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+                    : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+                  @click="inboxActivePlatformTab = p.type"
                 >
-                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-ch-' + t">
-                  {{ inboxChannelLabel(t) }}
-                </label>
-              </li>
-            </ul>
-            <p v-else class="text-xs" style="color: var(--text-muted)">
-              —
-            </p>
-            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Рубрики
-            </p>
-            <ul v-if="inboxDepartments.length" class="thin-scroll max-h-48 space-y-2 overflow-y-auto">
-              <li v-for="d in inboxDepartments" :key="'set-dep-' + d.id" class="flex items-start gap-2">
-                <input
-                  :id="'set-dep-' + d.id"
-                  type="checkbox"
-                  class="mt-1 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledDepartments.includes(d.id)"
-                  @change="prefEnabledDepartments = inboxToggleId(prefEnabledDepartments, d.id)"
+                  {{ p.label }}
+                </button>
+              </div>
+
+              <template v-for="plat in inboxActivePlatform ? [inboxActivePlatform] : []" :key="'panel-' + plat.type">
+                <div
+                  class="space-y-3"
+                  role="tabpanel"
+                  :aria-label="'Источники: ' + plat.label"
                 >
-                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-dep-' + d.id">{{ departmentLabel(d) }}</label>
-              </li>
-            </ul>
-            <p v-else class="text-xs" style="color: var(--text-muted)">
-              Нет рубрик или ещё загружаются.
-            </p>
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 py-2"
+                    style="border-color: var(--border-light); background: var(--bg-thread)"
+                  >
+                    <label class="flex min-w-0 cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        class="mt-0.5 shrink-0 rounded border"
+                        style="border-color: var(--border-light)"
+                        :checked="plat.triState === 'all'"
+                        :ref="(el) => registerPlatformMasterCheckbox(plat.type, el)"
+                        @change="onPlatformMasterClick(plat.type)"
+                      >
+                      <span class="text-xs font-semibold" style="color: var(--text-primary)">
+                        Вся площадка {{ plat.label }}
+                      </span>
+                    </label>
+                    <div class="flex shrink-0 flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        class="rounded-md border px-2 py-1 text-[10px] font-semibold"
+                        style="border-color: var(--border-light); color: var(--text-secondary)"
+                        @click="setPlatformFullyEnabled(plat.type, true)"
+                      >
+                        Выбрать всё
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-md border px-2 py-1 text-[10px] font-semibold"
+                        style="border-color: var(--border-light); color: var(--text-secondary)"
+                        @click="setPlatformFullyEnabled(plat.type, false)"
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                  </div>
+
+                  <p v-if="!plat.sources.length" class="text-xs" style="color: var(--text-muted)">
+                    Нет источников для этой площадки.
+                  </p>
+
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="s in plat.sources"
+                      :key="'src-' + s.id"
+                      class="overflow-hidden rounded-[var(--radius-md)] border"
+                      style="border-color: var(--border-light); background: var(--bg-thread)"
+                    >
+                    <div class="flex items-center gap-1 px-2 py-2">
+                      <button
+                        type="button"
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                        style="color: var(--text-muted)"
+                        :aria-expanded="isSourceExpanded(s.id)"
+                        :title="isSourceExpanded(s.id) ? 'Свернуть рубрики' : 'Рубрики'"
+                        @click="toggleSourceExpanded(s.id)"
+                      >
+                        <ChevronDown v-if="isSourceExpanded(s.id)" class="h-4 w-4" />
+                        <ChevronRight v-else class="h-4 w-4" />
+                      </button>
+                      <input
+                        :id="'inbox-src-' + s.id"
+                        type="checkbox"
+                        class="mt-0.5 shrink-0 rounded border"
+                        style="border-color: var(--border-light)"
+                        :checked="s.triState === 'all'"
+                        :ref="(el) => registerSourceMasterCheckbox(s.id, el)"
+                        @change="onSourceMasterClick(s.id)"
+                      >
+                      <label
+                        class="min-w-0 flex-1 cursor-pointer truncate text-xs font-medium"
+                        style="color: var(--text-secondary)"
+                        :for="'inbox-src-' + s.id"
+                        :title="s.name"
+                      >{{ s.name }}</label>
+                    </div>
+                    <div
+                      v-show="isSourceExpanded(s.id)"
+                      class="thin-scroll max-h-52 space-y-1.5 overflow-y-auto border-t px-2 py-2 pl-11"
+                      style="border-color: var(--border-light)"
+                    >
+                      <template v-if="s.departments.length">
+                        <div
+                          v-for="d in s.departments"
+                          :key="'dep-' + d.id"
+                          class="flex items-start gap-2"
+                        >
+                          <input
+                            :id="'inbox-dep-' + d.id"
+                            type="checkbox"
+                            class="mt-0.5 shrink-0 rounded border"
+                            style="border-color: var(--border-light)"
+                            :checked="prefEnabledDepartments.includes(d.id)"
+                            @change="toggleDepartmentPref(d.id)"
+                          >
+                          <label
+                            class="cursor-pointer text-[11px] leading-snug"
+                            style="color: var(--text-secondary)"
+                            :for="'inbox-dep-' + d.id"
+                          >{{ d.name }}</label>
+                        </div>
+                      </template>
+                      <p v-else class="text-[11px]" style="color: var(--text-muted)">
+                        Нет рубрик для этого источника.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                </div>
+              </template>
+            </template>
           </div>
           <button
             type="button"
