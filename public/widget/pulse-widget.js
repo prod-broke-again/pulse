@@ -31,12 +31,13 @@
         'x.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
     };
 
-    const defaultResponseSlaText = 'Стараемся ответить в течение 2 часов в рабочее время.';
-    const defaultCloseTabNotificationText = 'Если закроете вкладку: при ответе оператора вы услышите сигнал, увидите число в заголовке страницы и, при разрешённых уведомлениях браузера, всплывающее уведомление. Если оставили email в анкете — дублируем ответ письмом.';
+    const defaultResponseSlaText = 'Стараемся ответить в течение рабочего дня.';
+    const defaultCloseTabNotificationText =
+        'Пока эта страница открыта, при ответе вы услышите сигнал, увидите число на вкладке и, при разрешённых уведомлениях браузера, всплывающее уведомление. Если вы закроете страницу и не оставили email, переписка не пропадёт: ответ останется в чате — его можно прочитать, снова открыв виджет на этом сайте. С email в анкете дублируем ответ письмом.';
 
     let config = {
         title: 'Поддержка',
-        subtitle: 'Обычно отвечаем за пару минут',
+        subtitle: 'Напишите — мы ответим в рабочее время',
         responseSlaText: defaultResponseSlaText,
         closeTabNotificationText: defaultCloseTabNotificationText,
         primaryColor: '#55175e',
@@ -498,7 +499,8 @@
     const originalDocumentTitle = document.title;
     let guestOnboardingShown = false;
     let guestOnboardingCompleted = false;
-    const onboardingText = 'Спасибо за ваше сообщение! Чтобы специалист знал, как к вам обращаться, и мог ответить вам, даже если вы случайно закроете эту страницу, пожалуйста, укажите ваше имя. Также вы можете оставить свою электронную почту (это по желанию).';
+    const onboardingText =
+        'Спасибо за ваше сообщение! Укажите, пожалуйста, имя для обращения. Почта по желанию — с неё удобнее не потерять ответ, если вы уйдёте с сайта; без email ответ останется в чате и будет доступен при следующем визите.';
     let lastModeratorName = null;
     let lastModeratorAvatar = null;
 
