@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import {
   fetchChats,
   fetchTabCounts,
+  type ChatTabCountsParams,
   assignMe as apiAssignMe,
   closeChat as apiCloseChat,
   changeChatDepartment as apiChangeChatDepartment,
@@ -11,7 +12,9 @@ import {
 import type { ChatMuteMode } from '../api/chats'
 import { api } from '../api/client'
 import type { ApiChat, ChatListFilters, ChatResponse, TabCountsData } from '../types/dto/chat.types'
+import type { ApiUser } from '../types/dto/auth.types'
 import type { NewChatMessagePayload } from '../lib/realtime'
+import { pendingListFiltersFromPrefs } from '../lib/inboxFilterPrefs'
 
 export const useChatStore = defineStore('chat', () => {
   const chats = ref<ApiChat[]>([])
@@ -21,6 +24,9 @@ export const useChatStore = defineStore('chat', () => {
   const filters = ref<Omit<ChatListFilters, 'tab' | 'page' | 'per_page'>>({
     search: '',
     status: 'open',
+    source_ids: undefined,
+    department_ids: undefined,
+    channels: undefined,
   })
   const tabCounts = ref<TabCountsData>({ my: 0, unassigned: 0, all: 0 })
   const pagination = ref({
@@ -40,16 +46,39 @@ export const useChatStore = defineStore('chat', () => {
     chats.value.find((c) => c.id === selectedChatId.value) ?? null
   )
 
+  function tabCountsParams(): ChatTabCountsParams {
+    const f = filters.value
+    return {
+      search: (f.search ?? '').trim() || undefined,
+      status: f.status,
+      source_id: f.source_id,
+      source_ids: f.source_ids,
+      department_id: f.department_id,
+      department_ids: f.department_ids,
+      channels: f.channels,
+    }
+  }
+
   async function refreshTabCounts(): Promise<void> {
     try {
-      const data = await fetchTabCounts({
-        search: (filters.value.search ?? '').trim() || undefined,
-        status: filters.value.status,
-      })
+      const data = await fetchTabCounts(tabCountsParams())
       tabCounts.value = data
     } catch (e) {
       console.error('Failed to load tab counts:', e)
     }
+  }
+
+  /** Синхронизация ограничений инбокса из профиля / PATCH prefs (без поиска и статуса). */
+  async function syncInboxFiltersFromAuthUser(user: ApiUser): Promise<void> {
+    const prefsSlice = pendingListFiltersFromPrefs(user.inbox_filter_prefs ?? null)
+    filters.value = {
+      search: filters.value.search ?? '',
+      status: filters.value.status ?? 'open',
+      source_ids: prefsSlice.source_ids,
+      department_ids: prefsSlice.department_ids,
+      channels: prefsSlice.channels,
+    }
+    await loadChats(1)
   }
 
   /** Сжать всплески WS (прочитано и т.д.): подтянуть список без спиннера на весь инбокс. */
@@ -280,6 +309,8 @@ export const useChatStore = defineStore('chat', () => {
     bumpChatFromRealtime,
     setTab,
     setFilters,
+    syncInboxFiltersFromAuthUser,
+    tabCountsParams,
     selectChat,
     assignMe,
     applyChatAssigned,

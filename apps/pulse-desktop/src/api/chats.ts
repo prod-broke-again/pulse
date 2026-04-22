@@ -7,17 +7,63 @@ import type {
   TabCountsData,
 } from '../types/dto/chat.types'
 
-export async function fetchChats(filters: ChatListFilters = {}): Promise<ChatsListResponse> {
-  return api.get<ChatsListResponse>('/chats', filters as Record<string, string | number | undefined>)
+export type ChatTabCountsParams = Pick<
+  ChatListFilters,
+  | 'search'
+  | 'status'
+  | 'source_id'
+  | 'source_ids'
+  | 'department_id'
+  | 'department_ids'
+  | 'channels'
+>
+
+/** Query string for GET /chats и tab-counts (массивы → ключ[] для Laravel). */
+export function serializeChatListQuery(f: ChatListFilters): Record<
+  string,
+  string | number | (string | number)[] | undefined
+> {
+  const out: Record<string, string | number | (string | number)[] | undefined> = {}
+  if (f.page != null) {
+    out.page = f.page
+  }
+  if (f.per_page != null) {
+    out.per_page = f.per_page
+  }
+  if (f.tab != null) {
+    out.tab = f.tab
+  }
+  const s = f.search?.trim()
+  if (s) {
+    out.search = s
+  }
+  if (f.status != null) {
+    out.status = f.status
+  }
+  if (f.source_id != null) {
+    out.source_id = f.source_id
+  }
+  if (f.source_ids != null && f.source_ids.length > 0) {
+    out.source_ids = f.source_ids
+  }
+  if (f.department_id != null) {
+    out.department_id = f.department_id
+  }
+  if (f.department_ids != null && f.department_ids.length > 0) {
+    out.department_ids = f.department_ids
+  }
+  if (f.channels != null && f.channels.length > 0) {
+    out.channels = f.channels
+  }
+  return out
 }
 
-export async function fetchTabCounts(
-  params: Pick<ChatListFilters, 'search' | 'status'> = {},
-): Promise<TabCountsData> {
-  const response = await api.get<{ data: TabCountsData }>('/chats/tab-counts', {
-    search: params.search,
-    status: params.status,
-  })
+export async function fetchChats(filters: ChatListFilters = {}): Promise<ChatsListResponse> {
+  return api.get<ChatsListResponse>('/chats', serializeChatListQuery(filters))
+}
+
+export async function fetchTabCounts(params: ChatTabCountsParams = {}): Promise<TabCountsData> {
+  const response = await api.get<{ data: TabCountsData }>('/chats/tab-counts', serializeChatListQuery(params))
   return response.data
 }
 

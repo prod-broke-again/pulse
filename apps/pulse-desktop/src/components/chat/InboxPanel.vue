@@ -15,11 +15,22 @@ import {
   Volume2,
   ChevronDown,
   RotateCcw,
+  Settings,
 } from 'lucide-vue-next'
 import { resolveDepartmentIcon } from '../../constants/departmentIcons'
+import { useAuthStore } from '../../stores/authStore'
 import { useChatStore } from '../../stores/chatStore'
 import type { Conversation, ConversationChannel } from '../../types/chat'
 import { isMutedUntilActive } from '../../lib/chatMute'
+import { fetchUserDepartments, type DepartmentWithSource } from '../../api/departments'
+import { useInboxFilterPrefsForm } from '../../lib/useInboxFilterPrefsForm'
+
+const CHANNEL_LABELS: Record<string, string> = {
+  tg: 'Telegram',
+  vk: 'VK',
+  web: 'Сайт',
+  max: 'MAX',
+}
 
 function sourceBadgeClass(channel: ConversationChannel): string {
   if (channel === 'telegram' || channel === 'tg') {
@@ -55,7 +66,91 @@ const emit = defineEmits<{
 }>()
 
 const chatStore = useChatStore()
+const authStore = useAuthStore()
 const searchQuery = ref(chatStore.filters.search)
+
+const userDepartments = ref<DepartmentWithSource[]>([])
+const departmentsLoading = ref(false)
+
+const {
+  prefEnabledSources,
+  prefEnabledChannels,
+  prefEnabledDepartments,
+  prefsSaving,
+  prefsSaveError,
+  syncLocalFromAuth: syncInboxPrefsFromUser,
+  saveInboxPrefsDefaults,
+  togglePrefId: togglePrefSourceId,
+  togglePrefStr: togglePrefChannel,
+} = useInboxFilterPrefsForm(userDepartments)
+
+const userSources = computed(() => authStore.user?.sources ?? [])
+
+const channelTypesInSources = computed(() => {
+  const types = new Set<string>()
+  for (const s of userSources.value) {
+    if (s.type) {
+      types.add(s.type)
+    }
+  }
+  return ['tg', 'vk', 'web', 'max'].filter((t) => types.has(t))
+})
+
+function channelLabel(t: string): string {
+  return CHANNEL_LABELS[t] ?? t
+}
+
+const sourceFilterAll = computed(
+  () => !chatStore.filters.source_ids?.length && chatStore.filters.source_id == null,
+)
+
+function selectSourceFilter(sourceId: number | null): void {
+  if (sourceId === null) {
+    void chatStore.setFilters({ source_id: undefined, source_ids: undefined })
+  } else {
+    void chatStore.setFilters({ source_id: undefined, source_ids: [sourceId] })
+  }
+}
+
+function toggleChannelFilter(t: string): void {
+  const allowed = ['tg', 'vk', 'web', 'max'] as const
+  if (!(allowed as readonly string[]).includes(t)) {
+    return
+  }
+  type Ch = (typeof allowed)[number]
+  const ct = t as Ch
+  const cur = [...(chatStore.filters.channels ?? [])]
+  const idx = cur.indexOf(ct)
+  if (idx >= 0) {
+    cur.splice(idx, 1)
+  } else {
+    cur.push(ct)
+  }
+  void chatStore.setFilters({
+    channels: cur.length > 0 ? cur : undefined,
+  })
+}
+
+function clearChannelFilters(): void {
+  void chatStore.setFilters({ channels: undefined })
+}
+
+function toggleDepartmentFilter(id: number): void {
+  const cur = chatStore.filters.department_ids ?? []
+  const next = cur.includes(id) ? cur.filter((d) => d !== id) : [...cur, id]
+  void chatStore.setFilters({
+    department_ids: next.length > 0 ? next : undefined,
+  })
+}
+
+function clearDepartmentFilters(): void {
+  void chatStore.setFilters({ department_ids: undefined })
+}
+
+function isChannelChipActive(ct: string): boolean {
+  const ch = chatStore.filters.channels
+  return ch != null && (ch as string[]).includes(ct)
+}
 
 const menuOpen = ref(false)
 const menuChatId = ref<number | null>(null)
@@ -82,6 +177,18 @@ function onGlobalClick(): void {
 
 onMounted(() => {
   window.addEventListener('click', onGlobalClick)
+  departmentsLoading.value = true
+  void fetchUserDepartments()
+    .then((rows) => {
+      userDepartments.value = rows
+    })
+    .catch(() => {
+      userDepartments.value = []
+    })
+    .finally(() => {
+      departmentsLoading.value = false
+      syncInboxPrefsFromUser()
+    })
 })
 
 onBeforeUnmount(() => {
@@ -98,6 +205,13 @@ watch(searchQuery, (newQuery) => {
     chatStore.setFilters({ search: newQuery })
   }, 500)
 })
+
+watch(
+  () => chatStore.filters.search,
+  (s) => {
+    searchQuery.value = s ?? ''
+  },
+)
 
 const statusSelect = computed({
   get: () => chatStore.filters.status ?? 'open',
@@ -316,6 +430,169 @@ function unreadBadgeClass(count: number): string {
             aria-hidden="true"
           />
         </div>
+      </div>
+
+      <div v-if="userSources.length > 0" class="mb-2 space-y-2">
+        <div class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
+            :style="sourceFilterAll
+              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+            @click="selectSourceFilter(null)"
+          >
+            Все источники
+          </button>
+          <button
+            v-for="src in userSources"
+            :key="src.id"
+            type="button"
+            class="max-w-[10rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
+            :style="chatStore.filters.source_ids?.length === 1 && chatStore.filters.source_ids[0] === src.id
+              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+            :title="src.name"
+            @click="selectSourceFilter(src.id)"
+          >
+            {{ src.name }}
+          </button>
+        </div>
+
+        <div
+          v-if="channelTypesInSources.length > 0"
+          class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <button
+            type="button"
+            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
+            :style="!chatStore.filters.channels?.length
+              ? { borderColor: 'var(--border-light)', color: 'var(--text-muted)' }
+              : { borderColor: 'var(--border-light)', color: 'var(--text-muted)' }"
+            @click="clearChannelFilters"
+          >
+            Все каналы
+          </button>
+          <button
+            v-for="ct in channelTypesInSources"
+            :key="ct"
+            type="button"
+            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
+            :style="isChannelChipActive(ct)
+              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+            @click="toggleChannelFilter(ct)"
+          >
+            {{ channelLabel(ct) }}
+          </button>
+        </div>
+
+        <div
+          v-if="departmentsLoading || userDepartments.length > 0"
+          class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <button
+            type="button"
+            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
+            style="border-color: var(--border-light); color: var(--text-muted)"
+            :disabled="departmentsLoading"
+            @click="clearDepartmentFilters"
+          >
+            Все рубрики
+          </button>
+          <button
+            v-for="d in userDepartments"
+            :key="d.id"
+            type="button"
+            class="max-w-[11rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
+            :style="chatStore.filters.department_ids?.includes(d.id)
+              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+            :title="d.name"
+            @click="toggleDepartmentFilter(d.id)"
+          >
+            {{ d.name }}
+          </button>
+        </div>
+
+        <details class="group rounded-[var(--radius-md)] border text-left" style="border-color: var(--border-light); background: var(--bg-thread)">
+          <summary
+            class="flex cursor-pointer list-none items-center gap-2 px-2.5 py-2 text-[11px] font-semibold outline-none [&::-webkit-details-marker]:hidden"
+            style="color: var(--text-secondary)"
+          >
+            <Settings class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
+            Фильтры по умолчанию (сохранить на сервер)
+          </summary>
+          <div class="space-y-3 border-t px-2.5 py-3 text-[11px]" style="border-color: var(--border-light)">
+            <p v-if="prefsSaveError" class="font-medium" style="color: var(--status-closed)">
+              {{ prefsSaveError }}
+            </p>
+            <div v-if="!userSources.length" style="color: var(--text-muted)">
+              Нет источников.
+            </div>
+            <ul v-else class="space-y-1.5">
+              <li v-for="s in userSources" :key="'p-src-' + s.id" class="flex items-start gap-2">
+                <input
+                  :id="'ip-src-' + s.id"
+                  type="checkbox"
+                  class="mt-0.5 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledSources.includes(s.id)"
+                  @change="prefEnabledSources = togglePrefSourceId(prefEnabledSources, s.id)"
+                >
+                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-src-' + s.id">{{ s.name }}</label>
+              </li>
+            </ul>
+            <p class="pt-1 font-semibold" style="color: var(--text-primary)">
+              Каналы
+            </p>
+            <ul v-if="channelTypesInSources.length" class="space-y-1.5">
+              <li v-for="t in channelTypesInSources" :key="'p-ch-' + t" class="flex items-start gap-2">
+                <input
+                  :id="'ip-ch-' + t"
+                  type="checkbox"
+                  class="mt-0.5 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledChannels.includes(t)"
+                  @change="prefEnabledChannels = togglePrefChannel(prefEnabledChannels, t)"
+                >
+                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-ch-' + t">{{ channelLabel(t) }}</label>
+              </li>
+            </ul>
+            <p v-else style="color: var(--text-muted)">
+              —
+            </p>
+            <p class="pt-1 font-semibold" style="color: var(--text-primary)">
+              Рубрики
+            </p>
+            <ul v-if="userDepartments.length" class="max-h-32 space-y-1.5 overflow-y-auto">
+              <li v-for="d in userDepartments" :key="'p-dep-' + d.id" class="flex items-start gap-2">
+                <input
+                  :id="'ip-dep-' + d.id"
+                  type="checkbox"
+                  class="mt-0.5 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledDepartments.includes(d.id)"
+                  @change="prefEnabledDepartments = togglePrefSourceId(prefEnabledDepartments, d.id)"
+                >
+                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-dep-' + d.id">{{ d.name }}</label>
+              </li>
+            </ul>
+            <p v-else style="color: var(--text-muted)">
+              {{ departmentsLoading ? 'Загрузка…' : '—' }}
+            </p>
+            <button
+              type="button"
+              class="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] py-2 text-[11px] font-semibold text-white transition disabled:opacity-50"
+              style="background: var(--color-brand-200)"
+              :disabled="prefsSaving"
+              @click="saveInboxPrefsDefaults()"
+            >
+              <Loader2 v-if="prefsSaving" class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Сохранить
+            </button>
+          </div>
+        </details>
       </div>
     </div>
 

@@ -62,8 +62,13 @@ export interface ApiAttachment {
 
 export interface ChatListFilters {
   tab?: 'my' | 'unassigned' | 'all'
+  /** Один источник (совместимо с API); предпочтительнее source_ids */
   source_id?: number
+  /** Несколько источников — сериализуется как source_ids[] */
+  source_ids?: number[]
   department_id?: number
+  department_ids?: number[]
+  channels?: Array<'tg' | 'vk' | 'web' | 'max'>
   search?: string
   status?: 'open' | 'closed' | 'all'
   per_page?: number

@@ -370,10 +370,10 @@ onMounted(async () => {
   try {
     void maybeCheckDesktopUpdate(true)
     await authStore.fetchMe()
-    if (authStore.isAuthenticated) {
+    if (authStore.isAuthenticated && authStore.user) {
       getEcho()
       setupModeratorRealtime()
-      await chatStore.loadChats()
+      await chatStore.syncInboxFiltersFromAuthUser(authStore.user)
       void messageStore.flushOutboxQueue()
     }
   } catch (e) {
@@ -474,7 +474,11 @@ async function onLoginSuccess(): Promise<void> {
   oauthExchangeError.value = null
   getEcho()
   setupModeratorRealtime()
-  await chatStore.loadChats()
+  if (authStore.user) {
+    await chatStore.syncInboxFiltersFromAuthUser(authStore.user)
+  } else {
+    await chatStore.loadChats()
+  }
 }
 
 async function onSyncHistory(): Promise<void> {

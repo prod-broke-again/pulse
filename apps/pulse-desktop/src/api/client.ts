@@ -45,14 +45,26 @@ async function request<T>(
   path: string,
   options: {
     body?: Record<string, unknown> | FormData
-    params?: Record<string, string | number | undefined | null>
+    params?: Record<string, string | number | (string | number)[] | undefined | null>
   } = {},
 ): Promise<T> {
   const url = new URL(`${API_BASE_URL}${path}`)
 
   if (options.params) {
     for (const [key, value] of Object.entries(options.params)) {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value === undefined || value === null) {
+        continue
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item === undefined || item === null || item === '') {
+            continue
+          }
+          url.searchParams.append(`${key}[]`, String(item))
+        }
+        continue
+      }
+      if (value !== '') {
         url.searchParams.set(key, String(value))
       }
     }
@@ -96,7 +108,7 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(path: string, params?: Record<string, string | number | undefined | null>) =>
+  get: <T>(path: string, params?: Record<string, string | number | (string | number)[] | undefined | null>) =>
     request<T>('GET', path, { params }),
 
   post: <T>(path: string, body?: Record<string, unknown>) =>

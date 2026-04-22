@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Camera, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
+import { Camera, Loader2, LogOut, RefreshCw, Volume2 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/authStore'
 import { uploadAvatar } from '../../api/auth'
 import { patchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
@@ -14,6 +14,7 @@ import {
 } from '../../lib/notificationSoundPresets'
 import { playIncomingToneFromPrefs, setLocalCustomSoundDataUrl, getLocalCustomSoundDataUrl } from '../../lib/desktopNotifications'
 import { fetchNotificationSoundPreferences } from '../../api/notificationSoundPreferences'
+import { useInboxFilterPrefsForm, INBOX_CHANNEL_LABELS } from '../../lib/useInboxFilterPrefsForm'
 
 defineProps<{
   isDark: boolean
@@ -111,6 +112,26 @@ const isStaff = computed(
     !!user.value?.roles?.some((r) => r === 'admin' || r === 'moderator'),
 )
 
+const {
+  userSources: inboxUserSources,
+  channelTypesInSources: inboxChannelTypes,
+  departments: inboxDepartments,
+  departmentsLoading: inboxDeptsLoading,
+  prefEnabledSources,
+  prefEnabledChannels,
+  prefEnabledDepartments,
+  prefsSaving: inboxPrefsSaving,
+  prefsSaveError: inboxPrefsSaveError,
+  ensureDepartmentsLoaded,
+  saveInboxPrefsDefaults,
+  togglePrefId: inboxToggleId,
+  togglePrefStr: inboxToggleStr,
+} = useInboxFilterPrefsForm()
+
+function inboxChannelLabel(t: string): string {
+  return INBOX_CHANNEL_LABELS[t] ?? t
+}
+
 const localPrefs = ref(mergeNotificationSoundPrefs(null))
 const soundSaveBusy = ref(false)
 const hasCustomSound = ref(!!getLocalCustomSoundDataUrl())
@@ -157,6 +178,10 @@ onMounted(async () => {
     authStore.applyNotificationSoundPrefs(data.notification_sound_prefs)
   } catch {
     /* offline / old API */
+  }
+
+  if (isStaff.value) {
+    void ensureDepartmentsLoaded()
   }
 })
 
@@ -558,6 +583,99 @@ function clearCustomSound(): void {
               </button>
             </div>
           </div>
+        </div>
+
+        <div
+          v-if="isStaff"
+          class="space-y-4 rounded-[var(--radius-md)] border p-5"
+          style="border-color: var(--border-light); background: var(--bg-inbox)"
+        >
+          <div>
+            <h4 class="font-bold" style="color: var(--text-primary)">
+              Фильтры инбокса по умолчанию
+            </h4>
+            <p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary)">
+              Какие источники, каналы и рубрики показывать в списке обращений при входе. Можно уточнять фильтр под строкой поиска без сохранения.
+            </p>
+          </div>
+          <p v-if="inboxPrefsSaveError" class="text-xs font-medium text-red-500" role="alert">
+            {{ inboxPrefsSaveError }}
+          </p>
+          <div v-if="inboxDeptsLoading" class="flex items-center gap-2 text-xs" style="color: var(--text-muted)">
+            <Loader2 class="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
+            Загрузка рубрик…
+          </div>
+          <div class="space-y-3 text-sm">
+            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Источники
+            </p>
+            <ul v-if="inboxUserSources.length" class="space-y-2">
+              <li v-for="s in inboxUserSources" :key="'set-src-' + s.id" class="flex items-start gap-2">
+                <input
+                  :id="'set-src-' + s.id"
+                  type="checkbox"
+                  class="mt-1 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledSources.includes(s.id)"
+                  @change="prefEnabledSources = inboxToggleId(prefEnabledSources, s.id)"
+                >
+                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-src-' + s.id">{{ s.name }}</label>
+              </li>
+            </ul>
+            <p v-else class="text-xs" style="color: var(--text-muted)">
+              Нет доступных источников.
+            </p>
+            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Каналы
+            </p>
+            <ul v-if="inboxChannelTypes.length" class="space-y-2">
+              <li v-for="t in inboxChannelTypes" :key="'set-ch-' + t" class="flex items-start gap-2">
+                <input
+                  :id="'set-ch-' + t"
+                  type="checkbox"
+                  class="mt-1 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledChannels.includes(t)"
+                  @change="prefEnabledChannels = inboxToggleStr(prefEnabledChannels, t)"
+                >
+                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-ch-' + t">
+                  {{ inboxChannelLabel(t) }}
+                </label>
+              </li>
+            </ul>
+            <p v-else class="text-xs" style="color: var(--text-muted)">
+              —
+            </p>
+            <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
+              Рубрики
+            </p>
+            <ul v-if="inboxDepartments.length" class="max-h-48 space-y-2 overflow-y-auto">
+              <li v-for="d in inboxDepartments" :key="'set-dep-' + d.id" class="flex items-start gap-2">
+                <input
+                  :id="'set-dep-' + d.id"
+                  type="checkbox"
+                  class="mt-1 rounded border"
+                  style="border-color: var(--border-light)"
+                  :checked="prefEnabledDepartments.includes(d.id)"
+                  @change="prefEnabledDepartments = inboxToggleId(prefEnabledDepartments, d.id)"
+                >
+                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-dep-' + d.id">{{ d.name }}</label>
+              </li>
+            </ul>
+            <p v-else class="text-xs" style="color: var(--text-muted)">
+              Нет рубрик или ещё загружаются.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] py-2.5 text-sm font-semibold text-white transition disabled:opacity-50"
+            style="background: var(--color-brand-200)"
+            :disabled="inboxPrefsSaving"
+            @click="saveInboxPrefsDefaults()"
+          >
+            <Loader2 v-if="inboxPrefsSaving" class="h-4 w-4 animate-spin" aria-hidden="true" />
+            Сохранить фильтры инбокса
+          </button>
         </div>
       </div>
 
