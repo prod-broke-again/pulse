@@ -6,6 +6,7 @@ namespace App\Http\Resources\Api\V1;
 
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Models\User;
+use App\Services\InboxFilterPreferencesService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -29,6 +30,7 @@ final class UserResource extends JsonResource
             'sources' => $this->pulseSources($user),
             'department_ids' => $user->departments()->pluck('departments.id')->values(),
             'notification_sound_prefs' => app(\App\Services\NotificationSoundPreferencesService::class)->forUser($user),
+            'inbox_filter_prefs' => app(InboxFilterPreferencesService::class)->forUser($user),
         ];
     }
 
@@ -56,12 +58,12 @@ final class UserResource extends JsonResource
     }
 
     /**
-     * @return list<array{id:int,name:string}>
+     * @return list<array{id:int,name:string,type:string}>
      */
     private function pulseSources(User $user): array
     {
         $query = SourceModel::query()
-            ->select(['id', 'name'])
+            ->select(['id', 'name', 'type'])
             ->orderBy('id');
 
         if (! $user->hasRole('admin')) {
@@ -73,6 +75,7 @@ final class UserResource extends JsonResource
             ->map(static fn (SourceModel $source): array => [
                 'id' => (int) $source->id,
                 'name' => (string) $source->name,
+                'type' => (string) $source->type,
             ])
             ->values()
             ->all();

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\ChatController;
 use App\Http\Controllers\Api\V1\ChatMessageController;
 use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\InboxFilterPreferencesController;
 use App\Http\Controllers\Api\V1\ModeratorPresenceController;
 use App\Http\Controllers\Api\V1\NotificationSoundPreferencesController;
 use App\Http\Controllers\Api\V1\PushSubscriptionController;
@@ -63,6 +64,13 @@ Route::prefix('v1')->group(function (): void {
 
         // Departments (для смены отдела в чате)
         Route::get('/departments', [DepartmentController::class, 'index'])->name('api.v1.departments.index');
+        Route::get('/user/departments', [DepartmentController::class, 'indexForCurrentUser'])->name('api.v1.user.departments.index');
+
+        // Inbox filter preferences (moderator staff, synced)
+        Route::get('/user/inbox-filter-preferences', [InboxFilterPreferencesController::class, 'show'])
+            ->name('api.v1.user.inbox-filter-preferences.show');
+        Route::patch('/user/inbox-filter-preferences', [InboxFilterPreferencesController::class, 'update'])
+            ->name('api.v1.user.inbox-filter-preferences.update');
 
         // Analytics
         Route::get('/analytics/overview', [AnalyticsController::class, 'overview'])->name('api.v1.analytics.overview');

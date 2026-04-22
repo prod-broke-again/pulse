@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Application\Communication\Query;
 
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
+use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
+use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +18,9 @@ final readonly class ListChatsQuery
      * @param array{
      *     tab?: string,
      *     source_id?: int|null,
+     *     source_ids?: list<int>|null,
      *     department_id?: int|null,
+     *     department_ids?: list<int>|null,
      *     search?: string|null,
      *     status?: string|null,
      *     channels?: list<string>|null,
@@ -32,7 +36,9 @@ final readonly class ListChatsQuery
     /**
      * @param array{
      *     source_id?: int|null,
+     *     source_ids?: list<int>|null,
      *     department_id?: int|null,
+     *     department_ids?: list<int>|null,
      *     search?: string|null,
      *     status?: string|null,
      *     channels?: list<string>|null,
@@ -78,8 +84,8 @@ final readonly class ListChatsQuery
         $this->applyStatusFilter($query, $filters);
         $this->applyVisibilityScope($query, $user);
         $this->applyTabFilter($query, $user, $tab);
-        $this->applySourceFilter($query, $filters);
-        $this->applyDepartmentFilter($query, $filters);
+        $this->applySourceFilter($query, $user, $filters);
+        $this->applyDepartmentFilter($query, $user, $filters);
         $this->applyChannelFilter($query, $filters);
         $this->applySearchFilter($query, $filters);
 
@@ -134,23 +140,100 @@ final readonly class ListChatsQuery
     }
 
     /**
-     * @param  array{source_id?: int|null}  $filters
+     * @param  array{source_id?: int|null, source_ids?: list<int>|array<int>|null}  $filters
      */
-    private function applySourceFilter(Builder $query, array $filters): void
+    private function applySourceFilter(Builder $query, User $user, array $filters): void
     {
+        $multi = $filters['source_ids'] ?? null;
+        if (is_array($multi) && $multi !== []) {
+            $ids = $this->intersectSourceIdsForUser($user, $multi);
+            if ($ids !== []) {
+                $query->whereIn('source_id', $ids);
+            }
+
+            return;
+        }
+
         if (! empty($filters['source_id'])) {
             $query->where('source_id', (int) $filters['source_id']);
         }
     }
 
     /**
-     * @param  array{department_id?: int|null}  $filters
+     * @param  list<int|string>|array<int|string>  $requested
+     * @return list<int>
      */
-    private function applyDepartmentFilter(Builder $query, array $filters): void
+    private function intersectSourceIdsForUser(User $user, array $requested): array
     {
+        $ids = array_values(array_unique(array_map(static fn ($id): int => (int) $id, $requested)));
+        if ($ids === []) {
+            return [];
+        }
+
+        if ($user->isAdmin()) {
+            return SourceModel::query()->whereIn('id', $ids)->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+        }
+
+        $allowed = $user->sources()->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+
+        return array_values(array_intersect($ids, $allowed));
+    }
+
+    /**
+     * @param  array{department_id?: int|null, department_ids?: list<int>|array<int>|null}  $filters
+     */
+    private function applyDepartmentFilter(Builder $query, User $user, array $filters): void
+    {
+        $multi = $filters['department_ids'] ?? null;
+        if (is_array($multi) && $multi !== []) {
+            $ids = $this->intersectDepartmentIdsForUser($user, $multi);
+            if ($ids !== []) {
+                $query->whereIn('department_id', $ids);
+            }
+
+            return;
+        }
+
         if (! empty($filters['department_id'])) {
             $query->where('department_id', (int) $filters['department_id']);
         }
+    }
+
+    /**
+     * @param  list<int|string>|array<int|string>  $requested
+     * @return list<int>
+     */
+    private function intersectDepartmentIdsForUser(User $user, array $requested): array
+    {
+        $ids = array_values(array_unique(array_map(static fn ($id): int => (int) $id, $requested)));
+        if ($ids === []) {
+            return [];
+        }
+
+        if ($user->isAdmin()) {
+            return $ids;
+        }
+
+        $sourceIds = $user->sources()->pluck('id')->all();
+        if ($sourceIds === []) {
+            return [];
+        }
+
+        $pivotDeptIds = $user->departments()->pluck('departments.id')->all();
+        if ($pivotDeptIds !== []) {
+            $allowed = array_map(static fn ($id): int => (int) $id, $pivotDeptIds);
+
+            return array_values(array_intersect($ids, $allowed));
+        }
+
+        $allowed = DepartmentModel::query()
+            ->whereIn('source_id', $sourceIds)
+            ->where('is_active', true)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        return array_values(array_intersect($ids, $allowed));
     }
 
     /**

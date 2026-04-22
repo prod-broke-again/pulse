@@ -19,7 +19,11 @@ final class ListChatsRequest extends FormRequest
         return [
             'tab' => ['sometimes', 'string', 'in:my,unassigned,all'],
             'source_id' => ['sometimes', 'nullable', 'integer'],
+            'source_ids' => ['sometimes', 'nullable', 'array'],
+            'source_ids.*' => ['integer'],
             'department_id' => ['sometimes', 'nullable', 'integer'],
+            'department_ids' => ['sometimes', 'nullable', 'array'],
+            'department_ids.*' => ['integer'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string', 'in:open,closed,all'],
             'channels' => ['sometimes', 'array'],

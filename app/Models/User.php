@@ -35,6 +35,7 @@ class User extends Authenticatable implements FilamentUser
         'id_email',
         'avatar_url',
         'notification_sound_prefs',
+        'inbox_filter_prefs',
         'id_profile_synced_at',
     ];
 
@@ -63,6 +64,7 @@ class User extends Authenticatable implements FilamentUser
             'two_factor_confirmed_at' => 'datetime',
             'id_profile_synced_at' => 'datetime',
             'notification_sound_prefs' => 'array',
+            'inbox_filter_prefs' => 'array',
         ];
     }
 
