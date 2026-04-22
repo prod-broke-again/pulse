@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy } from 'lucide-vue-next'
+import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy, History } from 'lucide-vue-next'
 import { Teleport, computed, ref } from 'vue'
 import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useRouter } from 'vue-router'
@@ -32,6 +32,7 @@ const showAssignButton = computed(() => {
 })
 
 const showCloseButton = computed(() => props.meta.status === 'open')
+const showReopenButton = computed(() => props.meta.status === 'closed')
 const headerAction = ref<'assign' | 'close' | null>(null)
 const syncLoading = ref(false)
 
@@ -45,6 +46,7 @@ const showDepartmentPicker = computed(
 function channelColor(ch: ChannelSource) {
   if (ch === 'tg') return '#2AABEE'
   if (ch === 'vk') return '#0077FF'
+  if (ch === 'max') return '#6b4f7c'
   return '#8b6b9a'
 }
 
@@ -70,6 +72,22 @@ async function onCloseChat() {
   } finally {
     headerAction.value = null
   }
+}
+
+async function onReopenToWork() {
+  if (headerAction.value) return
+  headerAction.value = 'assign'
+  try {
+    await chat.reopenToWork()
+  } finally {
+    headerAction.value = null
+  }
+}
+
+function goClientHistory() {
+  const eid = props.meta.externalUserId
+  if (!eid) return
+  void router.push({ name: 'client-history', params: { externalUserId: eid } })
 }
 
 async function onSyncHistory(): Promise<void> {
@@ -165,6 +183,15 @@ function pickDepartment(id: number): void {
     </div>
     <div class="flex gap-1">
       <button
+        v-if="meta.externalUserId"
+        type="button"
+        class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white px-2.5 py-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
+        aria-label="История обращений клиента"
+        @click="goClientHistory"
+      >
+        <History class="size-3.5" />
+      </button>
+      <button
         v-if="meta.status === 'open'"
         type="button"
         class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] enabled:hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
@@ -224,6 +251,20 @@ function pickDepartment(id: number): void {
           :class="{ 'motion-safe:animate-pulse': headerAction === 'close' }"
           aria-hidden="true"
         />
+      </button>
+      <button
+        v-if="showReopenButton"
+        type="button"
+        class="flex cursor-pointer items-center gap-1 rounded-[10px] border-[1.5px] border-[var(--color-brand-200)] bg-[var(--color-brand-50)] px-3 py-1.5 text-xs font-medium text-[var(--color-brand)] transition-all active:scale-[0.97] dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
+        :disabled="headerAction !== null"
+        aria-label="Вернуть в работу"
+        @click="onReopenToWork()"
+      >
+        <UserPlus
+          class="size-3"
+          aria-hidden="true"
+        />
+        <span class="max-sm:hidden sm:inline">В работу</span>
       </button>
     </div>
 

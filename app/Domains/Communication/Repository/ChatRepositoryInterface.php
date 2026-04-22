@@ -11,7 +11,11 @@ interface ChatRepositoryInterface
 {
     public function findById(int $id): ?Chat;
 
-    public function findBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat;
+    /** Active conversation (not closed) for source + user. */
+    public function findOpenBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat;
+
+    /** Latest chat for source + user, any status. */
+    public function findLatestBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat;
 
     /** @return list<Chat> */
     public function listByDepartment(int $departmentId, ?ChatStatus $status = null): array;
@@ -20,4 +24,6 @@ interface ChatRepositoryInterface
     public function listAssignedTo(int $userId): array;
 
     public function persist(Chat $chat): Chat;
+
+    public function touchLastActivityAt(int $chatId): void;
 }

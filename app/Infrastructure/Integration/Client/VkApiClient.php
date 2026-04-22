@@ -91,4 +91,20 @@ final class VkApiClient
 
         return is_array($response) ? $response : [];
     }
+
+    /**
+     * Acknowledge a keyboard callback (message_event) so the client loader stops.
+     */
+    public function sendMessageEventAnswer(string $eventId, int $userId, int $peerId): void
+    {
+        try {
+            $this->vk->messages()->sendMessageEventAnswer($this->accessToken, [
+                'event_id' => $eventId,
+                'user_id' => $userId,
+                'peer_id' => $peerId,
+            ]);
+        } catch (\Throwable) {
+            // best-effort
+        }
+    }
 }

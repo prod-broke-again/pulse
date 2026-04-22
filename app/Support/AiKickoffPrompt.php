@@ -24,6 +24,11 @@ final class AiKickoffPrompt
    по его id. Если ни один не подходит — верни null. Новые департаменты
    НЕ создавай.
 6. Оцени уверенность своего выбора числом от 0 до 1 (confidence).
+7. Если вопрос типовой и ты МОЖЕШЬ дать готовый ответ клиенту (FAQ-стиль) —
+   верни auto_reply_text (кратко, вежливо, по-русски) и auto_reply_confidence (0-1).
+   Если не уверен, спорно, нет фактов, нужен человек — верни null для auto_reply_text.
+8. Поле escalate_to_human: true, если вопрос сложный, рискованный (счета/мед/юр) или
+   нельзя отвечать без модератора; тогда auto_reply_text должен быть null.
 
 Верни ТОЛЬКО валидный JSON вида:
 {
@@ -32,7 +37,10 @@ final class AiKickoffPrompt
   "intent_tag": "...",
   "replies": [{"id":"r1","text":"..."},{"id":"r2","text":"..."}],
   "suggested_department_id": 5,
-  "confidence": 0.92
+  "confidence": 0.92,
+  "auto_reply_text": null,
+  "auto_reply_confidence": null,
+  "escalate_to_human": false
 }
 
 Правила:
@@ -44,6 +52,7 @@ final class AiKickoffPrompt
   0.7–0.9 — уверенно;
   0.5–0.7 — есть сомнения;
   < 0.5 — плохо подходит.
+- auto_reply_text: только при очень высокой уверенности (рекомендуй auto_reply_confidence >= 0.85), иначе null.
 - Никакого текста вне JSON.
 PROMPT;
 
@@ -86,7 +95,7 @@ TXT;
         }
 
         try {
-            /** @var array{topic?: string, summary?: string, intent_tag?: string, replies?: list<array{id?: string, text?: string}>, suggested_department_id?: int|null, confidence?: mixed} $data */
+            /** @var array{topic?: string, summary?: string, intent_tag?: string, replies?: list<array{id?: string, text?: string}>, suggested_department_id?: int|null, confidence?: mixed, auto_reply_text?: string|null, auto_reply_confidence?: mixed, escalate_to_human?: bool} $data */
             $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
             return new AiChatKickoffDto;
@@ -127,6 +136,22 @@ TXT;
             $confidence = self::clampConfidence((float) $data['confidence']);
         }
 
+        $escalateToHuman = (bool) ($data['escalate_to_human'] ?? false);
+        if ($escalateToHuman) {
+            $autoReplyText = null;
+            $autoReplyConf = null;
+        } else {
+            $rawAuto = $data['auto_reply_text'] ?? null;
+            $autoReplyText = is_string($rawAuto) && trim($rawAuto) !== '' ? trim($rawAuto) : null;
+            if ($autoReplyText !== null && Str::length($autoReplyText) > 4000) {
+                $autoReplyText = Str::limit($autoReplyText, 4000, '');
+            }
+            $autoReplyConf = null;
+            if (array_key_exists('auto_reply_confidence', $data) && is_numeric($data['auto_reply_confidence'])) {
+                $autoReplyConf = self::clampConfidence((float) $data['auto_reply_confidence']);
+            }
+        }
+
         return new AiChatKickoffDto(
             topic: $topic,
             summary: $summary,
@@ -134,6 +159,9 @@ TXT;
             replies: $replies,
             suggestedDepartmentId: $suggestedDepartmentId,
             confidence: $confidence,
+            autoReplyText: $autoReplyText,
+            autoReplyConfidence: $autoReplyConf,
+            escalateToHuman: $escalateToHuman,
         );
     }
 

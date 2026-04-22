@@ -90,6 +90,9 @@ final class DepartmentSeederTest extends TestCase
 
     public function test_seeder_does_not_fail_when_no_sources_exist(): void
     {
+        // Migrations may insert default web sources; clear so the "empty" branch is exercised.
+        SourceModel::query()->delete();
+
         $this->artisan('db:seed', ['--class' => DepartmentSeeder::class])
             ->expectsOutputToContain('Нет источников в БД');
 

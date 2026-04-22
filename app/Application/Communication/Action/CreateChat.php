@@ -20,6 +20,7 @@ final readonly class CreateChat
         string $externalUserId,
         array $userMetadata = [],
         ?string $externalBusinessConnectionId = null,
+        ?int $previousChatId = null,
     ): Chat {
         $chat = new Chat(
             id: 0,
@@ -31,6 +32,7 @@ final readonly class CreateChat
             assignedTo: null,
             topic: null,
             externalBusinessConnectionId: $externalBusinessConnectionId,
+            previousChatId: $previousChatId,
         );
 
         return $this->chatRepository->persist($chat);

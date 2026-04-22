@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { Search } from 'lucide-vue-next'
+import { Search, SlidersHorizontal } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import BottomNav from '../components/layout/BottomNav.vue'
@@ -10,6 +10,7 @@ import SkeletonList from '../components/common/SkeletonList.vue'
 import ChannelGlyph from '../components/common/ChannelGlyph.vue'
 import ChatCard from '../components/inbox/ChatCard.vue'
 import InboxHeader from '../components/inbox/InboxHeader.vue'
+import InboxFiltersSheet from '../components/inbox/InboxFiltersSheet.vue'
 import InboxTabs from '../components/inbox/InboxTabs.vue'
 import type { FilterId } from '../types/chat'
 import * as chatApi from '../api/chatRepository'
@@ -32,9 +33,19 @@ const {
   filteredChats,
   showEmptyState,
   showChatList,
+  filterSourceIds,
+  filterDepartmentIds,
 } = storeToRefs(inbox)
 
 const ptrRefreshing = computed(() => ui.ptrRefreshing)
+
+const filtersSheetOpen = ref(false)
+
+const hasAdvancedFilters = computed(
+  () =>
+    (filterSourceIds.value != null && filterSourceIds.value.length > 0) ||
+    (filterDepartmentIds.value != null && filterDepartmentIds.value.length > 0),
+)
 
 const actionChatId = ref<string | null>(null)
 
@@ -50,6 +61,7 @@ const filterDefs: { id: FilterId; label: string; dot?: 'green' | 'grey' | 'none'
   { id: 'tg', label: 'Telegram', channel: 'tg' },
   { id: 'vk', label: 'VK', channel: 'vk' },
   { id: 'web', label: 'Web', channel: 'web' },
+  { id: 'max', label: 'MAX', channel: 'max' },
 ]
 
 function chipActive(id: FilterId) {
@@ -117,6 +129,20 @@ async function sheetCloseChat(): Promise<void> {
   }
 }
 
+async function sheetReopenChat(): Promise<void> {
+  if (actionChatId.value == null) {
+    return
+  }
+  try {
+    await chatApi.assignMe(Number(actionChatId.value))
+    ui.pushToast('Чат снова в работе', 'success')
+    closeActionSheet()
+    void inbox.loadInbox()
+  } catch {
+    ui.pushToast('Не удалось открыть чат', 'error')
+  }
+}
+
 async function sheetMute(mode: chatApi.ChatMuteMode): Promise<void> {
   if (actionChatId.value == null) {
     return
@@ -173,18 +199,34 @@ onMounted(() => {
     <div
       class="flex shrink-0 flex-col gap-2 bg-white px-4 py-3 dark:bg-[var(--zinc-850)]"
     >
-      <div
-        class="flex h-[42px] items-center gap-2 rounded-xl border-[1.5px] border-transparent bg-[var(--zinc-100)] px-3 transition-[border-color] focus-within:border-[var(--color-brand-200)] dark:bg-[var(--zinc-800)]"
-      >
-        <Search class="size-3.5 shrink-0 text-[var(--zinc-400)]" aria-hidden="true" />
-        <input
-          :value="searchQuery"
-          type="search"
-          class="min-w-0 flex-1 border-none bg-transparent font-[family-name:var(--font-sans)] text-sm text-[var(--color-dark)] outline-none placeholder:text-[var(--zinc-400)] dark:text-[var(--zinc-100)]"
-          placeholder="Поиск по имени или сообщению..."
-          autocomplete="off"
-          @input="inbox.setSearchQuery(($event.target as HTMLInputElement).value)"
+      <div class="flex gap-2">
+        <div
+          class="flex h-[42px] min-w-0 flex-1 items-center gap-2 rounded-xl border-[1.5px] border-transparent bg-[var(--zinc-100)] px-3 transition-[border-color] focus-within:border-[var(--color-brand-200)] dark:bg-[var(--zinc-800)]"
         >
+          <Search class="size-3.5 shrink-0 text-[var(--zinc-400)]" aria-hidden="true" />
+          <input
+            :value="searchQuery"
+            type="search"
+            class="min-w-0 flex-1 border-none bg-transparent font-[family-name:var(--font-sans)] text-sm text-[var(--color-dark)] outline-none placeholder:text-[var(--zinc-400)] dark:text-[var(--zinc-100)]"
+            placeholder="Поиск по имени или сообщению..."
+            autocomplete="off"
+            @input="inbox.setSearchQuery(($event.target as HTMLInputElement).value)"
+          >
+        </div>
+        <button
+          type="button"
+          class="relative flex h-[42px] w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--color-gray-line)] bg-white text-[var(--color-brand)] dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)]"
+          :aria-pressed="filtersSheetOpen"
+          aria-label="Фильтры: источники и отделы"
+          @click="filtersSheetOpen = true"
+        >
+          <SlidersHorizontal class="size-[18px]" />
+          <span
+            v-if="hasAdvancedFilters"
+            class="absolute right-1.5 top-1.5 size-2 rounded-full bg-[var(--color-brand)]"
+            aria-hidden="true"
+          />
+        </button>
       </div>
       <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
@@ -207,6 +249,7 @@ onMounted(() => {
           <ChannelGlyph v-else-if="f.channel === 'tg'" channel="tg" :size="12" />
           <ChannelGlyph v-else-if="f.channel === 'vk'" channel="vk" :size="12" />
           <ChannelGlyph v-else-if="f.channel === 'web'" channel="web" :size="12" />
+          <ChannelGlyph v-else-if="f.channel === 'max'" channel="max" :size="12" />
           {{ f.label }}
         </button>
       </div>
@@ -241,6 +284,12 @@ onMounted(() => {
 
     <BottomNav :inbox-badge="inboxBadge" />
 
+    <InboxFiltersSheet
+      :open="filtersSheetOpen"
+      @close="filtersSheetOpen = false"
+      @applied="void inbox.loadInbox()"
+    />
+
     <Teleport to="body">
       <div
         v-if="actionChatId && actionChat"
@@ -262,6 +311,7 @@ onMounted(() => {
             </div>
           </div>
           <button
+            v-if="actionChat && actionChat.status === 'open'"
             type="button"
             class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
             @click="sheetAssignMe"
@@ -269,11 +319,20 @@ onMounted(() => {
             Назначить на меня
           </button>
           <button
+            v-if="actionChat && actionChat.status === 'open'"
             type="button"
             class="flex w-full px-4 py-3 text-left text-sm text-[var(--color-dark)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
             @click="sheetCloseChat"
           >
             Закрыть чат
+          </button>
+          <button
+            v-if="actionChat && actionChat.status === 'closed'"
+            type="button"
+            class="flex w-full px-4 py-3 text-left text-sm font-medium text-[var(--color-brand)] active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            @click="sheetReopenChat"
+          >
+            Вернуть в работу
           </button>
           <div class="h-px bg-[var(--color-gray-line)] dark:bg-[var(--zinc-700)]" />
           <template v-if="!isMutedUntilActive(actionChat.muted_until)">

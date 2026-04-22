@@ -24,7 +24,7 @@ final class VkMessengerProvider implements MessengerProviderInterface
         unset($params['message_id'], $params['local_attachment_paths'], $params['reply_to_external_message_id']);
 
         if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
-            $params['keyboard'] = $this->vkOpenLinkKeyboardJson($params['reply_markup']);
+            $params['keyboard'] = $this->buildKeyboardJson($params['reply_markup']);
             unset($params['reply_markup']);
         }
 
@@ -81,21 +81,33 @@ final class VkMessengerProvider implements MessengerProviderInterface
     }
 
     /**
-     * @param  list<array{text: string, url: string}>  $buttons
+     * @param  list<array{text: string, url?: string, callback_data?: string}>  $buttons
      */
-    private function vkOpenLinkKeyboardJson(array $buttons): string
+    private function buildKeyboardJson(array $buttons): string
     {
         $rows = [];
         foreach ($buttons as $btn) {
-            $rows[] = [
-                [
-                    'action' => [
-                        'type' => 'open_link',
-                        'link' => $btn['url'],
-                        'label' => $btn['text'],
+            if (isset($btn['url']) && is_string($btn['url']) && $btn['url'] !== '') {
+                $rows[] = [
+                    [
+                        'action' => [
+                            'type' => 'open_link',
+                            'link' => $btn['url'],
+                            'label' => $btn['text'],
+                        ],
                     ],
-                ],
-            ];
+                ];
+            } elseif (isset($btn['callback_data']) && is_string($btn['callback_data']) && $btn['callback_data'] !== '') {
+                $rows[] = [
+                    [
+                        'action' => [
+                            'type' => 'callback',
+                            'label' => $btn['text'],
+                            'payload' => json_encode(['c' => $btn['callback_data']], JSON_UNESCAPED_UNICODE),
+                        ],
+                    ],
+                ];
+            }
         }
 
         return json_encode([

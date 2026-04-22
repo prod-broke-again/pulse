@@ -2,8 +2,7 @@ import type { ApiChatRow } from '../api/types'
 import type { ChannelSource, ChatPreviewItem } from '../types/chat'
 
 function channelFromApi(v: string | null | undefined): ChannelSource {
-  if (v === 'tg' || v === 'vk' || v === 'web') return v
-  if (v === 'max') return 'web'
+  if (v === 'tg' || v === 'vk' || v === 'web' || v === 'max') return v
   return 'web'
 }
 

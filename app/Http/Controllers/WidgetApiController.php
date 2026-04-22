@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Application\Communication\Action\CreateMessage;
+use App\Application\Communication\Action\HandleAiClientControlAction;
+use App\Domains\Communication\ValueObject\SenderType;
 use App\Infrastructure\Persistence\Eloquent\ChatModel;
 use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
-use App\Jobs\GenerateChatTopicJob;
 use App\Models\WidgetConfig;
 use App\Services\MaybeSendOfflineAutoReply;
 use App\Services\ModeratorPresenceService;
-use App\Support\BroadcastSenderDisplay;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -25,6 +26,8 @@ final class WidgetApiController extends Controller
     public function __construct(
         private readonly ModeratorPresenceService $moderatorPresenceService,
         private readonly MaybeSendOfflineAutoReply $maybeSendOfflineAutoReply,
+        private readonly CreateMessage $createMessage,
+        private readonly HandleAiClientControlAction $handleAiClientControl,
     ) {}
 
     public function config(): JsonResponse
@@ -119,7 +122,17 @@ final class WidgetApiController extends Controller
         $chat = ChatModel::query()
             ->where('source_id', $source->id)
             ->where('external_user_id', $visitorId)
+            ->where('status', '!=', 'closed')
+            ->orderByDesc('id')
             ->first();
+        $lastAny = null;
+        if ($chat === null) {
+            $lastAny = ChatModel::query()
+                ->where('source_id', $source->id)
+                ->where('external_user_id', $visitorId)
+                ->orderByDesc('id')
+                ->first();
+        }
 
         $metadata = [
             'name' => $data['name'] ?? null,
@@ -135,6 +148,7 @@ final class WidgetApiController extends Controller
                 'user_metadata' => array_filter($metadata, static fn ($v) => $v !== null && $v !== []),
                 'status' => 'new',
                 'assigned_to' => null,
+                'previous_chat_id' => $lastAny?->id,
             ]);
             $userMetaNew = $chat->user_metadata ?? [];
             if (($userMetaNew['name'] ?? null) !== null || ($userMetaNew['email'] ?? null) !== null) {
@@ -207,6 +221,7 @@ final class WidgetApiController extends Controller
                     'id' => $m->id,
                     'sender_type' => $m->sender_type,
                     'text' => $m->text,
+                    'reply_markup' => $m->reply_markup,
                     'payload' => $m->payload ?? [],
                     'created_at' => $m->created_at?->toISOString(),
                     'is_read' => $m->is_read,
@@ -243,74 +258,89 @@ final class WidgetApiController extends Controller
         ]);
 
         $chat = $this->resolveChatByToken($data['chat_token']);
+        $oldChatId = (int) $chat->id;
         $text = trim((string) $data['text']);
         if ($text === '') {
             throw ValidationException::withMessages(['text' => 'Message text is required.']);
         }
 
-        $message = MessageModel::create([
-            'chat_id' => $chat->id,
-            'external_message_id' => null,
-            'sender_id' => null,
-            'sender_type' => 'client',
-            'text' => $text,
-            'payload' => $data['payload'] ?? [],
-            'is_read' => false,
-        ]);
-
         if ($chat->status === 'closed') {
-            $chat->status = 'new';
+            $lastAny = ChatModel::query()
+                ->where('source_id', $chat->source_id)
+                ->where('external_user_id', $chat->external_user_id)
+                ->orderByDesc('id')
+                ->first();
+            $chat = ChatModel::create([
+                'source_id' => $chat->source_id,
+                'department_id' => $chat->department_id,
+                'external_user_id' => $chat->external_user_id,
+                'user_metadata' => $chat->user_metadata ?? [],
+                'status' => 'new',
+                'assigned_to' => null,
+                'previous_chat_id' => $lastAny?->id,
+            ]);
         }
-        $chat->touch();
-        $chat->save();
 
-        $message->loadMissing('replyTo');
-        $extras = \App\Support\NewChatMessageBroadcastExtras::fromMessage($message);
-        $senderDisplay = BroadcastSenderDisplay::forMessage($message->sender_id, (string) $message->sender_type);
-
-        $isNewChat = MessageModel::query()->where('chat_id', $chat->id)->count() === 1;
-
-        event(new \App\Events\NewChatMessage(
+        $message = $this->createMessage->run(
             chatId: $chat->id,
-            messageId: $message->id,
-            text: $message->text,
-            senderType: $message->sender_type,
-            senderId: $message->sender_id,
-            attachments: $extras['attachments'],
-            pendingAttachments: $extras['pending_attachments'],
-            replyTo: $extras['reply_to'],
-            assignedModeratorUserId: $chat->assigned_to,
-            sourceId: (int) $chat->source_id,
-            isNewChat: $isNewChat,
-            deliveryChannel: $extras['delivery_channel'] ?? null,
-            senderName: $senderDisplay['name'],
-            senderAvatarUrl: $senderDisplay['avatar_url'],
-        ));
-
-        $clientMessageCount = MessageModel::where('chat_id', $chat->id)
-            ->where('sender_type', 'client')
-            ->count();
-        $topicEmpty = ($chat->topic ?? '') === '';
-        if ($clientMessageCount >= 1 && $clientMessageCount <= 2 && $topicEmpty) {
-            GenerateChatTopicJob::dispatch($chat->id);
-        }
+            text: $text,
+            senderType: SenderType::Client,
+            senderId: null,
+            payload: $data['payload'] ?? [],
+        );
 
         $chat->refresh();
         $this->maybeSendOfflineAutoReply->run($chat);
 
         $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($chat->source_id);
 
-        return response()->json([
+        $msgRow = MessageModel::query()->find($message->id);
+
+        $payload = [
             'ok' => true,
             'is_online' => $isOnline,
             'message' => [
                 'id' => $message->id,
-                'sender_type' => $message->sender_type,
+                'sender_type' => $message->senderType->value,
                 'text' => $message->text,
-                'payload' => $message->payload ?? [],
-                'created_at' => $message->created_at?->toISOString(),
+                'reply_markup' => $message->replyMarkup,
+                'payload' => $message->payload,
+                'created_at' => $msgRow?->created_at?->toISOString(),
             ],
+        ];
+        if ((int) $chat->id !== $oldChatId) {
+            $payload['chat_token'] = $this->makeChatToken($chat);
+            $payload['chat'] = [
+                'id' => $chat->id,
+                'status' => $chat->status,
+            ];
+        }
+
+        return response()->json($payload);
+    }
+
+    public function chatAction(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'chat_token' => ['required', 'string'],
+            'action' => ['required', 'string', 'in:'.implode(',', [
+                \App\Support\AiClientActionPayload::A_HUMAN,
+                \App\Support\AiClientActionPayload::A_RESOLVED_YES,
+                \App\Support\AiClientActionPayload::A_RESOLVED_NO,
+            ])],
         ]);
+        $chat = $this->resolveChatByToken($data['chat_token']);
+        $r = $this->handleAiClientControl->run(
+            (int) $chat->source_id,
+            $chat->id,
+            $data['action'],
+        );
+        if (! $r['ok']) {
+            return response()->json(['ok' => false, 'error' => $r['error'] ?? 'unknown'], 422);
+        }
+        $chat->refresh();
+
+        return response()->json(['ok' => true, 'status' => $chat->status]);
     }
 
     public function typing(Request $request): JsonResponse

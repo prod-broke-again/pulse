@@ -42,6 +42,8 @@ class AppServiceProvider extends ServiceProvider
                 default => $app->make(\App\Services\TimewebAiService::class),
             };
         });
+
+        $this->app->singleton(\App\Services\GptunnelRagService::class);
     }
 
     /**

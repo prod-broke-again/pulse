@@ -61,6 +61,13 @@ watch(
 <template>
   <div v-if="threadMeta" class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
     <ChatHeader :meta="threadMeta" @select-for-copy="() => listRef?.enterSelectionMode?.()" />
+    <div
+      v-if="threadMeta.status === 'closed'"
+      class="shrink-0 border-b border-amber-200/80 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/50 dark:text-amber-100"
+      role="status"
+    >
+      Чат закрыт — клиент не получит ответ, пока чат снова не в работе.
+    </div>
 
     <button
       type="button"

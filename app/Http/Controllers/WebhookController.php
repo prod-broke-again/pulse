@@ -163,10 +163,11 @@ final class WebhookController extends Controller
             // Only true inbound messages should become chat messages.
             'message_new' => ! $this->isVkOutgoingEvent($payload),
 
+            'message_event' => true,
+
             // Events we currently acknowledge but intentionally do not persist as inbound messages.
             'message_reply',
             'message_edit',
-            'message_event',
             'message_allow',
             'message_deny',
             'message_typing_state',

@@ -20,11 +20,17 @@ final readonly class WebhookPayloadExtractor
     /** @param array<string, mixed> $payload */
     public function extractExternalUserId(array $payload): string
     {
+        $telegramPeer = $this->extractTelegramPeerId($payload);
+        if ($telegramPeer !== null) {
+            return $telegramPeer;
+        }
+
         $id = $payload['user_id']
             ?? $payload['from']['id']
             ?? ($payload['message']['from']['id'] ?? null)
             ?? ($payload['business_message']['from']['id'] ?? null)
             ?? ($payload['object']['message']['from_id'] ?? null)
+            ?? ($payload['object']['user_id'] ?? null)
             ?? ($payload['object']['from_id'] ?? null)
             ?? $payload['external_user_id'] ?? null;
         if ($id === null) {
@@ -32,6 +38,77 @@ final readonly class WebhookPayloadExtractor
         }
 
         return (string) $id;
+    }
+
+    /**
+     * Telegram: route by chat id (group/supergroup/private peer). Must match sendMessage target.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function extractTelegramPeerId(array $payload): ?string
+    {
+        $message = $this->firstTelegramMessageWithChat($payload);
+        if (! is_array($message)) {
+            return null;
+        }
+        $chat = $message['chat'] ?? null;
+        if (! is_array($chat) || ! isset($chat['id'])) {
+            return null;
+        }
+
+        return (string) $chat['id'];
+    }
+
+    /**
+     * Merges {@see TelegramGroupModeratorSignature::METADATA_KEY_CHAT_TYPE} and optional forum thread id into chat user_metadata.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $userMetadata
+     * @return array<string, mixed>
+     */
+    public function mergeTelegramChatContextIntoUserMetadata(array $payload, array $userMetadata): array
+    {
+        $message = $this->firstTelegramMessageWithChat($payload);
+        if (! is_array($message)) {
+            return $userMetadata;
+        }
+        $chat = $message['chat'] ?? null;
+        if (! is_array($chat)) {
+            return $userMetadata;
+        }
+        $type = $chat['type'] ?? null;
+        if (is_string($type) && $type !== '') {
+            $userMetadata['chat_type'] = $type;
+        }
+        if (isset($message['message_thread_id']) && (is_int($message['message_thread_id']) || (is_string($message['message_thread_id']) && ctype_digit($message['message_thread_id'])))) {
+            $userMetadata['message_thread_id'] = (int) $message['message_thread_id'];
+        }
+
+        return $userMetadata;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>|null
+     */
+    private function firstTelegramMessageWithChat(array $payload): ?array
+    {
+        $containers = [
+            $payload['message'] ?? null,
+            $payload['edited_message'] ?? null,
+            $payload['channel_post'] ?? null,
+            $payload['business_message'] ?? null,
+        ];
+        if (isset($payload['callback_query']['message']) && is_array($payload['callback_query']['message'])) {
+            $containers[] = $payload['callback_query']['message'];
+        }
+        foreach ($containers as $msg) {
+            if (is_array($msg) && isset($msg['chat']['id'])) {
+                return $msg;
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $payload */

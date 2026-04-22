@@ -41,17 +41,7 @@ final class TelegramApiClient
         }
 
         if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
-            $body['reply_markup'] = json_encode([
-                'inline_keyboard' => array_map(
-                    static fn (array $btn): array => [
-                        [
-                            'text' => $btn['text'],
-                            'url' => $btn['url'],
-                        ],
-                    ],
-                    $params['reply_markup'],
-                ),
-            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+            $body['reply_markup'] = self::inlineKeyboardJson($params['reply_markup']);
         }
 
         if (isset($params['business_connection_id']) && is_string($params['business_connection_id']) && $params['business_connection_id'] !== '') {
@@ -73,6 +63,59 @@ final class TelegramApiClient
         }
 
         return $json;
+    }
+
+    /**
+     * @param  list<array{text: string, url?: string, callback_data?: string}>  $rows  One button per entry (one column).
+     */
+    public static function inlineKeyboardJson(array $rows): string
+    {
+        $inlineKeyboard = [];
+        foreach ($rows as $btn) {
+            if (! is_array($btn) || ! isset($btn['text']) || $btn['text'] === '') {
+                continue;
+            }
+            $cell = ['text' => (string) $btn['text']];
+            if (isset($btn['url']) && is_string($btn['url']) && $btn['url'] !== '') {
+                $cell['url'] = $btn['url'];
+            } elseif (isset($btn['callback_data']) && is_string($btn['callback_data']) && $btn['callback_data'] !== '') {
+                $cell['callback_data'] = $btn['callback_data'];
+            } else {
+                continue;
+            }
+            $inlineKeyboard[] = [$cell];
+        }
+
+        return json_encode(
+            ['inline_keyboard' => $inlineKeyboard],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+        );
+    }
+
+    public function answerCallbackQuery(
+        string $callbackQueryId,
+        ?string $text = null,
+    ): void {
+        if ($this->botToken === '' || $callbackQueryId === '') {
+            return;
+        }
+
+        $body = [
+            'callback_query_id' => $callbackQueryId,
+        ];
+        if ($text !== null && $text !== '') {
+            $body['text'] = $text;
+        } else {
+            $body['show_alert'] = false;
+        }
+
+        $response = Http::timeout(30)->post($this->apiBase().'/answerCallbackQuery', $body);
+        if (! $response->successful()) {
+            Log::warning('Telegram answerCallbackQuery failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        }
     }
 
     /**
@@ -116,17 +159,7 @@ final class TelegramApiClient
         $replyTo = isset($params['reply_to_message_id']) ? (int) $params['reply_to_message_id'] : null;
         $replyMarkup = null;
         if (isset($params['reply_markup']) && is_array($params['reply_markup'])) {
-            $replyMarkup = json_encode([
-                'inline_keyboard' => array_map(
-                    static fn (array $btn): array => [
-                        [
-                            'text' => $btn['text'],
-                            'url' => $btn['url'],
-                        ],
-                    ],
-                    $params['reply_markup'],
-                ),
-            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+            $replyMarkup = self::inlineKeyboardJson($params['reply_markup']);
         }
 
         $businessConnectionId = isset($params['business_connection_id']) && is_string($params['business_connection_id']) && $params['business_connection_id'] !== ''

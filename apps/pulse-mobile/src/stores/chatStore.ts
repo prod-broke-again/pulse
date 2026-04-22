@@ -51,6 +51,8 @@ export const useChatStore = defineStore('chat', () => {
   let readNearBottomTimer: number | null = null
   let readRequestInFlight = false
   let lastSentReadWatermarkKey: string | null = null
+  let lastTypingNotifyAt = 0
+  let typingNotifyTimer: number | null = null
 
   watch(activeChatId, () => {
     readRequestInFlight = false
@@ -77,6 +79,7 @@ export const useChatStore = defineStore('chat', () => {
       status: preview.status,
       channel: preview.channel,
       channelLabel: chat.channel_label ?? 'Web',
+      externalUserId: chat.external_user_id != null && String(chat.external_user_id).trim() !== '' ? String(chat.external_user_id) : null,
       departmentLabel: preview.department,
       departmentIcon: preview.departmentIcon ?? null,
       sourceId: chat.source_id ?? null,
@@ -114,6 +117,22 @@ export const useChatStore = defineStore('chat', () => {
       ui.pushToast('Чат закрыт', 'success')
     } catch {
       ui.pushToast('Не удалось закрыть чат', 'error')
+    }
+  }
+
+  /** Закрытый чат → в работе (назначение на себя на бэкенде переводит в active). */
+  async function reopenToWork(): Promise<void> {
+    const chatId = activeChatId.value
+    const id = parseApiChatId(chatId)
+    if (id == null) return
+    const ui = useUiStore()
+    try {
+      const chat = await chatApi.assignMe(id)
+      applyThreadMetaFromApiChat(chat, chatId!)
+      await useInboxStore().loadInbox()
+      ui.pushToast('Чат снова в работе', 'success')
+    } catch {
+      ui.pushToast('Не удалось открыть чат', 'error')
     }
   }
 
@@ -206,6 +225,7 @@ export const useChatStore = defineStore('chat', () => {
         status: preview.status,
         channel: preview.channel,
         channelLabel: chat.channel_label ?? 'Web',
+        externalUserId: chat.external_user_id != null && String(chat.external_user_id).trim() !== '' ? String(chat.external_user_id) : null,
         departmentLabel: preview.department,
         departmentIcon: preview.departmentIcon ?? null,
         sourceId: chat.source_id ?? null,
@@ -278,6 +298,29 @@ export const useChatStore = defineStore('chat', () => {
     composerText.value = value
   }
 
+  /** Throttled POST /typing while moderator types (как на desktop). */
+  function scheduleTypingNotify(): void {
+    const chatId = activeChatId.value
+    const id = parseApiChatId(chatId)
+    if (id == null || composerLocked.value) {
+      return
+    }
+    const now = Date.now()
+    if (now - lastTypingNotifyAt < 2500) {
+      if (typingNotifyTimer == null) {
+        typingNotifyTimer = window.setTimeout(() => {
+          typingNotifyTimer = null
+          scheduleTypingNotify()
+        }, 2600)
+      }
+      return
+    }
+    lastTypingNotifyAt = now
+    void chatApi.sendTypingIndicator(id).catch(() => {
+      /* ignore */
+    })
+  }
+
   function setReplyTarget(messageId: number) {
     replyToMessageId.value = messageId > 0 ? messageId : null
   }
@@ -287,9 +330,15 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const composerLocked = computed(() => {
-    const uid = useAuthStore().user?.id ?? null
     const m = threadMeta.value
-    if (!m || uid == null) {
+    if (!m) {
+      return false
+    }
+    if (m.status === 'closed') {
+      return true
+    }
+    const uid = useAuthStore().user?.id ?? null
+    if (uid == null) {
       return false
     }
     const a = m.assignedToUserId
@@ -543,6 +592,11 @@ export const useChatStore = defineStore('chat', () => {
     leaveThread()
     readRequestInFlight = false
     lastSentReadWatermarkKey = null
+    lastTypingNotifyAt = 0
+    if (typingNotifyTimer != null) {
+      window.clearTimeout(typingNotifyTimer)
+      typingNotifyTimer = null
+    }
     messages.value = []
     threadMeta.value = null
     oldestMessageId.value = null
@@ -606,6 +660,7 @@ export const useChatStore = defineStore('chat', () => {
     fetchThread,
     loadOlderMessages,
     setComposerText,
+    scheduleTypingNotify,
     setReplyTarget,
     clearReplyTarget,
     canSend,
@@ -627,6 +682,7 @@ export const useChatStore = defineStore('chat', () => {
     markAsRead,
     assignToMe,
     closeThread,
+    reopenToWork,
     changeDepartment,
     mergeContextMessages,
     ensureReplyMessageLoaded,

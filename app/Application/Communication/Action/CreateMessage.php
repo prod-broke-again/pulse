@@ -11,6 +11,7 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Jobs\GenerateChatTopicJob;
+use App\Jobs\ProcessAiAutoreplyTurnJob;
 use App\Support\BroadcastSenderDisplay;
 use App\Support\NewChatMessageBroadcastExtras;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -58,6 +59,7 @@ final readonly class CreateMessage
         );
 
         $persisted = $this->messageRepository->persist($message);
+        $this->chatRepository->touchLastActivityAt($chatId);
 
         $model = MessageModel::query()->with('replyTo')->find($persisted->id);
         $extras = $model !== null
@@ -96,6 +98,9 @@ final readonly class CreateMessage
             $topicEmpty = $chat->topic === null || $chat->topic === '';
             if ($clientMessageCount >= 1 && $clientMessageCount <= 2 && $topicEmpty) {
                 GenerateChatTopicJob::dispatch($chatId);
+            }
+            if (! $topicEmpty) {
+                ProcessAiAutoreplyTurnJob::dispatch($chatId);
             }
         }
 

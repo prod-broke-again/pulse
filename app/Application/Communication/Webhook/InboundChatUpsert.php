@@ -29,15 +29,19 @@ final readonly class InboundChatUpsert
         array $userMetadata,
         ?string $businessConnectionId = null,
     ): Chat {
-        $chat = $this->chatRepository->findBySourceAndExternalUser($sourceId, $externalUserId);
+        $chat = $this->chatRepository->findOpenBySourceAndExternalUser($sourceId, $externalUserId);
 
         if ($chat === null) {
+            $latest = $this->chatRepository->findLatestBySourceAndExternalUser($sourceId, $externalUserId);
+            $previousChatId = $latest !== null ? $latest->id : null;
+
             return $this->createChat->run(
                 sourceId: $sourceId,
                 departmentId: $departmentId,
                 externalUserId: $externalUserId,
                 userMetadata: $userMetadata,
                 externalBusinessConnectionId: $businessConnectionId,
+                previousChatId: $previousChatId,
             );
         }
 
@@ -56,20 +60,9 @@ final readonly class InboundChatUpsert
             $externalBusinessConnectionId = $businessConnectionId;
         }
 
-        return $this->chatRepository->persist(new Chat(
-            id: $chat->id,
-            sourceId: $chat->sourceId,
-            departmentId: $chat->departmentId,
-            externalUserId: $chat->externalUserId,
-            userMetadata: $metadataChanged ? $mergedMetadata : $chat->userMetadata,
-            status: $chat->status,
-            assignedTo: $chat->assignedTo,
-            topic: $chat->topic,
-            aiSuggestedDepartmentId: $chat->aiSuggestedDepartmentId,
-            aiDepartmentConfidence: $chat->aiDepartmentConfidence,
-            aiDepartmentAssignedAt: $chat->aiDepartmentAssignedAt,
-            departmentReassignedByUserId: $chat->departmentReassignedByUserId,
-            externalBusinessConnectionId: $externalBusinessConnectionId,
-        ));
+        return $this->chatRepository->persist($chat->withOverrides([
+            'userMetadata' => $metadataChanged ? $mergedMetadata : $chat->userMetadata,
+            'externalBusinessConnectionId' => $externalBusinessConnectionId,
+        ]));
     }
 }

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AuthCallbackPage from '../pages/AuthCallbackPage.vue'
 import ChatPage from '../pages/ChatPage.vue'
+import ClientHistoryPage from '../pages/ClientHistoryPage.vue'
 import HistoryPage from '../pages/HistoryPage.vue'
 import InboxPage from '../pages/InboxPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
@@ -52,6 +53,11 @@ const router = createRouter({
       path: '/chat/:id',
       name: 'chat',
       component: ChatPage,
+    },
+    {
+      path: '/history/client/:externalUserId',
+      name: 'client-history',
+      component: ClientHistoryPage,
     },
   ],
 })

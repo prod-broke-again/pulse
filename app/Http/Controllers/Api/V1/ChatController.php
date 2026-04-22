@@ -6,8 +6,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Application\Communication\Action\AssignChatToModerator;
 use App\Application\Communication\Action\ChangeChatDepartment;
-use App\Application\Integration\Action\SyncChatHistoryFromProvider;
 use App\Application\Communication\Query\ListChatsQuery;
+use App\Application\Integration\Action\SyncChatHistoryFromProvider;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Events\UserTyping as UserTypingEvent;
@@ -101,16 +101,7 @@ final class ChatController extends Controller
             return response()->json(['message' => 'Chat not found.', 'code' => 'NOT_FOUND'], 404);
         }
 
-        $chatRepository->persist(new \App\Domains\Communication\Entity\Chat(
-            id: $domainChat->id,
-            sourceId: $domainChat->sourceId,
-            departmentId: $domainChat->departmentId,
-            externalUserId: $domainChat->externalUserId,
-            userMetadata: $domainChat->userMetadata,
-            status: ChatStatus::Closed,
-            assignedTo: $domainChat->assignedTo,
-            topic: $domainChat->topic,
-        ));
+        $chatRepository->persist($domainChat->withOverrides(['status' => ChatStatus::Closed]));
 
         /** @var User $user */
         $user = auth()->user();

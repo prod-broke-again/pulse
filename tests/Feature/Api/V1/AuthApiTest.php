@@ -160,12 +160,12 @@ final class AuthApiTest extends TestCase
 
     public function test_me_includes_all_source_ids_for_admin_without_pivot_sources(): void
     {
-        $alpha = SourceModel::query()->create([
+        SourceModel::query()->create([
             'name' => 'Alpha',
             'type' => 'web',
             'identifier' => 'src-admin-'.uniqid('', true),
         ]);
-        $bravo = SourceModel::query()->create([
+        SourceModel::query()->create([
             'name' => 'Bravo',
             'type' => 'web',
             'identifier' => 'src-admin-'.uniqid('', true),
@@ -178,8 +178,15 @@ final class AuthApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.is_admin', true);
 
+        $expected = SourceModel::query()
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (mixed $id) => (int) $id)
+            ->values()
+            ->all();
+
         $this->assertEqualsCanonicalizing(
-            [$alpha->id, $bravo->id],
+            $expected,
             $response->json('data.source_ids'),
         );
     }

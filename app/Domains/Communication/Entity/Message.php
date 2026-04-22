@@ -17,7 +17,7 @@ final readonly class Message
         public string $text,
         /** @var array<string, mixed> */
         public array $payload,
-        /** @var list<array{text: string, url: string}>|null */
+        /** @var list<array{text: string, url?: string, callback_data?: string}>|null */
         public ?array $replyMarkup,
         public bool $isRead,
         public ?\DateTimeInterface $createdAt = null,

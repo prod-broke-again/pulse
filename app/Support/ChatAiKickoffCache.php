@@ -32,6 +32,9 @@ final class ChatAiKickoffCache
                 static fn (AiSuggestedReplyDto $r): array => ['id' => $r->id, 'text' => $r->text],
                 $dto->replies,
             ),
+            'auto_reply_text' => $dto->autoReplyText,
+            'auto_reply_confidence' => $dto->autoReplyConfidence,
+            'escalate_to_human' => $dto->escalateToHuman,
         ], self::TTL_SECONDS);
     }
 

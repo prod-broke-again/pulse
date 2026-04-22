@@ -12,11 +12,13 @@ use App\Domains\Communication\ValueObject\ChatStatus;
 use App\Domains\Communication\ValueObject\SenderType;
 use App\Domains\Integration\Messenger\MessengerProviderInterface;
 use App\Domains\Integration\Repository\SourceRepositoryInterface;
+use App\Domains\Integration\ValueObject\SourceType;
 use App\Events\ChatAssigned as ChatAssignedEvent;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Support\BroadcastSenderDisplay;
 use App\Support\NewChatMessageBroadcastExtras;
+use App\Support\TelegramGroupModeratorSignature;
 use App\Support\TelegramOutboundBusinessOptions;
 use Illuminate\Contracts\Events\Dispatcher;
 
@@ -47,20 +49,20 @@ final readonly class SendMessage
         }
 
         if ($chat->assignedTo === null && $senderType === SenderType::Moderator && $senderId !== null) {
-            $updated = new Chat(
-                id: $chat->id,
-                sourceId: $chat->sourceId,
-                departmentId: $chat->departmentId,
-                externalUserId: $chat->externalUserId,
-                userMetadata: $chat->userMetadata,
-                status: ChatStatus::Active,
-                assignedTo: $senderId,
-                topic: $chat->topic,
-                externalBusinessConnectionId: $chat->externalBusinessConnectionId,
-            );
-            $chat = $this->chatRepository->persist($updated);
+            $chat = $this->chatRepository->persist($chat->withOverrides([
+                'status' => ChatStatus::Active,
+                'assignedTo' => $senderId,
+            ]));
             $this->events->dispatch(new ChatAssignedEvent(chatId: $chat->id, assignedToUserId: $senderId));
         }
+
+        $textToPersist = $this->maybePrefixTelegramGroupModeratorLine(
+            $text,
+            $chat,
+            $senderType,
+            $senderId,
+            $deliverToMessenger,
+        );
 
         $message = new \App\Domains\Communication\Entity\Message(
             id: 0,
@@ -68,7 +70,7 @@ final readonly class SendMessage
             externalMessageId: null,
             senderId: $senderId,
             senderType: $senderType,
-            text: $text,
+            text: $textToPersist,
             payload: $payload,
             replyMarkup: $replyMarkup,
             isRead: false,
@@ -76,6 +78,7 @@ final readonly class SendMessage
         );
 
         $persisted = $this->messageRepository->persist($message);
+        $this->chatRepository->touchLastActivityAt($chatId);
 
         $model = MessageModel::query()->with('replyTo')->find($persisted->id);
         $extras = $model !== null
@@ -93,7 +96,7 @@ final readonly class SendMessage
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
             messageId: $persisted->id,
-            text: $text,
+            text: $textToPersist,
             senderType: $senderType->value,
             senderId: $senderId,
             attachments: $extras['attachments'],
@@ -124,9 +127,33 @@ final readonly class SendMessage
             foreach (TelegramOutboundBusinessOptions::fromDomainChat($chat, $source->settings) as $key => $value) {
                 $options[$key] = $value;
             }
-            $messenger->sendMessage($chat->externalUserId, $text, $options);
+            $messenger->sendMessage($chat->externalUserId, $textToPersist, $options);
         }
 
         return $persisted;
+    }
+
+    private function maybePrefixTelegramGroupModeratorLine(
+        string $text,
+        Chat $chat,
+        SenderType $senderType,
+        ?int $senderId,
+        bool $deliverToMessenger,
+    ): string {
+        if (! $deliverToMessenger
+            || $senderType !== SenderType::Moderator
+            || $senderId === null) {
+            return $text;
+        }
+        $source = $this->sourceRepository->findById($chat->sourceId);
+        if ($source === null || $source->type !== SourceType::Tg) {
+            return $text;
+        }
+
+        return TelegramGroupModeratorSignature::formatForOutbound(
+            $text,
+            $chat->userMetadata,
+            $senderId,
+        );
     }
 }

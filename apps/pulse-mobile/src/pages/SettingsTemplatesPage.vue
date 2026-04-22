@@ -16,6 +16,9 @@ const inbox = useInboxStore()
 const items = ref<ApiCannedResponse[]>([])
 const loading = ref(false)
 const err = ref<string | null>(null)
+const visibility = ref<'all' | 'mine' | 'shared'>('all')
+const listSourceId = ref<string>('')
+const listQ = ref('')
 const modal = ref(false)
 const editing = ref<ApiCannedResponse | null>(null)
 const form = ref({
@@ -34,6 +37,14 @@ const departmentOptions = ref<{ id: number; name: string }[]>([])
 
 const sourceIds = () => auth.user?.source_ids ?? []
 const isAdmin = computed(() => auth.user?.roles?.includes('admin'))
+
+const sourceOptions = computed(() => {
+  const u = auth.user
+  if (u?.sources && u.sources.length > 0) {
+    return u.sources.map((s) => ({ id: s.id, label: s.name || `Источник #${s.id}` }))
+  }
+  return (u?.source_ids ?? []).map((id) => ({ id, label: `Источник #${id}` }))
+})
 
 async function loadDepartmentOptions(sourceId: number) {
   try {
@@ -83,13 +94,30 @@ async function load() {
   loading.value = true
   err.value = null
   try {
-    items.value = await cannedApi.fetchCannedResponses({ include_inactive: true })
+    items.value = await cannedApi.fetchCannedResponses({
+      include_inactive: true,
+      visibility: visibility.value,
+      source_id: listSourceId.value === '' ? undefined : Number(listSourceId.value) || undefined,
+      q: listQ.value.trim() || undefined,
+    })
   } catch {
     err.value = 'Не удалось загрузить'
   } finally {
     loading.value = false
   }
 }
+
+watch([visibility, listSourceId], () => {
+  void load()
+})
+
+let qTimer: ReturnType<typeof setTimeout> | null = null
+watch(listQ, () => {
+  if (qTimer) clearTimeout(qTimer)
+  qTimer = setTimeout(() => {
+    void load()
+  }, 400)
+})
 
 onMounted(() => {
   inbox.setBottomNav('settings')
@@ -219,6 +247,41 @@ function scopeLabel(row: ApiCannedResponse): string {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="v in (['all', 'mine', 'shared'] as const)"
+            :key="v"
+            type="button"
+            class="rounded-full border px-3 py-1.5 text-xs font-medium"
+            :class="
+              visibility === v
+                ? 'border-[var(--color-brand)] bg-[var(--color-brand)] text-white'
+                : 'border-[var(--color-gray-line)] bg-white text-[var(--zinc-600)] dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)]'
+            "
+            @click="visibility = v"
+          >
+            {{ v === 'all' ? 'Все' : v === 'mine' ? 'Мои' : 'Общие' }}
+          </button>
+        </div>
+        <select
+          v-model="listSourceId"
+          class="w-full min-w-0 rounded-xl border border-[var(--color-gray-line)] bg-white px-3 py-2 text-sm dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] sm:max-w-[200px]"
+        >
+          <option value="">
+            Все источники
+          </option>
+          <option v-for="o in sourceOptions" :key="o.id" :value="String(o.id)">
+            {{ o.label }}
+          </option>
+        </select>
+        <input
+          v-model="listQ"
+          type="search"
+          placeholder="Поиск…"
+          class="w-full min-w-0 rounded-xl border border-[var(--color-gray-line)] bg-white px-3 py-2 text-sm dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)]"
+        >
+      </div>
       <p v-if="err" class="mb-2 text-sm text-red-500">
         {{ err }}
       </p>

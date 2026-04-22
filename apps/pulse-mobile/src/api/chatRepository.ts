@@ -1,41 +1,101 @@
 import { http } from '../lib/http'
 import type { ApiChatRow, ApiPaginatedLinks, ApiPaginatedMeta, ApiTabCounts } from './types'
 
-export interface ListChatsParams {
-  tab: string
-  status?: 'open' | 'closed' | 'all'
+export type ChatTab = 'my' | 'unassigned' | 'all'
+
+export type ChatListFilters = {
+  tab?: ChatTab
+  source_id?: number
+  source_ids?: number[]
+  department_id?: number
+  department_ids?: number[]
+  channels?: Array<'tg' | 'vk' | 'web' | 'max'>
   search?: string
-  channels?: string[]
-  page?: number
+  status?: 'open' | 'closed' | 'all'
   per_page?: number
+  page?: number
 }
+
+/** Query for GET /chats и /chats/tab-counts (массивы → key[] для Laravel). */
+export function serializeChatListQuery(
+  f: ChatListFilters,
+): Record<string, string | number | (string | number)[] | undefined> {
+  const out: Record<string, string | number | (string | number)[] | undefined> = {}
+  if (f.page != null) {
+    out.page = f.page
+  }
+  if (f.per_page != null) {
+    out.per_page = f.per_page
+  }
+  if (f.tab != null) {
+    out.tab = f.tab
+  }
+  const s = f.search?.trim()
+  if (s) {
+    out.search = s
+  }
+  if (f.status != null) {
+    out.status = f.status
+  }
+  if (f.source_id != null) {
+    out.source_id = f.source_id
+  }
+  if (f.source_ids != null && f.source_ids.length > 0) {
+    out.source_ids = f.source_ids
+  }
+  if (f.department_id != null) {
+    out.department_id = f.department_id
+  }
+  if (f.department_ids != null && f.department_ids.length > 0) {
+    out.department_ids = f.department_ids
+  }
+  if (f.channels != null && f.channels.length > 0) {
+    out.channels = f.channels
+  }
+  return out
+}
+
+export type ListChatsParams = ChatListFilters
 
 export async function fetchChat(chatId: number): Promise<ApiChatRow> {
   const res = await http.get<{ data: ApiChatRow }>(`/chats/${chatId}`)
   return res.data.data
 }
 
-export async function fetchChats(params: ListChatsParams): Promise<{
-  data: ApiChatRow[]
-  meta: ApiPaginatedMeta
-  links: ApiPaginatedLinks
-}> {
+export async function fetchChats(
+  params: ListChatsParams,
+): Promise<{ data: ApiChatRow[]; meta: ApiPaginatedMeta; links: ApiPaginatedLinks }> {
   const res = await http.get<{ data: ApiChatRow[]; meta: ApiPaginatedMeta; links: ApiPaginatedLinks }>(
     '/chats',
-    { params },
+    { params: serializeChatListQuery(params) },
   )
   return res.data
 }
 
-export async function fetchTabCounts(
-  params: Omit<ListChatsParams, 'tab' | 'page' | 'per_page'>,
-): Promise<ApiTabCounts> {
-  const res = await http.get<{ data: ApiTabCounts }>('/chats/tab-counts', { params })
+export type ChatTabCountsParams = Pick<
+  ChatListFilters,
+  | 'search'
+  | 'status'
+  | 'source_id'
+  | 'source_ids'
+  | 'department_id'
+  | 'department_ids'
+  | 'channels'
+>
+
+export async function fetchTabCounts(params: ChatTabCountsParams): Promise<ApiTabCounts> {
+  const res = await http.get<{ data: ApiTabCounts }>('/chats/tab-counts', {
+    params: serializeChatListQuery(params),
+  })
   return res.data.data
 }
 
 export async function markChatRead(chatId: number, lastMessageId: number): Promise<void> {
   await http.post(`/chats/${chatId}/read`, { last_message_id: lastMessageId })
+}
+
+export async function sendTypingIndicator(chatId: number): Promise<void> {
+  await http.post(`/chats/${chatId}/typing`, {})
 }
 
 export async function assignMe(chatId: number): Promise<ApiChatRow> {

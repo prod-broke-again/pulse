@@ -26,6 +26,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Illuminate\Support\Carbon|null $ai_department_assigned_at
  * @property int|null $department_reassigned_by_user_id
  * @property \Illuminate\Support\Carbon|null $last_auto_reply_at
+ * @property \Illuminate\Support\Carbon|null $last_activity_at
+ * @property int|null $previous_chat_id
+ * @property int $ai_auto_replies_count
+ * @property bool $awaiting_client_feedback
  * @property-read int|null $unread_count
  */
 class ChatModel extends Model
@@ -46,6 +50,10 @@ class ChatModel extends Model
         'ai_department_assigned_at',
         'department_reassigned_by_user_id',
         'last_auto_reply_at',
+        'last_activity_at',
+        'previous_chat_id',
+        'ai_auto_replies_count',
+        'awaiting_client_feedback',
     ];
 
     /** @return array<string, string> */
@@ -56,6 +64,8 @@ class ChatModel extends Model
             'ai_department_confidence' => 'decimal:2',
             'ai_department_assigned_at' => 'datetime',
             'last_auto_reply_at' => 'datetime',
+            'last_activity_at' => 'datetime',
+            'awaiting_client_feedback' => 'boolean',
         ];
     }
 

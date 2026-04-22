@@ -8,6 +8,7 @@ use App\Application\Ai\Dto\AiChatKickoffDto;
 use App\Application\Ai\Dto\AiSuggestedReplyDto;
 use App\Application\Ai\Dto\AiThreadSummaryDto;
 use App\Application\Communication\Action\ChangeChatDepartment;
+use App\Application\Communication\Action\ProcessClientAiAutoreply;
 use App\Contracts\Ai\AiProviderInterface;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
 use App\Domains\Integration\Repository\DepartmentRepositoryInterface;
@@ -42,6 +43,10 @@ final class GenerateChatTopicJobTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Config::set('features', array_merge(config('features', []), [
+            'ai_client_autoreply' => false,
+        ]));
 
         $this->source = SourceModel::create([
             'name' => 'Src',
@@ -241,6 +246,7 @@ final class GenerateChatTopicJobTest extends TestCase
             $this->app->make(AiProviderInterface::class),
             $this->app->make(DepartmentRepositoryInterface::class),
             $this->app->make(ChangeChatDepartment::class),
+            $this->app->make(ProcessClientAiAutoreply::class),
         );
     }
 }

@@ -34,19 +34,10 @@ final readonly class AssignChatToModerator
 
         $previousAssignee = $chat->assignedTo;
 
-        $updated = new Chat(
-            id: $chat->id,
-            sourceId: $chat->sourceId,
-            departmentId: $chat->departmentId,
-            externalUserId: $chat->externalUserId,
-            userMetadata: $chat->userMetadata,
-            status: ChatStatus::Active,
-            assignedTo: $userId,
-            topic: $chat->topic,
-            externalBusinessConnectionId: $chat->externalBusinessConnectionId,
-        );
-
-        $persisted = $this->chatRepository->persist($updated);
+        $persisted = $this->chatRepository->persist($chat->withOverrides([
+            'status' => ChatStatus::Active,
+            'assignedTo' => $userId,
+        ]));
 
         $this->events->dispatch(new ChatAssignedEvent(chatId: $persisted->id, assignedToUserId: $userId));
 
@@ -80,6 +71,7 @@ final readonly class AssignChatToModerator
         );
 
         $persistedMessage = $this->messageRepository->persist($domainMessage);
+        $this->chatRepository->touchLastActivityAt($chatId);
 
         $model = MessageModel::query()->with('replyTo')->find($persistedMessage->id);
         $extras = $model !== null

@@ -35,6 +35,7 @@ Route::prefix('/api/widget')->group(function (): void {
     Route::post('/session', [WidgetApiController::class, 'session'])->name('api.widget.session');
     Route::get('/messages', [WidgetApiController::class, 'messages'])->name('api.widget.messages');
     Route::post('/messages', [WidgetApiController::class, 'send'])->name('api.widget.send');
+    Route::post('/chat-action', [WidgetApiController::class, 'chatAction'])->name('api.widget.chat_action');
     Route::post('/messages/read', [WidgetApiController::class, 'markRead'])->name('api.widget.messages.read');
     Route::post('/typing', [WidgetApiController::class, 'typing'])->name('api.widget.typing');
 });

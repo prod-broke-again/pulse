@@ -9,9 +9,11 @@ use App\Application\Ai\Dto\AiSuggestedReplyDto;
 use App\Application\Ai\Dto\AiThreadSummaryDto;
 use App\Contracts\Ai\AiProviderInterface;
 use App\Contracts\ChatTopicGeneratorInterface;
+use App\Models\AiSettings;
 use App\Support\AiKickoffPrompt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class TimewebAiService implements AiProviderInterface, ChatTopicGeneratorInterface
@@ -27,6 +29,16 @@ final class TimewebAiService implements AiProviderInterface, ChatTopicGeneratorI
         $userContent = $departments === []
             ? $messagesText
             : AiKickoffPrompt::buildUserMessage($messagesText, $departments);
+        if (Schema::hasTable('ai_settings')) {
+            $adminExtra = (string) (AiSettings::query()->value('extra_kickoff_instructions') ?? '');
+            if ($adminExtra !== '') {
+                $userContent = "Дополнительные инструкции от администратора:\n{$adminExtra}\n\n".$userContent;
+            }
+            $rules = (string) (AiSettings::query()->value('autoreply_rules') ?? '');
+            if ($rules !== '') {
+                $userContent = "Правила автоответа:\n{$rules}\n\n".$userContent;
+            }
+        }
 
         $content = $this->chatCompletion(AiKickoffPrompt::SYSTEM, $userContent, self::KICKOFF_MAX_TOKENS);
         if ($content === null || $content === '') {

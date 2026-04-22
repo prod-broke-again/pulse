@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Application\Ai\Dto\AiChatKickoffDto;
 use App\Application\Ai\Dto\AiSuggestedReplyDto;
 use App\Application\Communication\Action\ChangeChatDepartment;
+use App\Application\Communication\Action\ProcessClientAiAutoreply;
 use App\Contracts\Ai\AiProviderInterface;
 use App\Domains\Communication\Entity\Chat;
 use App\Domains\Communication\Repository\ChatRepositoryInterface;
@@ -20,6 +21,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -46,6 +48,26 @@ final class GenerateChatTopicJob implements ShouldQueue
         AiProviderInterface $ai,
         DepartmentRepositoryInterface $departmentRepository,
         ChangeChatDepartment $changeChatDepartment,
+        ProcessClientAiAutoreply $processClientAiAutoreply,
+    ): void {
+        $lock = Cache::lock('chat-kickoff:'.$this->chatId, 30);
+        $lock->block(25, function () use ($chatRepository, $ai, $departmentRepository, $changeChatDepartment, $processClientAiAutoreply): void {
+            $this->doGenerate(
+                $chatRepository,
+                $ai,
+                $departmentRepository,
+                $changeChatDepartment,
+                $processClientAiAutoreply,
+            );
+        });
+    }
+
+    private function doGenerate(
+        ChatRepositoryInterface $chatRepository,
+        AiProviderInterface $ai,
+        DepartmentRepositoryInterface $departmentRepository,
+        ChangeChatDepartment $changeChatDepartment,
+        ProcessClientAiAutoreply $processClientAiAutoreply,
     ): void {
         $chat = $chatRepository->findById($this->chatId);
         if ($chat === null || ($chat->topic !== null && $chat->topic !== '')) {
@@ -116,33 +138,19 @@ final class GenerateChatTopicJob implements ShouldQueue
         }
 
         $topic = $kickoff->topic;
-        if ($topic === null || $topic === '') {
-            return;
+        if ($topic !== null && $topic !== '') {
+            $latest = $chatRepository->findById($this->chatId) ?? $chat;
+            $chatRepository->persist($latest->withOverrides(['topic' => $topic]));
+
+            event(new ChatTopicGenerated(
+                chatId: $this->chatId,
+                topic: $topic,
+                assignedModeratorUserId: $latest->assignedTo,
+                sourceId: $latest->sourceId,
+            ));
         }
 
-        $latest = $chatRepository->findById($this->chatId) ?? $chat;
-        $chatRepository->persist(new Chat(
-            id: $latest->id,
-            sourceId: $latest->sourceId,
-            departmentId: $latest->departmentId,
-            externalUserId: $latest->externalUserId,
-            userMetadata: $latest->userMetadata,
-            status: $latest->status,
-            assignedTo: $latest->assignedTo,
-            topic: $topic,
-            aiSuggestedDepartmentId: $latest->aiSuggestedDepartmentId,
-            aiDepartmentConfidence: $latest->aiDepartmentConfidence,
-            aiDepartmentAssignedAt: $latest->aiDepartmentAssignedAt,
-            departmentReassignedByUserId: $latest->departmentReassignedByUserId,
-            externalBusinessConnectionId: $latest->externalBusinessConnectionId,
-        ));
-
-        event(new ChatTopicGenerated(
-            chatId: $this->chatId,
-            topic: $topic,
-            assignedModeratorUserId: $latest->assignedTo,
-            sourceId: $latest->sourceId,
-        ));
+        $processClientAiAutoreply->fromKickoff($this->chatId, $kickoff);
     }
 
     /**
@@ -174,11 +182,19 @@ final class GenerateChatTopicJob implements ShouldQueue
         $topicRaw = $cached['topic'] ?? null;
         $topic = is_string($topicRaw) && trim($topicRaw) !== '' ? trim($topicRaw) : null;
 
+        $autoConf = $cached['auto_reply_confidence'] ?? null;
+        $escalate = (bool) ($cached['escalate_to_human'] ?? false);
+        $art = $cached['auto_reply_text'] ?? null;
+        $autoText = is_string($art) && trim($art) !== '' ? trim($art) : null;
+
         return new AiChatKickoffDto(
             topic: $topic,
             summary: isset($cached['summary']) ? trim((string) $cached['summary']) : '',
             intentTag: $intentTag,
             replies: $replies,
+            autoReplyText: $escalate ? null : $autoText,
+            autoReplyConfidence: is_numeric($autoConf) ? (float) $autoConf : null,
+            escalateToHuman: $escalate,
         );
     }
 
@@ -194,21 +210,10 @@ final class GenerateChatTopicJob implements ShouldQueue
             return $chat;
         }
 
-        $chat = $chatRepository->persist(new Chat(
-            id: $chat->id,
-            sourceId: $chat->sourceId,
-            departmentId: $chat->departmentId,
-            externalUserId: $chat->externalUserId,
-            userMetadata: $chat->userMetadata,
-            status: $chat->status,
-            assignedTo: $chat->assignedTo,
-            topic: $chat->topic,
-            aiSuggestedDepartmentId: $suggestedId,
-            aiDepartmentConfidence: $confidence,
-            aiDepartmentAssignedAt: $chat->aiDepartmentAssignedAt,
-            departmentReassignedByUserId: $chat->departmentReassignedByUserId,
-            externalBusinessConnectionId: $chat->externalBusinessConnectionId,
-        ));
+        $chat = $chatRepository->persist($chat->withOverrides([
+            'aiSuggestedDepartmentId' => $suggestedId,
+            'aiDepartmentConfidence' => $confidence,
+        ]));
 
         $threshold = (float) config('features.ai_department_confidence_threshold', 0.7);
         if ($confidence >= $threshold && $chat->departmentId !== $suggestedId) {
@@ -225,21 +230,9 @@ final class GenerateChatTopicJob implements ShouldQueue
             }
 
             try {
-                $chat = $chatRepository->persist(new Chat(
-                    id: $afterMove->id,
-                    sourceId: $afterMove->sourceId,
-                    departmentId: $afterMove->departmentId,
-                    externalUserId: $afterMove->externalUserId,
-                    userMetadata: $afterMove->userMetadata,
-                    status: $afterMove->status,
-                    assignedTo: $afterMove->assignedTo,
-                    topic: $afterMove->topic,
-                    aiSuggestedDepartmentId: $afterMove->aiSuggestedDepartmentId,
-                    aiDepartmentConfidence: $afterMove->aiDepartmentConfidence,
-                    aiDepartmentAssignedAt: \DateTimeImmutable::createFromInterface(now()),
-                    departmentReassignedByUserId: $afterMove->departmentReassignedByUserId,
-                    externalBusinessConnectionId: $afterMove->externalBusinessConnectionId,
-                ));
+                $chat = $chatRepository->persist($afterMove->withOverrides([
+                    'aiDepartmentAssignedAt' => \DateTimeImmutable::createFromInterface(now()),
+                ]));
             } catch (\Throwable $e) {
                 Log::warning('AI dept auto-assign: persist ai_department_assigned_at failed after department move', [
                     'chat_id' => $this->chatId,

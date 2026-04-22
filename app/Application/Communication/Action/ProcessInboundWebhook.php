@@ -25,6 +25,7 @@ use App\Models\SocialAccount;
 use App\Models\User;
 use App\Services\MaybeSendOfflineAutoReply;
 use App\Services\SendWelcomeMessage;
+use App\Support\AiClientActionPayload;
 use App\Support\PendingInboundAttachments;
 use Illuminate\Support\Facades\Log;
 
@@ -44,6 +45,7 @@ final readonly class ProcessInboundWebhook
         private MessageRepositoryInterface $messageRepository,
         private TelegramMediaGroupInboundBuffer $telegramMediaGroupInboundBuffer,
         private HandleBusinessConnectionEvent $handleBusinessConnectionEvent,
+        private HandleAiClientControlAction $handleAiClientControl,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -59,6 +61,18 @@ final readonly class ProcessInboundWebhook
         $source = $this->sourceRepository->findById($sourceId);
         if ($source === null) {
             throw new \InvalidArgumentException("Source not found: {$sourceId}");
+        }
+
+        if (($payload['type'] ?? null) === 'message_event' && $source->type === SourceType::Vk) {
+            $this->handleVkMessageEvent($sourceId, $payload);
+
+            return;
+        }
+
+        if (isset($payload['callback_query']) && $source->type === SourceType::Tg) {
+            $this->handleTelegramCallbackQuery($sourceId, $payload);
+
+            return;
         }
 
         if (isset($payload['business_connection'])) {
@@ -129,6 +143,12 @@ final readonly class ProcessInboundWebhook
             $payload,
             $userMetadata,
         );
+        if ($source->type === SourceType::Tg) {
+            $userMetadata = $this->webhookPayloadExtractor->mergeTelegramChatContextIntoUserMetadata(
+                $payload,
+                $userMetadata,
+            );
+        }
         $externalMessageId = $this->webhookPayloadExtractor->extractExternalMessageId($payload);
 
         $businessConnectionId = $this->webhookPayloadExtractor->extractBusinessConnectionId($payload);
@@ -282,6 +302,81 @@ final readonly class ProcessInboundWebhook
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function handleTelegramCallbackQuery(int $sourceId, array $payload): void
+    {
+        $cq = $payload['callback_query'] ?? null;
+        if (! is_array($cq)) {
+            return;
+        }
+        $data = isset($cq['data']) && is_string($cq['data']) ? $cq['data'] : null;
+        $id = isset($cq['id']) && is_string($cq['id']) ? $cq['id'] : null;
+        if ($id === null || $id === '') {
+            return;
+        }
+        $parsed = AiClientActionPayload::parse($data);
+        if ($parsed === null) {
+            $this->handleAiClientControl->answerTelegramCallback($sourceId, $id);
+
+            return;
+        }
+        $msg = $cq['message'] ?? null;
+        if (is_array($msg)) {
+            $chat = $msg['chat'] ?? null;
+            if (is_array($chat) && isset($chat['id'])) {
+                $expectedPeer = (string) $chat['id'];
+                $row = ChatModel::query()->whereKey($parsed['chat_id'])->value('external_user_id');
+                if ($row === null || (string) $row !== $expectedPeer) {
+                    $this->handleAiClientControl->answerTelegramCallback($sourceId, $id);
+
+                    return;
+                }
+            }
+        }
+        $this->handleAiClientControl->run($sourceId, $parsed['chat_id'], $parsed['action']);
+        $this->handleAiClientControl->answerTelegramCallback($sourceId, $id);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function handleVkMessageEvent(int $sourceId, array $payload): void
+    {
+        $obj = $payload['object'] ?? null;
+        if (! is_array($obj)) {
+            return;
+        }
+        $rawPayload = $obj['payload'] ?? null;
+        $c = null;
+        if (is_string($rawPayload) && $rawPayload !== '') {
+            $decoded = json_decode($rawPayload, true);
+            $c = is_array($decoded) ? ($decoded['c'] ?? null) : null;
+        } elseif (is_array($rawPayload)) {
+            $c = $rawPayload['c'] ?? null;
+        }
+        if (! is_string($c) || $c === '') {
+            return;
+        }
+        $parsed = AiClientActionPayload::parse($c);
+        if ($parsed === null) {
+            return;
+        }
+        $eventId = $obj['event_id'] ?? null;
+        $userId = $obj['user_id'] ?? null;
+        $peerId = $obj['peer_id'] ?? null;
+        if ($eventId === null || $userId === null || $peerId === null) {
+            return;
+        }
+        $this->handleAiClientControl->run($sourceId, $parsed['chat_id'], $parsed['action']);
+        $this->handleAiClientControl->answerVkEvent($sourceId, [
+            'event_id' => (string) $eventId,
+            'user_id' => (int) $userId,
+            'peer_id' => (int) $peerId,
+        ]);
+    }
+
+    /**
      * @param  list<array{url: string, file_name: string, mime_type: string, kind?: string}>  $attachments
      */
     private function dispatchAttachmentDownloads(array $attachments, int $messageId): void
@@ -371,6 +466,10 @@ final readonly class ProcessInboundWebhook
         $userMetadata = $this->telegramUserMetadataEnricher->enrich(
             SourceType::Tg,
             $settings,
+            $payload,
+            $userMetadata,
+        );
+        $userMetadata = $this->webhookPayloadExtractor->mergeTelegramChatContextIntoUserMetadata(
             $payload,
             $userMetadata,
         );
@@ -464,6 +563,10 @@ final readonly class ProcessInboundWebhook
         $userMetadata = $this->telegramUserMetadataEnricher->enrich(
             SourceType::Tg,
             $settings,
+            $payload,
+            $userMetadata,
+        );
+        $userMetadata = $this->webhookPayloadExtractor->mergeTelegramChatContextIntoUserMetadata(
             $payload,
             $userMetadata,
         );

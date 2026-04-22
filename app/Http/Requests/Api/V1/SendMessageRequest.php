@@ -42,7 +42,8 @@ final class SendMessageRequest extends FormRequest
             ],
             'reply_markup' => ['sometimes', 'nullable', 'array'],
             'reply_markup.*.text' => ['required', 'string', 'max:40'],
-            'reply_markup.*.url' => ['required', 'url'],
+            'reply_markup.*.url' => ['sometimes', 'nullable', 'url'],
+            'reply_markup.*.callback_data' => ['sometimes', 'nullable', 'string', 'max:64'],
         ];
     }
 
@@ -61,6 +62,21 @@ final class SendMessageRequest extends FormRequest
                     'text',
                     __('validation.required', ['attribute' => 'text']),
                 );
+            }
+            if (is_array($markup)) {
+                foreach ($markup as $i => $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    $url = isset($row['url']) && is_string($row['url']) && $row['url'] !== '';
+                    $cb = isset($row['callback_data']) && is_string($row['callback_data']) && $row['callback_data'] !== '';
+                    if ($url && $cb) {
+                        $validator->errors()->add("reply_markup.$i", 'Provide either url or callback_data, not both.');
+                    }
+                    if (! $url && ! $cb) {
+                        $validator->errors()->add("reply_markup.$i", 'Each button must have url or callback_data.');
+                    }
+                }
             }
         });
     }

@@ -1,8 +1,8 @@
-export type ChannelSource = 'tg' | 'vk' | 'web'
+export type ChannelSource = 'tg' | 'vk' | 'web' | 'max'
 
 export type InboxTab = 'my' | 'unassigned' | 'all'
 
-export type FilterId = 'open' | 'closed' | 'tg' | 'vk' | 'web'
+export type FilterId = 'open' | 'closed' | 'tg' | 'vk' | 'web' | 'max'
 
 export type BottomNavId = 'inbox' | 'history' | 'settings'
 
@@ -87,6 +87,8 @@ export interface ChatThreadMeta {
   status: TicketStatus
   channel: ChannelSource
   channelLabel: string
+  /** Guest id in messengers (для «Истории обращений» / поиска). */
+  externalUserId: string | null
   departmentLabel: string
   /** Иконка отдела (имя компонента Lucide с API). */
   departmentIcon?: string | null

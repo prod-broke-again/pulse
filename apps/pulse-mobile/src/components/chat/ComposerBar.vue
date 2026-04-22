@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Paperclip, Send, Sparkles, X, Zap } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
@@ -10,6 +10,7 @@ const {
   composerText,
   canSend,
   composerLocked,
+  threadMeta,
   pendingReplyMarkup,
   cannedQuickReplies,
   quickLinkPresets,
@@ -54,6 +55,20 @@ const quickReplies = computed(() =>
 function onSend() {
   chat.sendMessage()
 }
+
+const isChatClosed = computed(() => threadMeta.value?.status === 'closed')
+const isOtherModerator = computed(
+  () => composerLocked.value && !isChatClosed.value,
+)
+
+watch(
+  composerText,
+  (t) => {
+    if (t.trim().length > 0) {
+      chat.scheduleTypingNotify()
+    }
+  },
+)
 </script>
 
 <template>
@@ -81,7 +96,14 @@ function onSend() {
     </div>
     <div class="px-3 pt-2.5">
       <div
-        v-if="composerLocked"
+        v-if="isChatClosed"
+        class="mb-2 rounded-xl border border-[var(--zinc-300)] bg-[var(--zinc-100)] px-3 py-2 text-xs text-[var(--zinc-700)] dark:border-[var(--zinc-600)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-200)]"
+        role="status"
+      >
+        Чат закрыт. Нажмите «Вернуть в работу» в шапке, чтобы отвечать.
+      </div>
+      <div
+        v-else-if="isOtherModerator"
         class="mb-2 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
         role="status"
       >

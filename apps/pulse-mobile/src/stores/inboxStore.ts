@@ -3,9 +3,8 @@ import { computed, ref, watch } from 'vue'
 import * as chatApi from '../api/chatRepository'
 import { isMutedUntilActive } from '../lib/chatMute'
 import { parseApiChatId } from '../lib/chatIds'
-import {
-  mergeNotificationSoundPrefs,
-} from '../lib/notificationSoundPresets'
+import { mergeNotificationSoundPrefs } from '../lib/notificationSoundPresets'
+import { pendingListFiltersFromPrefs } from '../lib/inboxFilterPrefs'
 import {
   playIncomingToneFromPrefs,
   resolveNotificationScenario,
@@ -21,8 +20,10 @@ import type { BottomNavId, ChatPreviewItem, FilterId, InboxTab } from '../types/
 let moderatorUnsub: (() => void) | null = null
 let sourceInboxUnsubs: Array<() => void> = []
 
-/** Same NewChatMessage may arrive on moderator.* and source-inbox.* */
 let lastInboxRealtimeDedupeKey: string | null = null
+
+/** After login / first /auth/me, apply inbox_filter_prefs once per user id. */
+let lastSyncedInboxUserId: number | null = null
 
 function deriveApiStatus(filters: Set<FilterId>): 'open' | 'closed' | 'all' {
   const hasOpen = filters.has('open')
@@ -33,8 +34,8 @@ function deriveApiStatus(filters: Set<FilterId>): 'open' | 'closed' | 'all' {
   return 'all'
 }
 
-function deriveChannels(filters: Set<FilterId>): string[] | undefined {
-  const ch = (['tg', 'vk', 'web'] as const).filter((c) => filters.has(c))
+function deriveChannelFilters(filters: Set<FilterId>): Array<'tg' | 'vk' | 'web' | 'max'> | undefined {
+  const ch = (['tg', 'vk', 'web', 'max'] as const).filter((c) => filters.has(c))
   return ch.length > 0 ? [...ch] : undefined
 }
 
@@ -49,12 +50,16 @@ export const useInboxStore = defineStore('inbox', () => {
   const tabBadges = ref({ my: 0, unassigned: 0, all: 0 })
   const inboxBadge = ref(0)
 
+  /** `undefined` = все источники; иначе пересечение с доступными на бэкенде. */
+  const filterSourceIds = ref<number[] | undefined>(undefined)
+  /** `undefined` = все отделы. */
+  const filterDepartmentIds = ref<number[] | undefined>(undefined)
+
   const historyChats = ref<ChatPreviewItem[]>([])
   const historySearchQuery = ref('')
   const isLoadingHistory = ref(false)
 
   const filteredChats = computed(() => chats.value)
-
   const filteredHistoryChats = computed(() => historyChats.value)
 
   const showEmptyState = computed(
@@ -64,6 +69,65 @@ export const useInboxStore = defineStore('inbox', () => {
   const showChatList = computed(
     () => !isLoadingList.value && !loadError.value && filteredChats.value.length > 0,
   )
+
+  function commonListParams(): Pick<
+    chatApi.ChatListFilters,
+    'search' | 'status' | 'source_id' | 'source_ids' | 'department_id' | 'department_ids' | 'channels'
+  > {
+    const chans = deriveChannelFilters(activeFilters.value)
+    return {
+      search: searchQuery.value.trim() || undefined,
+      status: deriveApiStatus(activeFilters.value),
+      source_ids: filterSourceIds.value,
+      department_ids: filterDepartmentIds.value,
+      channels: chans,
+    }
+  }
+
+  function syncInboxFiltersFromUserProfile(): void {
+    const auth = useAuthStore()
+    const u = auth.user
+    if (!u) {
+      lastSyncedInboxUserId = null
+      return
+    }
+    if (lastSyncedInboxUserId === u.id) {
+      return
+    }
+    lastSyncedInboxUserId = u.id
+    const slice = pendingListFiltersFromPrefs(u.inbox_filter_prefs ?? null)
+    filterSourceIds.value = slice.source_ids
+    filterDepartmentIds.value = slice.department_ids
+    if (slice.channels != null && slice.channels.length > 0) {
+      const next = new Set<FilterId>(['open'])
+      for (const c of slice.channels) {
+        if (c === 'tg' || c === 'vk' || c === 'web' || c === 'max') {
+          next.add(c)
+        }
+      }
+      activeFilters.value = next
+    }
+  }
+
+  function setFilterSourceIds(ids: number[] | undefined): void {
+    filterSourceIds.value = ids
+  }
+
+  function setFilterDepartmentIds(ids: number[] | undefined): void {
+    filterDepartmentIds.value = ids
+  }
+
+  function onAuthUserChanged(): void {
+    const u = useAuthStore().user
+    if (!u) {
+      lastSyncedInboxUserId = null
+      return
+    }
+    if (lastSyncedInboxUserId !== u.id) {
+      lastSyncedInboxUserId = null
+    }
+    syncInboxFiltersFromUserProfile()
+  }
 
   function setActiveTab(tab: InboxTab) {
     activeTab.value = tab
@@ -104,21 +168,16 @@ export const useInboxStore = defineStore('inbox', () => {
     isLoadingList.value = true
     loadError.value = false
     try {
-      const status = deriveApiStatus(activeFilters.value)
-      const channels = deriveChannels(activeFilters.value)
+      const base = commonListParams()
       const [listRes, counts] = await Promise.all([
         chatApi.fetchChats({
           tab: activeTab.value,
-          status,
-          search: searchQuery.value.trim() || undefined,
-          channels,
+          ...base,
           page: 1,
           per_page: 50,
         }),
         chatApi.fetchTabCounts({
-          status,
-          search: searchQuery.value.trim() || undefined,
-          channels,
+          ...base,
         }),
       ])
       chats.value = listRes.data.map(mapApiChatToPreview)
@@ -134,10 +193,14 @@ export const useInboxStore = defineStore('inbox', () => {
   async function loadHistory(): Promise<void> {
     isLoadingHistory.value = true
     try {
+      const base = commonListParams()
       const listRes = await chatApi.fetchChats({
         tab: 'all',
         status: 'closed',
         search: historySearchQuery.value.trim() || undefined,
+        source_ids: base.source_ids,
+        department_ids: base.department_ids,
+        channels: base.channels,
         page: 1,
         per_page: 100,
       })
@@ -147,7 +210,7 @@ export const useInboxStore = defineStore('inbox', () => {
     }
   }
 
-  watch([activeTab, activeFilters], () => {
+  watch([activeTab, activeFilters, filterSourceIds, filterDepartmentIds], () => {
     void loadInbox()
   }, { deep: true })
 
@@ -167,7 +230,14 @@ export const useInboxStore = defineStore('inbox', () => {
     }, 400)
   })
 
-  /** Coalesce MessageRead (and similar) bursts; refreshes tab badges + list. */
+  watch(
+    () => useAuthStore().user?.id,
+    () => {
+      onAuthUserChanged()
+    },
+    { immediate: true },
+  )
+
   let realtimeInboxDebounce: ReturnType<typeof setTimeout> | null = null
   function scheduleInboxRefreshFromRealtime(debounceMs = 800): void {
     if (realtimeInboxDebounce != null) {
@@ -301,6 +371,8 @@ export const useInboxStore = defineStore('inbox', () => {
     filteredHistoryChats,
     showEmptyState,
     showChatList,
+    filterSourceIds,
+    filterDepartmentIds,
     setActiveTab,
     toggleFilter,
     setSearchQuery,
@@ -311,5 +383,8 @@ export const useInboxStore = defineStore('inbox', () => {
     loadInbox,
     loadHistory,
     scheduleInboxRefreshFromRealtime,
+    syncInboxFiltersFromUserProfile,
+    setFilterSourceIds,
+    setFilterDepartmentIds,
   }
 })

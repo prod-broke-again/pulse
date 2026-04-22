@@ -4,8 +4,11 @@ import type { NotificationSoundPrefs } from '../lib/notificationSoundPresets'
 import { disconnectEcho } from '../lib/realtime'
 import { http } from '../lib/http'
 import { resolveOAuthRedirectUri } from '../lib/oauthConfig'
+import type { InboxFilterPrefs } from '../types/inbox'
 
 const STORAGE_KEY = 'api-token'
+
+export type { InboxFilterPrefs } from '../types/inbox'
 
 export type PulseUser = {
   id: number
@@ -15,8 +18,11 @@ export type PulseUser = {
   roles: string[]
   is_admin?: boolean
   source_ids: number[]
+  /** Optional labels for sources (from API) — used in inbox filter UI. */
+  sources?: Array<{ id: number; name: string; type: string }>
   department_ids: number[]
   notification_sound_prefs?: NotificationSoundPrefs | null
+  inbox_filter_prefs?: InboxFilterPrefs | null
 }
 
 export const useAuthStore = defineStore('auth', () => {

@@ -18,10 +18,24 @@ final class EloquentChatRepository implements ChatRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
-    public function findBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat
+    public function findOpenBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat
     {
-        $model = ChatModel::where('source_id', $sourceId)
+        $model = ChatModel::query()
+            ->where('source_id', $sourceId)
             ->where('external_user_id', $externalUserId)
+            ->where('status', '!=', ChatStatus::Closed->value)
+            ->orderByDesc('id')
+            ->first();
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
+    public function findLatestBySourceAndExternalUser(int $sourceId, string $externalUserId): ?Chat
+    {
+        $model = ChatModel::query()
+            ->where('source_id', $sourceId)
+            ->where('external_user_id', $externalUserId)
+            ->orderByDesc('id')
             ->first();
 
         return $model ? $this->toEntity($model) : null;
@@ -70,9 +84,18 @@ final class EloquentChatRepository implements ChatRepositoryInterface
         $model->ai_department_confidence = $chat->aiDepartmentConfidence;
         $model->ai_department_assigned_at = $chat->aiDepartmentAssignedAt;
         $model->department_reassigned_by_user_id = $chat->departmentReassignedByUserId;
+        $model->last_activity_at = $chat->lastActivityAt;
+        $model->previous_chat_id = $chat->previousChatId;
+        $model->ai_auto_replies_count = $chat->aiAutoRepliesCount;
+        $model->awaiting_client_feedback = $chat->awaitingClientFeedback;
         $model->save();
 
         return $this->toEntity($model);
+    }
+
+    public function touchLastActivityAt(int $chatId): void
+    {
+        ChatModel::query()->whereKey($chatId)->update(['last_activity_at' => now()]);
     }
 
     private function toEntity(ChatModel $model): Chat
@@ -93,6 +116,10 @@ final class EloquentChatRepository implements ChatRepositoryInterface
             aiDepartmentAssignedAt: $model->ai_department_assigned_at?->toDateTimeImmutable(),
             departmentReassignedByUserId: $model->department_reassigned_by_user_id,
             externalBusinessConnectionId: $model->external_business_connection_id,
+            lastActivityAt: $model->last_activity_at?->toDateTimeImmutable(),
+            previousChatId: $model->previous_chat_id,
+            aiAutoRepliesCount: (int) $model->ai_auto_replies_count,
+            awaitingClientFeedback: (bool) $model->awaiting_client_feedback,
         );
     }
 }

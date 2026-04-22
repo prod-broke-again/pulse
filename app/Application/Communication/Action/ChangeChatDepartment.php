@@ -87,20 +87,9 @@ final class ChangeChatDepartment
         int $departmentId,
         ?int $departmentReassignedByUserId,
     ): Chat {
-        return $this->chats->persist(new Chat(
-            id: $domainChat->id,
-            sourceId: $domainChat->sourceId,
-            departmentId: $departmentId,
-            externalUserId: $domainChat->externalUserId,
-            userMetadata: $domainChat->userMetadata,
-            status: $domainChat->status,
-            assignedTo: $domainChat->assignedTo,
-            topic: $domainChat->topic,
-            aiSuggestedDepartmentId: $domainChat->aiSuggestedDepartmentId,
-            aiDepartmentConfidence: $domainChat->aiDepartmentConfidence,
-            aiDepartmentAssignedAt: $domainChat->aiDepartmentAssignedAt,
-            departmentReassignedByUserId: $departmentReassignedByUserId,
-            externalBusinessConnectionId: $domainChat->externalBusinessConnectionId,
-        ));
+        return $this->chats->persist($domainChat->withOverrides([
+            'departmentId' => $departmentId,
+            'departmentReassignedByUserId' => $departmentReassignedByUserId,
+        ]));
     }
 }

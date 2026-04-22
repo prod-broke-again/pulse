@@ -107,6 +107,7 @@ function onTouchCancel(): void {
         'bg-[#2AABEE]': chat.channel === 'tg',
         'bg-[#0077FF]': chat.channel === 'vk',
         'bg-[var(--color-brand-300)]': chat.channel === 'web',
+        'bg-[#6b4f7c]': chat.channel === 'max',
       }"
     >
       {{ chat.initials }}
@@ -116,6 +117,7 @@ function onTouchCancel(): void {
           'text-[#2AABEE]': chat.channel === 'tg',
           'text-[#0077FF]': chat.channel === 'vk',
           'text-[var(--color-brand)]': chat.channel === 'web',
+          'text-[#6b4f7c]': chat.channel === 'max',
         }"
       >
         <ChannelGlyph :channel="chat.channel" :size="14" />
