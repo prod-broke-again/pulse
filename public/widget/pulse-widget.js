@@ -16,10 +16,8 @@
         : 'system';
 
     const defaultIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
-    const iconBellOn = '<svg class="pw-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
-    const iconBellOff = '<svg class="pw-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.7 3h6.6c.3 0 .5.1.7.2l-8 8H4.6c-.3 0-.5-.1-.6-.2a.9.9 0 0 1-.1-.4V7.5A4.4 4.4 0 0 1 8.7 3Z"/><path d="M8.7 4.5 3.3 9.8a.7.7 0 0 0-.1.4v.3c0 5 1.3 6.3 1.3 6.3"/><path d="M14.4 3.5c1.1.5 1.7 1.4 1.7 2.3v.3"/><path d="M9.2 20.5a1.8 1.8 0 0 0 2.1.5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-    const closeIcon = `<svg class="pw-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-    const sendIcon = `<svg class="pw-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+    /** Стабильный бренд для поля ввода, кнопки «Отправить» и кольца фокуса (независимо от primaryColor в конфиге). */
+    const PULSE_COMPOSER_BRAND = '#55175e';
     const readIconSvg = '<span class="pw-read-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span>';
     const iconUser = '<svg class="pw-icon pw-icon--sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
@@ -89,6 +87,7 @@
     const guestDataKey = `pulse_widget_guest_${sourceIdentifier}`;
     const widgetSoundKey = `pulse_widget_sound_${sourceIdentifier}`;
     const themeStorageKey = `pulse_widget_theme_${sourceIdentifier}`;
+    const slaDismissKey = `pulse_widget_sla_dismiss_${sourceIdentifier}`;
 
     function getGuestData() {
         if (guestDataFromParent.name) return guestDataFromParent;
@@ -171,6 +170,8 @@
         root.dataset.pwTheme = isDark ? 'dark' : 'light';
         root.style.setProperty('--pw-primary', config.primaryColor);
         root.style.setProperty('--pw-on-primary', config.textColor);
+        root.style.setProperty('--pw-composer', PULSE_COMPOSER_BRAND);
+        root.style.setProperty('--pw-composer-ring', 'color-mix(in srgb, ' + PULSE_COMPOSER_BRAND + ' 24%, transparent)');
     }
     applyPwTheme();
     root.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
@@ -190,20 +191,20 @@
       .pw-icon { width: 20px; height: 20px; display: block; }
       .pw-icon--sm { width: 16px; height: 16px; }
 
-      #pulse-widget-root { --pw-radius-lg: 14px; --pw-radius-md: 10px; --pw-radius-full: 9999px; font-size: 15px; }
+      #pulse-widget-root { --pw-radius-lg: 14px; --pw-radius-md: 10px; --pw-radius-full: 9999px; font-size: 15px; accent-color: var(--pw-composer); }
       #pulse-widget-root[data-pw-theme="light"] {
         --pw-bg-panel: #ffffff; --pw-bg-thread: #f8f7fa; --pw-bg-bubble-in: #ffffff; --pw-bg-bubble-out: #55175e;
         --pw-text: #1a1a1a; --pw-text-muted: #6b6578; --pw-text-on-brand: #ffffff;
         --pw-border: #e8e4ed; --pw-shadow: 0 4px 16px rgba(85, 23, 94, 0.08);
         --pw-form-bg: #ffffff; --pw-input-placeholder: #9b95a3;
-        --pw-focus-ring: color-mix(in srgb, var(--pw-primary) 20%, transparent);
+        --pw-focus-ring: color-mix(in srgb, var(--pw-composer) 20%, transparent);
       }
       #pulse-widget-root[data-pw-theme="dark"] {
         --pw-bg-panel: #201a26; --pw-bg-thread: #1c1722; --pw-bg-bubble-in: #2d2535; --pw-bg-bubble-out: #55175e;
         --pw-text: #e8e4ed; --pw-text-muted: #9b95a3; --pw-text-on-brand: #ffffff;
         --pw-border: #2d2535; --pw-shadow: 0 4px 20px rgba(0,0,0,0.4);
         --pw-form-bg: #241e2a; --pw-input-placeholder: #6b6578;
-        --pw-focus-ring: color-mix(in srgb, var(--pw-primary) 28%, transparent);
+        --pw-focus-ring: color-mix(in srgb, var(--pw-composer) 28%, transparent);
       }
 
       .pw-fab-wrap { position: absolute; bottom: 0; ${position}: 0; z-index: 2; }
@@ -268,12 +269,26 @@
         transition: background 0.15s, color 0.15s;
       }
       .pw-icon-btn:hover { background: var(--pw-bg-thread); color: var(--pw-text); }
+      .pw-icon-btn svg, .pw-icon-btn .pw-icon { display: block; width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
+      .pw-sound { line-height: 0; }
+      .pw-icon--xs { width: 10px !important; height: 10px !important; }
+      .pw-theme-dual { display: inline-flex; align-items: center; justify-content: center; gap: 0; width: 20px; height: 20px; }
 
-      .pw-theme-toggle { font-size: 10px; font-weight: 600; padding: 0 8px; border-radius: 999px; }
       .pw-sla {
-        padding: 10px 16px; flex-shrink: 0; border-bottom: 1px solid var(--pw-border);
-        background: color-mix(in srgb, var(--pw-primary) 7%, var(--pw-bg-panel));
+        padding: 10px 12px 10px 16px; flex-shrink: 0; border-bottom: 1px solid var(--pw-border);
+        background: color-mix(in srgb, var(--pw-composer) 7%, var(--pw-bg-panel));
       }
+      .pw-sla--dismissed { display: none !important; }
+      .pw-sla__row { display: flex; align-items: flex-start; gap: 6px; }
+      .pw-sla__copy { flex: 1; min-width: 0; }
+      .pw-sla__close {
+        width: 32px; height: 32px; margin: -2px -4px 0 0; padding: 0; flex-shrink: 0; border: 1px solid transparent;
+        background: transparent; border-radius: var(--pw-radius-full); color: var(--pw-text-muted);
+        display: flex; align-items: center; justify-content: center; cursor: pointer; line-height: 0;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+      }
+      .pw-sla__close:hover { background: color-mix(in srgb, var(--pw-text) 6%, var(--pw-bg-panel)); color: var(--pw-text); border-color: var(--pw-border); }
+      .pw-sla__close:focus-visible { outline: 2px solid var(--pw-composer); outline-offset: 1px; }
       .pw-sla__main { font-size: 12.5px; font-weight: 600; color: var(--pw-text); line-height: 1.45; margin: 0; }
       .pw-sla__note { font-size: 11.5px; color: var(--pw-text-muted); line-height: 1.45; margin: 8px 0 0; }
       .pw-msgs { flex: 1; overflow-y: auto; padding: 16px; background: var(--pw-bg-thread);
@@ -303,8 +318,11 @@
       .pw-onboarding p { margin: 0 0 12px 0; }
       .pw-onboarding label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
       .pw-onboarding input { width: 100%; padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--pw-border);
-        border-radius: 8px; font-size: 14px; background: var(--pw-bg-panel); color: var(--pw-text); }
-      .pw-onboarding button { padding: 10px 20px; background: var(--pw-primary); color: var(--pw-on-primary);
+        border-radius: 8px; font-size: 14px; background: var(--pw-bg-panel); color: var(--pw-text);
+        outline: none; accent-color: var(--pw-composer); }
+      .pw-onboarding input:focus-visible { border-color: color-mix(in srgb, var(--pw-composer) 50%, var(--pw-border));
+        box-shadow: 0 0 0 3px var(--pw-composer-ring); }
+      .pw-onboarding button { padding: 10px 20px; background: var(--pw-composer); color: #ffffff;
         border: none; border-radius: var(--pw-radius-md); font-weight: 600; font-size: 14px; cursor: pointer; }
       .pw-form-container { background: var(--pw-bg-panel); padding: 12px 14px; border-top: 1px solid var(--pw-border);
         box-shadow: 0 -2px 10px rgba(0,0,0,0.04); flex-shrink: 0; }
@@ -312,16 +330,20 @@
       .pw-typing { font-size: 12px; color: #9a5fa8; margin-bottom: 6px; min-height: 18px; }
       .pw-form { display: flex; gap: 8px; align-items: flex-end; background: var(--pw-form-bg);
         border: 1px solid var(--pw-border); padding: 6px; border-radius: var(--pw-radius-md); }
-      .pw-form:focus-within { border-color: color-mix(in srgb, var(--pw-primary) 45%, var(--pw-border));
-        box-shadow: 0 0 0 3px var(--pw-focus-ring); }
+      .pw-form:focus-within { border-color: color-mix(in srgb, var(--pw-composer) 45%, var(--pw-border));
+        box-shadow: 0 0 0 3px var(--pw-composer-ring); }
       .pw-input { flex: 1; resize: none; min-height: 24px; max-height: 120px; padding: 8px 10px; border: none; background: transparent;
-        font-size: 14px; color: var(--pw-text); line-height: 1.4; }
+        font-size: 14px; color: var(--pw-text); line-height: 1.4; outline: none; -webkit-tap-highlight-color: transparent;
+        caret-color: var(--pw-composer); }
       .pw-input::placeholder { color: var(--pw-input-placeholder); }
       .pw-send { width: 36px; height: 36px; border: none; border-radius: var(--pw-radius-full);
-        background: var(--pw-primary); color: var(--pw-on-primary); display: flex; align-items: center; justify-content: center;
-        transition: opacity 0.2s, transform 0.15s; flex-shrink: 0; }
+        background: var(--pw-composer); color: #ffffff; display: flex; align-items: center; justify-content: center;
+        transition: opacity 0.2s, transform 0.15s; flex-shrink: 0; line-height: 0; }
       .pw-send:hover { transform: scale(1.04); }
       .pw-send[disabled] { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .pw-send:focus, .pw-send:focus-visible { outline: none; box-shadow: none; }
+      .pw-form:focus-within .pw-send:focus-visible { box-shadow: 0 0 0 2px var(--pw-bg-panel), 0 0 0 4px var(--pw-composer); }
+      .pw-icon-btn:focus, .pw-icon-btn:focus-visible { outline: 2px solid var(--pw-composer); outline-offset: 1px; }
 
       @media (max-width: 640px) {
         :host { bottom: 0 !important; left: 0 !important; right: 0 !important; top: 0 !important; pointer-events: none; width: 100%; height: 100%; }
@@ -360,21 +382,26 @@
             </div>
           </div>
           <div class="pw-head-actions">
-            <button class="pw-icon-btn pw-theme-toggle" type="button" data-pw-theme-cycle title="Тема" aria-label="Сменить тему">А</button>
+            <button class="pw-icon-btn pw-theme-toggle" type="button" data-pw-theme-cycle title="Смена темы" aria-label="Сменить тему"></button>
             <button class="pw-icon-btn pw-sound" type="button" aria-label="Звук" title="Звук уведомлений"></button>
-            <button class="pw-icon-btn pw-close" type="button" aria-label="Закрыть">${closeIcon}</button>
+            <button class="pw-icon-btn pw-close" type="button" aria-label="Закрыть"></button>
           </div>
         </header>
-        <div class="pw-sla" role="region" aria-label="Сроки ответа и уведомления">
-          <p class="pw-sla__main">Время ожидания: ${sla1}</p>
-          <p class="pw-sla__note">${sla2}</p>
+        <div class="pw-sla" id="pw-sla" role="region" aria-label="Сроки ответа и уведомления">
+          <div class="pw-sla__row">
+            <div class="pw-sla__copy">
+              <p class="pw-sla__main">Время ожидания: ${sla1}</p>
+              <p class="pw-sla__note">${sla2}</p>
+            </div>
+            <button type="button" class="pw-sla__close" data-pw-sla-close aria-label="Скрыть подсказку" title="Скрыть"></button>
+          </div>
         </div>
         <div class="pw-msgs"></div>
         <div class="pw-form-container">
             <div class="pw-status">Готов к подключению</div>
             <form class="pw-form">
             <textarea class="pw-input" placeholder="Напишите сообщение…" rows="1"></textarea>
-            <button class="pw-send" type="submit" disabled aria-label="Отправить">${sendIcon}</button>
+            <button class="pw-send" type="submit" disabled aria-label="Отправить"></button>
             </form>
         </div>
       </section>
@@ -398,6 +425,84 @@
     const form = root.querySelector('.pw-form');
     const input = root.querySelector('.pw-input');
     const sendBtn = root.querySelector('.pw-send');
+    const slaEl = root.querySelector('#pw-sla');
+    const slaCloseBtn = root.querySelector('[data-pw-sla-close]');
+
+    const iconsBase = apiBase + '/widget/icons/';
+    const iconFileCache = {};
+    let svgSend = null;
+    let svgPanelClose = null;
+    let svgVolOn = null;
+    let svgVolOff = null;
+    let svgSun = null;
+    let svgMoon = null;
+    let svgSlaClose = null;
+
+    function fetchWidgetIconFile(filename) {
+        if (iconFileCache[filename] !== undefined) {
+            return Promise.resolve(iconFileCache[filename]);
+        }
+        return fetch(iconsBase + filename)
+            .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('icon')); })
+            .then(function (t) { iconFileCache[filename] = t; return t; })
+            .catch(function () { iconFileCache[filename] = null; return null; });
+    }
+    function svgWithClass(svg, extraClass) {
+        if (!svg) return '';
+        return svg.replace('<svg', '<svg class="pw-icon' + (extraClass ? ' ' + extraClass : '') + '" focusable="false" aria-hidden="true"');
+    }
+    function renderThemeButton() {
+        if (!themeBtn) return;
+        const themeTitles = { system: 'Как в системе', light: 'Светлая тема', dark: 'Тёмная тема' };
+        const modeLabel = themeTitles[themeMode] || themeTitles.system;
+        themeBtn.setAttribute('title', modeLabel);
+        themeBtn.setAttribute('aria-label', 'Сменить тему: ' + modeLabel);
+        if (themeMode === 'light' && svgSun) {
+            themeBtn.innerHTML = svgWithClass(svgSun);
+        } else if (themeMode === 'dark' && svgMoon) {
+            themeBtn.innerHTML = svgWithClass(svgMoon);
+        } else if (svgSun && svgMoon) {
+            themeBtn.innerHTML = '<span class="pw-theme-dual" aria-hidden="true">' + svgWithClass(svgSun, 'pw-icon--xs') + svgWithClass(svgMoon, 'pw-icon--xs') + '</span>';
+        }
+    }
+    function tryDismissSlaFromStorage() {
+        if (!slaEl) return;
+        try {
+            if (localStorage.getItem(slaDismissKey) === '1') {
+                slaEl.classList.add('pw-sla--dismissed');
+            }
+        } catch (e) { /* empty */ }
+    }
+    tryDismissSlaFromStorage();
+    if (slaCloseBtn && slaEl) {
+        slaCloseBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            slaEl.classList.add('pw-sla--dismissed');
+            try { localStorage.setItem(slaDismissKey, '1'); } catch (err) { /* empty */ }
+        });
+    }
+    Promise.all([
+        fetchWidgetIconFile('send.svg'),
+        fetchWidgetIconFile('close-outline.svg'),
+        fetchWidgetIconFile('volume-high-outline.svg'),
+        fetchWidgetIconFile('volume-mute-outline.svg'),
+        fetchWidgetIconFile('sunny-outline.svg'),
+        fetchWidgetIconFile('moon-outline.svg'),
+        fetchWidgetIconFile('x.svg')
+    ]).then(function (arr) {
+        svgSend = arr[0];
+        svgPanelClose = arr[1];
+        svgVolOn = arr[2];
+        svgVolOff = arr[3];
+        svgSun = arr[4];
+        svgMoon = arr[5];
+        svgSlaClose = arr[6];
+        if (sendBtn && svgSend) { sendBtn.innerHTML = svgWithClass(svgSend); }
+        if (closeBtn && svgPanelClose) { closeBtn.innerHTML = svgWithClass(svgPanelClose); }
+        if (slaCloseBtn && svgSlaClose) { slaCloseBtn.innerHTML = svgWithClass(svgSlaClose); }
+        renderThemeButton();
+        syncSoundButton();
+    });
 
     let chatToken = localStorage.getItem(chatTokenKey) || null;
     let chatId = localStorage.getItem(chatIdKey) || null;
@@ -448,7 +553,13 @@
     function syncSoundButton() {
         if (!soundBtn) return;
         const s = getWidgetSoundSettings();
-        soundBtn.innerHTML = s.enabled ? iconBellOn : iconBellOff;
+        if (s.enabled && svgVolOn) {
+            soundBtn.innerHTML = svgWithClass(svgVolOn);
+        } else if (!s.enabled && svgVolOff) {
+            soundBtn.innerHTML = svgWithClass(svgVolOff);
+        } else {
+            soundBtn.innerHTML = '';
+        }
         soundBtn.title = s.enabled ? 'Звук включён' : 'Звук выключен';
     }
     syncSoundButton();
@@ -468,14 +579,9 @@
         themeMode = order[(i + 1) % order.length];
         try { localStorage.setItem(themeStorageKey, themeMode); } catch (e) { /* empty */ }
         applyPwTheme();
-        if (themeBtn) {
-            const labels = { system: 'Авто', light: 'Свет', dark: 'Тёмн' };
-            themeBtn.textContent = labels[themeMode] || 'Авто';
-        }
+        renderThemeButton();
     }
     if (themeBtn) {
-        const labels = { system: 'Авто', light: 'Свет', dark: 'Тёмн' };
-        themeBtn.textContent = labels[themeMode] || 'Авто';
         themeBtn.addEventListener('click', function (e) { e.stopPropagation(); cycleTheme(); });
     }
 
