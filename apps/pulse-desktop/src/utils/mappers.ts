@@ -63,6 +63,12 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
   const topic =
     typeof topicRaw === 'string' && topicRaw.trim() !== '' ? topicRaw.trim() : null
 
+  const sourceNameRaw = chat.source?.name
+  const sourceName =
+    typeof sourceNameRaw === 'string' && sourceNameRaw.trim() !== ''
+      ? sourceNameRaw.trim()
+      : undefined
+
   return {
     id: chat.id,
     initials,
@@ -77,6 +83,7 @@ export function mapChatToConversation(chat: ApiChat, activeId: number | null): C
     unreadCount,
     unread: unreadCount > 0,
     sourceId: chat.source_id,
+    ...(sourceName ? { sourceName } : {}),
     assignedTo: chat.assigned_to,
     assignee: chat.assignee ?? null,
     clientAvatarUrl,

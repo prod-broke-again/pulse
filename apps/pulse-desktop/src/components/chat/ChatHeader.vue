@@ -244,6 +244,14 @@ onBeforeUnmount(() => {
             {{ activeConversation.id }}
           </span>
           <span
+            v-if="activeConversation.sourceName"
+            class="meta-chip inline-flex min-w-0 max-w-full items-center sm:max-w-[min(280px,45vw)]"
+            :title="`Источник: ${activeConversation.sourceName}`"
+          >
+            <span class="shrink-0">Источник:&nbsp;</span>
+            <span class="min-w-0 flex-1 truncate">{{ activeConversation.sourceName }}</span>
+          </span>
+          <span
             v-if="activeConversation.department"
             class="meta-chip meta-chip-dept inline-flex min-w-0 max-w-full items-center gap-0.5 sm:max-w-[min(280px,45vw)]"
             :title="`Отдел: ${activeConversation.department}`"

@@ -17,6 +17,8 @@ export interface Conversation {
   unread?: boolean
   active?: boolean
   sourceId?: number
+  /** Название подключения/источника с бэка (source.name), для отображения в хедере. */
+  sourceName?: string
   assignedTo?: number | null
   assignee?: { id: number; name: string; avatar_url?: string | null } | null
   /** Аватар гостя из user_metadata.avatar_url */
