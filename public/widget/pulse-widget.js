@@ -257,7 +257,6 @@
       }
       .pw-head-brand { min-width: 0; }
       .pw-title { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; color: var(--pw-text); }
-      .pw-sub { font-size: 12.5px; color: var(--pw-text-muted); margin-top: 2px; }
       .pw-op-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
       .pw-op-row.pw-hidden { display: none; }
       .pw-op-avatar {
@@ -337,7 +336,8 @@
         border: none; border-radius: var(--pw-radius-md); font-weight: 600; font-size: 14px; cursor: pointer; }
       .pw-form-container { background: var(--pw-bg-panel); padding: 12px 14px; border-top: 1px solid var(--pw-border);
         box-shadow: 0 -2px 10px rgba(0,0,0,0.04); flex-shrink: 0; }
-      .pw-status { font-size: 12px; color: var(--pw-text-muted); margin-bottom: 10px; text-align: center; font-weight: 500; }
+      .pw-status { font-size: 12.5px; color: var(--pw-text-muted); margin-bottom: 10px; text-align: center; font-weight: 500; line-height: 1.45; max-width: 100%; }
+      .pw-status--empty { display: none; margin-bottom: 0; }
       .pw-typing { font-size: 12px; color: #9a5fa8; margin-bottom: 6px; min-height: 18px; }
       .pw-form { display: flex; gap: 8px; align-items: flex-end; background: var(--pw-form-bg);
         border: 1px solid var(--pw-border); padding: 6px; border-radius: var(--pw-radius-md); }
@@ -371,6 +371,13 @@
     }
     const sla1 = escHtml(config.responseSlaText);
     const sla2 = escHtml(config.closeTabNotificationText);
+    const sublineOnlineText = 'На связи';
+    const sublineOfflineShortText = 'Не в сети';
+    const genericOperatorLabel = 'Команда поддержки';
+    const offlinePresenceText =
+        typeof config.responseSlaText === 'string' && config.responseSlaText.trim()
+            ? config.responseSlaText.trim()
+            : 'Стараемся ответить в течение рабочего дня.';
 
     root.innerHTML = `
       <div class="pw-fab-wrap">
@@ -383,7 +390,6 @@
         <header class="pw-head">
           <div class="pw-head-brand">
             <div class="pw-title">${String(config.title).replace(/</g, '&lt;')}</div>
-            <div class="pw-sub">${String(config.subtitle).replace(/</g, '&lt;')}</div>
             <div class="pw-op-row pw-hidden" id="pw-op-row">
               <div class="pw-op-avatar" id="pw-op-avatar" aria-hidden="true">${iconUser}</div>
               <div class="pw-op-meta">
@@ -409,7 +415,7 @@
         </div>
         <div class="pw-msgs"></div>
         <div class="pw-form-container">
-            <div class="pw-status">Готов к подключению</div>
+            <div class="pw-status pw-status--empty" id="pw-status" aria-hidden="true"></div>
             <form class="pw-form">
             <textarea class="pw-input" placeholder="Напишите сообщение…" rows="1"></textarea>
             <button class="pw-send" type="submit" disabled aria-label="Отправить"></button>
@@ -503,6 +509,7 @@
         'Спасибо за ваше сообщение! Укажите, пожалуйста, имя для обращения. Почта по желанию — с неё удобнее не потерять ответ, если вы уйдёте с сайта; без email ответ останется в чате и будет доступен при следующем визите.';
     let lastModeratorName = null;
     let lastModeratorAvatar = null;
+    let lastPresenceIsOnline = null;
 
     function setOpen(open) {
         if (open) {
@@ -599,19 +606,47 @@
         updateTitleAndBadge();
     }
 
-    function setStatus(text) { if (status) status.textContent = text; }
+    function setStatus(text) {
+        if (!status) return;
+        const t = text == null ? '' : String(text);
+        status.textContent = t;
+        status.classList.toggle('pw-status--empty', t.trim() === '');
+        if (t.trim() === '') {
+            status.setAttribute('aria-hidden', 'true');
+        } else {
+            status.removeAttribute('aria-hidden');
+        }
+    }
+
+    function showGenericOperatorRow() {
+        if (!opName || !opAvatar) return;
+        if (lastModeratorName) return;
+        opName.textContent = genericOperatorLabel;
+        opAvatar.innerHTML = iconUser;
+    }
+
+    function applyOperatorSublineFromPresence() {
+        if (!opLine2) return;
+        if (operatorTypingTimeout) return;
+        opLine2.classList.remove('pw-typing');
+        if (lastPresenceIsOnline === true) {
+            opLine2.textContent = sublineOnlineText;
+        } else if (lastModeratorName) {
+            opLine2.textContent = sublineOfflineShortText;
+        } else {
+            opLine2.textContent = offlinePresenceText;
+        }
+    }
 
     function setOperatorPresence(isOnline) {
-        if (!status) return;
-        if (isOnline === true) {
-            setStatus('Оператор на связи');
-        } else {
-            setStatus('Сейчас операторов нет в сети — ответим, как только появимся');
+        lastPresenceIsOnline = isOnline === true;
+        if (!opRow) return;
+        opRow.classList.remove('pw-hidden');
+        if (!lastModeratorName) {
+            showGenericOperatorRow();
         }
-        if (opLine2 && !operatorTypingTimeout) {
-            if (isOnline === true) opLine2.textContent = 'На связи';
-            else if (isOnline === false) opLine2.textContent = 'Офлайн';
-        }
+        applyOperatorSublineFromPresence();
+        setStatus('');
     }
 
     function updateOperatorHeader(name, avatarUrl) {
@@ -629,25 +664,24 @@
             opAvatar.textContent = initialsFromName(name);
         }
         if (opLine2 && !operatorTypingTimeout) {
-            opLine2.classList.remove('pw-typing');
+            applyOperatorSublineFromPresence();
         }
     }
 
     function showOperatorTyping(senderName) {
-        if (opLine2 && opName && opRow) {
-            if (!lastModeratorName && senderName) {
-                updateOperatorHeader(senderName, null);
-            }
-            if (opLine2) {
-                opLine2.classList.add('pw-typing');
-                opLine2.textContent = (senderName || lastModeratorName || 'Оператор') + ' печатает…';
-            }
-            if (operatorTypingTimeout) clearTimeout(operatorTypingTimeout);
-            operatorTypingTimeout = setTimeout(function () {
-                operatorTypingTimeout = null;
-                if (opLine2) { opLine2.classList.remove('pw-typing'); opLine2.textContent = ''; }
-            }, 4000);
+        if (!opLine2 || !opName || !opRow) return;
+        opRow.classList.remove('pw-hidden');
+        if (!lastModeratorName && senderName) {
+            updateOperatorHeader(senderName, null);
         }
+        opLine2.classList.add('pw-typing');
+        opLine2.textContent = (senderName || lastModeratorName || 'Оператор') + ' печатает…';
+        if (operatorTypingTimeout) clearTimeout(operatorTypingTimeout);
+        operatorTypingTimeout = setTimeout(function () {
+            operatorTypingTimeout = null;
+            if (opLine2) { opLine2.classList.remove('pw-typing'); }
+            applyOperatorSublineFromPresence();
+        }, 4000);
     }
 
     function sendTyping() {
@@ -819,10 +853,12 @@
         if (existingGuest.name) guestOnboardingCompleted = true;
         sendBtn.disabled = !chatToken;
         if (chatToken) {
-            if (sessionResponse && typeof sessionResponse.is_online === 'boolean') {
-                setOperatorPresence(sessionResponse.is_online);
-            } else {
-                setStatus('Оператор на связи');
+            if (sessionResponse) {
+                if (typeof sessionResponse.is_online === 'boolean') {
+                    setOperatorPresence(sessionResponse.is_online);
+                } else {
+                    setOperatorPresence(false);
+                }
             }
         } else {
             setStatus('Ошибка подключения');
@@ -831,9 +867,15 @@
 
     async function loadMessages() {
         if (!chatToken) return;
+        lastModeratorName = null;
+        lastModeratorAvatar = null;
+        if (opRow) {
+            opRow.classList.add('pw-hidden');
+        }
         const result = await request('/messages?chat_token=' + encodeURIComponent(chatToken) + '&limit=100');
         msgs.innerHTML = '';
         lastMessageId = 0;
+        lastPresenceIsOnline = result.is_online === true;
         for (const message of (result.messages || [])) {
             renderMessage({
                 id: message.id,
@@ -845,11 +887,7 @@
                 sender_avatar_url: message.sender_avatar_url
             });
         }
-        if (typeof result.is_online === 'boolean') {
-            setOperatorPresence(result.is_online);
-        } else if (!result.messages || result.messages.length === 0) {
-            setStatus('Напишите нам, мы скоро ответим');
-        }
+        setOperatorPresence(lastPresenceIsOnline);
     }
 
     async function pollMessages() {

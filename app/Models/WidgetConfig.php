@@ -22,6 +22,9 @@ class WidgetConfig extends Model
 {
     public const string CACHE_KEY_PREFIX = 'widget_config_ui:';
 
+    /** Увеличивать при смене копии/дефолтов в defaults(), иначе старый JSON остаётся в Cache до истечения TTL. */
+    public const int UI_CONFIG_CACHE_VERSION = 2;
+
     public const int CACHE_TTL_SECONDS = 3600;
 
     protected $table = 'widget_configs';
@@ -47,17 +50,17 @@ class WidgetConfig extends Model
     protected static function booted(): void
     {
         static::saved(function (WidgetConfig $config): void {
-            Cache::forget(self::CACHE_KEY_PREFIX . $config->source_identifier);
+            Cache::forget(self::cacheKey($config->source_identifier));
         });
 
         static::deleted(function (WidgetConfig $config): void {
-            Cache::forget(self::CACHE_KEY_PREFIX . $config->source_identifier);
+            Cache::forget(self::cacheKey($config->source_identifier));
         });
     }
 
     public static function cacheKey(string $sourceIdentifier): string
     {
-        return self::CACHE_KEY_PREFIX . $sourceIdentifier;
+        return self::CACHE_KEY_PREFIX . $sourceIdentifier . ':v' . self::UI_CONFIG_CACHE_VERSION;
     }
 
     /**
