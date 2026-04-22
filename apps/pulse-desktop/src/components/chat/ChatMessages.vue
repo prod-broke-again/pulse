@@ -33,6 +33,9 @@ const props = defineProps<{
   moderatorName?: string
   chatId?: number | null
   clientTyping?: boolean
+  /** Другой модератор (или вы) печатает в этом чате */
+  moderatorTyping?: boolean
+  moderatorTypingName?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -792,6 +795,13 @@ defineExpose({
         style="color: var(--color-brand-200)"
       >
         Клиент печатает…
+      </p>
+      <p
+        v-if="moderatorTyping"
+        class="px-1 pt-2 text-[11px] font-medium"
+        style="color: var(--text-secondary)"
+      >
+        {{ (moderatorTypingName || 'Оператор') + ' печатает…' }}
       </p>
       </div>
     </div>

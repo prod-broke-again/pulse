@@ -13,7 +13,7 @@ import type { ChatMuteMode } from '../api/chats'
 import { api } from '../api/client'
 import type { ApiChat, ChatListFilters, ChatResponse, TabCountsData } from '../types/dto/chat.types'
 import type { ApiUser } from '../types/dto/auth.types'
-import type { NewChatMessagePayload } from '../lib/realtime'
+import type { ChatGuestUpdatedPayload, NewChatMessagePayload } from '../lib/realtime'
 import { pendingListFiltersFromPrefs } from '../lib/inboxFilterPrefs'
 
 export const useChatStore = defineStore('chat', () => {
@@ -277,6 +277,31 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** Гость обновил имя/email (веб-виджет) — мгновенно подтянуть в инбокс. */
+  function applyChatGuestFromRealtime(payload: ChatGuestUpdatedPayload): void {
+    const index = chats.value.findIndex((c) => c.id === payload.chatId)
+    if (index === -1) {
+      scheduleListRefreshFromRealtime(400, { silent: true })
+      return
+    }
+    const row = chats.value[index]
+    const prevMeta = (row.user_metadata ?? {}) as Record<string, unknown>
+    const nextMeta: Record<string, unknown> = { ...prevMeta }
+    if (payload.user_metadata.name != null) {
+      nextMeta.name = payload.user_metadata.name
+    }
+    if (payload.user_metadata.email != null) {
+      nextMeta.email = payload.user_metadata.email
+    }
+    const next: ApiChat = {
+      ...row,
+      user_metadata: nextMeta,
+    }
+    const copy = [...chats.value]
+    copy[index] = next
+    chats.value = copy
+  }
+
   /** Тема чата от AI после GenerateChatTopicJob (WS: ChatTopicGenerated). */
   function applyChatTopicFromRealtime(chatId: number, topic: string): void {
     const t = topic.trim()
@@ -319,5 +344,6 @@ export const useChatStore = defineStore('chat', () => {
     changeDepartment,
     muteChat,
     applyChatTopicFromRealtime,
+    applyChatGuestFromRealtime,
   }
 })

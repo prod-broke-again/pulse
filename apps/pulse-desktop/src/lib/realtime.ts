@@ -17,6 +17,9 @@ export type NewChatMessagePayload = {
   text: string
   sender_type: string
   sender_id: number | null
+  /** Имя/аватар модератора (веб-виджет, WS). */
+  sender_name?: string | null
+  sender_avatar_url?: string | null
   attachments?: Array<Record<string, unknown>>
   pending_attachments?: PendingAttachmentMeta[]
   reply_to?: { id: number | null; text: string; sender_type: string } | null
@@ -41,8 +44,14 @@ export type MessageReadPayload = {
 
 export type TypingPayload = {
   chat_id?: number
+  chatId?: number
   sender_name?: string | null
   sender_type?: string
+}
+
+export type ChatGuestUpdatedPayload = {
+  chatId: number
+  user_metadata: { name?: string | null; email?: string | null }
 }
 
 export type ChatAssignedPayload = {
@@ -102,6 +111,7 @@ export type ChatChannelHandlers = {
   onChatMessageUpdated?: (payload: ChatMessageUpdatedPayload) => void
   onMessageRead?: (payload: MessageReadPayload) => void
   onTyping?: (payload: TypingPayload) => void
+  onChatGuestUpdated?: (payload: ChatGuestUpdatedPayload) => void
   onChatAssigned?: (payload: ChatAssignedPayload) => void
   onChatTopicGenerated?: (payload: ChatTopicGeneratedPayload) => void
 }
@@ -177,6 +187,26 @@ export function subscribeChatChannel(chatId: number, handlers: ChatChannelHandle
   )
   ch.listen('.App\\Events\\MessageRead', (e: MessageReadPayload) => handlers.onMessageRead?.(e))
   ch.listen('typing', (e: TypingPayload) => handlers.onTyping?.(e))
+  ch.listen('.App\\Events\\ChatGuestUpdated', (e: Record<string, unknown>) => {
+    const chatId =
+      typeof e.chatId === 'number'
+        ? e.chatId
+        : typeof e.chat_id === 'number'
+          ? e.chat_id
+          : null
+    const userMeta = e.user_metadata
+    if (chatId === null || userMeta === null || typeof userMeta !== 'object') {
+      return
+    }
+    const um = userMeta as Record<string, unknown>
+    handlers.onChatGuestUpdated?.({
+      chatId,
+      user_metadata: {
+        name: typeof um.name === 'string' ? um.name : null,
+        email: typeof um.email === 'string' ? um.email : null,
+      },
+    })
+  })
   ch.listen('.App\\Events\\ChatAssigned', (e: unknown) => {
     const p = normalizeChatAssignedPayload(e)
     if (p) {

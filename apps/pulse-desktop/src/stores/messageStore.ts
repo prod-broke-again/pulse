@@ -74,6 +74,7 @@ async function notifyIncomingDesktop(
   }
   const meta = (row?.user_metadata ?? {}) as Record<string, unknown>
   const name =
+    (typeof meta.name === 'string' && meta.name.trim() !== '' && meta.name) ||
     (typeof meta.first_name === 'string' && meta.first_name) ||
     (typeof meta.username === 'string' && meta.username) ||
     row?.external_user_id ||
@@ -107,6 +108,9 @@ export const useMessageStore = defineStore('message', () => {
   const isSending = ref(false)
   const loadError = ref<string | null>(null)
   const clientTyping = ref(false)
+  const moderatorTyping = ref(false)
+  const moderatorTypingName = ref<string | null>(null)
+  let moderatorTypingTimer: ReturnType<typeof setTimeout> | null = null
   /** Активный открытый чат (для подстановки после outbox). */
   let activeThreadChatId: number | null = null
 
@@ -163,11 +167,17 @@ export const useMessageStore = defineStore('message', () => {
       clearTimeout(typingClearTimer)
       typingClearTimer = null
     }
+    if (moderatorTypingTimer != null) {
+      clearTimeout(moderatorTypingTimer)
+      moderatorTypingTimer = null
+    }
     if (readNearBottomTimer != null) {
       clearTimeout(readNearBottomTimer)
       readNearBottomTimer = null
     }
     clientTyping.value = false
+    moderatorTyping.value = false
+    moderatorTypingName.value = null
   }
 
   function subscribeRealtime(chatId: number): void {
@@ -311,7 +321,7 @@ export const useMessageStore = defineStore('message', () => {
         }
         const readIds = new Set(payload.messageIds)
         messages.value = messages.value.map((m) =>
-          readIds.has(m.id) && m.sender_type === 'client' ? { ...m, is_read: true } : m,
+          readIds.has(m.id) ? { ...m, is_read: true } : m,
         )
         void persistThreadCache(chatId)
         chat.scheduleListRefreshFromRealtime(600, { silent: true })
@@ -319,7 +329,29 @@ export const useMessageStore = defineStore('message', () => {
       onTyping: (payload) => {
         if (payload.sender_type === 'moderator') {
           clientTyping.value = false
+          moderatorTyping.value = true
+          const raw = payload.sender_name
+          moderatorTypingName.value = typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null
+          if (moderatorTypingTimer != null) {
+            clearTimeout(moderatorTypingTimer)
+          }
+          moderatorTypingTimer = setTimeout(() => {
+            moderatorTypingTimer = null
+            moderatorTyping.value = false
+            moderatorTypingName.value = null
+          }, 4000)
+          if (typingClearTimer != null) {
+            clearTimeout(typingClearTimer)
+            typingClearTimer = null
+          }
           return
+        }
+        /* client typing (виджет / сайт) */
+        moderatorTyping.value = false
+        moderatorTypingName.value = null
+        if (moderatorTypingTimer != null) {
+          clearTimeout(moderatorTypingTimer)
+          moderatorTypingTimer = null
         }
         clientTyping.value = true
         if (typingClearTimer != null) {
@@ -329,6 +361,12 @@ export const useMessageStore = defineStore('message', () => {
           typingClearTimer = null
           clientTyping.value = false
         }, 4000)
+      },
+      onChatGuestUpdated: (payload) => {
+        if (payload.chatId !== chatId) {
+          return
+        }
+        void chat.applyChatGuestFromRealtime(payload)
       },
       onChatAssigned: (payload) => {
         if (payload.chatId !== chatId) {
@@ -527,6 +565,8 @@ export const useMessageStore = defineStore('message', () => {
     isSending,
     loadError,
     clientTyping,
+    moderatorTyping,
+    moderatorTypingName,
     loadMessages,
     sendMessage,
     clearMessages,

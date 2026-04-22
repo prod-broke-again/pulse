@@ -798,6 +798,8 @@ async function onAiInsertComposerText(text: string): Promise<void> {
                 :moderator-name="authStore.user?.name?.trim() || 'Модератор'"
                 :chat-id="chatStore.selectedChatId"
                 :client-typing="messageStore.clientTyping"
+                :moderator-typing="messageStore.moderatorTyping"
+                :moderator-typing-name="messageStore.moderatorTypingName"
                 :is-loading="messageStore.isLoading"
                 :can-load-more="canLoadMoreMessages"
                 @load-more="loadMoreMessages"

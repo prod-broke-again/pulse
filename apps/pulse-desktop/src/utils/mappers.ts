@@ -31,7 +31,11 @@ function mapWsAttachmentsToMessageItemAttachments(
 
 export function mapChatToConversation(chat: ApiChat, activeId: number | null): Conversation {
   const metadata = chat.user_metadata ?? {}
-  const name = (metadata.first_name as string) || (metadata.username as string) || chat.external_user_id
+  const name =
+    (typeof metadata.name === 'string' && metadata.name.trim() !== '' ? metadata.name : '') ||
+    (metadata.first_name as string) ||
+    (metadata.username as string) ||
+    chat.external_user_id
   const initials = name
     .split(' ')
     .map((w: string) => w.charAt(0).toUpperCase())
