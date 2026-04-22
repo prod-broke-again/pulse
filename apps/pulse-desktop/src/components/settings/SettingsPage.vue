@@ -132,6 +132,11 @@ function inboxChannelLabel(t: string): string {
   return INBOX_CHANNEL_LABELS[t] ?? t
 }
 
+function departmentLabel(d: { name: string; source_name?: string | null }): string {
+  const src = d.source_name?.trim()
+  return src ? `${d.name} — ${src}` : d.name
+}
+
 const localPrefs = ref(mergeNotificationSoundPrefs(null))
 const soundSaveBusy = ref(false)
 const hasCustomSound = ref(!!getLocalCustomSoundDataUrl())
@@ -659,7 +664,7 @@ function clearCustomSound(): void {
                   :checked="prefEnabledDepartments.includes(d.id)"
                   @change="prefEnabledDepartments = inboxToggleId(prefEnabledDepartments, d.id)"
                 >
-                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-dep-' + d.id">{{ d.name }}</label>
+                <label class="cursor-pointer" style="color: var(--text-secondary)" :for="'set-dep-' + d.id">{{ departmentLabel(d) }}</label>
               </li>
             </ul>
             <p v-else class="text-xs" style="color: var(--text-muted)">

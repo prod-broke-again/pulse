@@ -9,6 +9,8 @@ export interface DepartmentOption {
 
 export interface DepartmentWithSource extends DepartmentOption {
   source_id: number
+  /** Название источника (интеграции); одна рубрика может повторяться на разных источниках. */
+  source_name?: string | null
 }
 
 export async function fetchDepartments(sourceId: number): Promise<DepartmentOption[]> {

@@ -65,35 +65,51 @@ final class DepartmentController extends Controller
         $user = auth()->user();
 
         $query = DepartmentModel::query()
-            ->where('is_active', true)
-            ->orderBy('name');
+            ->from('departments')
+            ->join('sources', 'sources.id', '=', 'departments.source_id')
+            ->where('departments.is_active', true)
+            ->orderBy('sources.name')
+            ->orderBy('departments.name')
+            ->select([
+                'departments.id',
+                'departments.name',
+                'departments.slug',
+                'departments.icon',
+                'departments.source_id',
+            ])
+            ->addSelect(['sources.name as source_name']);
 
         if ($user->isAdmin()) {
-            $rows = $query->get(['id', 'name', 'slug', 'icon', 'source_id']);
+            $rows = $query->get();
         } else {
             $sourceIds = $user->sources()->pluck('id')->all();
             if ($sourceIds === []) {
                 return response()->json(['data' => []]);
             }
 
-            $query->whereIn('source_id', $sourceIds);
+            $query->whereIn('departments.source_id', $sourceIds);
 
             $pivotDeptIds = $user->departments()->pluck('departments.id')->all();
             if ($pivotDeptIds !== []) {
-                $query->whereIn('id', array_map(static fn ($id): int => (int) $id, $pivotDeptIds));
+                $query->whereIn('departments.id', array_map(static fn ($id): int => (int) $id, $pivotDeptIds));
             }
 
-            $rows = $query->get(['id', 'name', 'slug', 'icon', 'source_id']);
+            $rows = $query->get();
         }
 
         return response()->json([
-            'data' => $rows->map(static fn (DepartmentModel $d) => [
-                'id' => $d->id,
-                'name' => $d->name,
-                'slug' => $d->slug,
-                'icon' => DepartmentIcons::normalize($d->icon),
-                'source_id' => $d->source_id,
-            ])->values()->all(),
+            'data' => $rows->map(static function (DepartmentModel $d): array {
+                $sourceName = $d->getAttribute('source_name');
+
+                return [
+                    'id' => $d->id,
+                    'name' => $d->name,
+                    'slug' => $d->slug,
+                    'icon' => DepartmentIcons::normalize($d->icon),
+                    'source_id' => $d->source_id,
+                    'source_name' => is_string($sourceName) ? $sourceName : null,
+                ];
+            })->values()->all(),
         ]);
     }
 }
