@@ -20,6 +20,22 @@ php artisan migrate
 
 ## 2. Настройка Pulse (`.env`)
 
+### CORS (обязательно для сторонних сайтов)
+
+Браузер на `kukushechka.ru` / `appp-psy.ru` обращается к `pulse.appp-psy.ru` — в ответе должны быть заголовки CORS. В [`config/cors.php`](/var/www/pulse/config/cors.php) уже перечислены основные публичные origin’ы; при необходимости добавьте в `.env` Pulse:
+
+`CORS_ALLOWED_ORIGINS=https://example.com`
+
+После смены: `php artisan config:cache` (или `config:clear`).
+
+### Статика виджета (`/widget/icons/*`)
+
+[`config/cors.php`](/var/www/pulse/config/cors.php) задаёт CORS только для маршрутов приложения (например `api/*`). Файлы из `public/widget/icons/` обычно отдаёт **веб‑сервер** напрямую, минуя Laravel, поэтому для них заголовки нужно выставить **в nginx** (или на CDN), если иконки когда‑либо запрашиваются через cross-origin `fetch`.
+
+В репозитории есть пример: [`docker/nginx/pulse.appp-psy.ru.conf`](/var/www/pulse/docker/nginx/pulse.appp-psy.ru.conf) — блок `location ^~ /widget/icons/` с `Access-Control-Allow-Origin`. Скопируйте его в продакшен-конфиг и перезагрузите nginx.
+
+Текущий [`public/widget/pulse-widget.js`](/var/www/pulse/public/widget/pulse-widget.js) встраивает SVG иконок в скрипт, так что браузер не делает отдельных запросов к `/widget/icons/` ради UI; заголовки на статике остаются полезны для прямых обращений к файлам и для совместимости.
+
 ### Разрешённые origin’ы для виджета (обязательно)
 
 В `config/widget.php` список берётся из `WIDGET_ALLOWED_ORIGINS` (через запятую, без пробелов). Укажите **публичный URL самого Pulse** и **origin каждого сайта**, куда встраивается виджет, например:

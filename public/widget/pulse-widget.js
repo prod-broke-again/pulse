@@ -20,6 +20,16 @@
     const PULSE_COMPOSER_BRAND = '#55175e';
     const readIconSvg = '<span class="pw-read-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg></span>';
     const iconUser = '<svg class="pw-icon pw-icon--sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+    /** Встроенные копии public/widget/icons/*.svg — без cross-origin fetch (CORS на статике не нужен для UI). */
+    const PW_ICONS = {
+        'send.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
+        'close-outline.svg': '<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M368 368L144 144M368 144L144 368"/></svg>',
+        'volume-high-outline.svg': '<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path d="M126 192H56a8 8 0 00-8 8v112a8 8 0 008 8h69.65a15.93 15.93 0 0110.14 3.54l91.47 74.89A8 8 0 00240 392V120a8 8 0 00-12.74-6.43l-91.47 74.89A15 15 0 01126 192zM320 320c9.74-19.38 16-40.84 16-64 0-23.48-6-44.42-16-64M368 368c19.48-33.92 32-64.06 32-112s-12-77.74-32-112M416 416c30-46 48-91.43 48-160s-18-113-48-160" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32"/></svg>',
+        'volume-mute-outline.svg': '<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="32" d="M416 432L64 80"/><path d="M224 136.92v33.8a4 4 0 001.17 2.82l24 24a4 4 0 006.83-2.82v-74.15a24.53 24.53 0 00-12.67-21.72 23.91 23.91 0 00-25.55 1.83 8.27 8.27 0 00-.66.51l-31.94 26.15a4 4 0 00-.29 5.92l17.05 17.06a4 4 0 005.37.26zM224 375.08l-78.07-63.92a32 32 0 00-20.28-7.16H64v-96h50.72a4 4 0 002.82-6.83l-24-24a4 4 0 00-2.82-1.17H56a24 24 0 00-24 24v112a24 24 0 0024 24h69.76l91.36 74.8a8.27 8.27 0 00.66.51 23.93 23.93 0 0025.85 1.69A24.49 24.49 0 00256 391.45v-50.17a4 4 0 00-1.17-2.82l-24-24a4 4 0 00-6.83 2.82zM125.82 336zM352 256c0-24.56-5.81-47.88-17.75-71.27a16 16 0 00-28.5 14.54C315.34 218.06 320 236.62 320 256q0 4-.31 8.13a8 8 0 002.32 6.25l19.66 19.67a4 4 0 006.75-2A146.89 146.89 0 00352 256zM416 256c0-51.19-13.08-83.89-34.18-120.06a16 16 0 00-27.64 16.12C373.07 184.44 384 211.83 384 256c0 23.83-3.29 42.88-9.37 60.65a8 8 0 001.9 8.26l16.77 16.76a4 4 0 006.52-1.27C410.09 315.88 416 289.91 416 256z"/><path d="M480 256c0-74.26-20.19-121.11-50.51-168.61a16 16 0 10-27 17.22C429.82 147.38 448 189.5 448 256c0 47.45-8.9 82.12-23.59 113a4 4 0 00.77 4.55L443 391.39a4 4 0 006.4-1C470.88 348.22 480 307 480 256z"/></svg>',
+        'sunny-outline.svg': '<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="32" d="M256 48v48M256 416v48M403.08 108.92l-33.94 33.94M142.86 369.14l-33.94 33.94M464 256h-48M96 256H48M403.08 403.08l-33.94-33.94M142.86 142.86l-33.94-33.94"/><circle cx="256" cy="256" r="80" fill="none" stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="32"/></svg>',
+        'moon-outline.svg': '<svg xmlns="http://www.w3.org/2000/svg" class="ionicon" viewBox="0 0 512 512"><path d="M160 136c0-30.62 4.51-61.61 16-88C99.57 81.27 48 159.32 48 248c0 119.29 96.71 216 216 216 88.68 0 166.73-51.57 200-128-26.39 11.49-57.38 16-88 16-119.29 0-216-96.71-216-216z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32"/></svg>',
+        'x.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+    };
 
     const defaultResponseSlaText = 'Стараемся ответить в течение 2 часов в рабочее время.';
     const defaultCloseTabNotificationText = 'Если закроете вкладку: при ответе оператора вы услышите сигнал, увидите число в заголовке страницы и, при разрешённых уведомлениях браузера, всплывающее уведомление. Если оставили email в анкете — дублируем ответ письмом.';
@@ -428,25 +438,14 @@
     const slaEl = root.querySelector('#pw-sla');
     const slaCloseBtn = root.querySelector('[data-pw-sla-close]');
 
-    const iconsBase = apiBase + '/widget/icons/';
-    const iconFileCache = {};
-    let svgSend = null;
-    let svgPanelClose = null;
-    let svgVolOn = null;
-    let svgVolOff = null;
-    let svgSun = null;
-    let svgMoon = null;
-    let svgSlaClose = null;
+    const svgSend = PW_ICONS['send.svg'];
+    const svgPanelClose = PW_ICONS['close-outline.svg'];
+    const svgVolOn = PW_ICONS['volume-high-outline.svg'];
+    const svgVolOff = PW_ICONS['volume-mute-outline.svg'];
+    const svgSun = PW_ICONS['sunny-outline.svg'];
+    const svgMoon = PW_ICONS['moon-outline.svg'];
+    const svgSlaClose = PW_ICONS['x.svg'];
 
-    function fetchWidgetIconFile(filename) {
-        if (iconFileCache[filename] !== undefined) {
-            return Promise.resolve(iconFileCache[filename]);
-        }
-        return fetch(iconsBase + filename)
-            .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('icon')); })
-            .then(function (t) { iconFileCache[filename] = t; return t; })
-            .catch(function () { iconFileCache[filename] = null; return null; });
-    }
     function svgWithClass(svg, extraClass) {
         if (!svg) return '';
         return svg.replace('<svg', '<svg class="pw-icon' + (extraClass ? ' ' + extraClass : '') + '" focusable="false" aria-hidden="true"');
@@ -481,28 +480,11 @@
             try { localStorage.setItem(slaDismissKey, '1'); } catch (err) { /* empty */ }
         });
     }
-    Promise.all([
-        fetchWidgetIconFile('send.svg'),
-        fetchWidgetIconFile('close-outline.svg'),
-        fetchWidgetIconFile('volume-high-outline.svg'),
-        fetchWidgetIconFile('volume-mute-outline.svg'),
-        fetchWidgetIconFile('sunny-outline.svg'),
-        fetchWidgetIconFile('moon-outline.svg'),
-        fetchWidgetIconFile('x.svg')
-    ]).then(function (arr) {
-        svgSend = arr[0];
-        svgPanelClose = arr[1];
-        svgVolOn = arr[2];
-        svgVolOff = arr[3];
-        svgSun = arr[4];
-        svgMoon = arr[5];
-        svgSlaClose = arr[6];
-        if (sendBtn && svgSend) { sendBtn.innerHTML = svgWithClass(svgSend); }
-        if (closeBtn && svgPanelClose) { closeBtn.innerHTML = svgWithClass(svgPanelClose); }
-        if (slaCloseBtn && svgSlaClose) { slaCloseBtn.innerHTML = svgWithClass(svgSlaClose); }
-        renderThemeButton();
-        syncSoundButton();
-    });
+    if (sendBtn && svgSend) { sendBtn.innerHTML = svgWithClass(svgSend); }
+    if (closeBtn && svgPanelClose) { closeBtn.innerHTML = svgWithClass(svgPanelClose); }
+    if (slaCloseBtn && svgSlaClose) { slaCloseBtn.innerHTML = svgWithClass(svgSlaClose); }
+    renderThemeButton();
+    syncSoundButton();
 
     let chatToken = localStorage.getItem(chatTokenKey) || null;
     let chatId = localStorage.getItem(chatIdKey) || null;
@@ -562,7 +544,6 @@
         }
         soundBtn.title = s.enabled ? 'Звук включён' : 'Звук выключен';
     }
-    syncSoundButton();
     if (soundBtn) {
         soundBtn.addEventListener('click', function (ev) {
             ev.stopPropagation();
