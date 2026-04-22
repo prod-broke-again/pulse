@@ -13,7 +13,6 @@ import {
   Clock,
   Infinity,
   Volume2,
-  Sparkles,
   ChevronDown,
   RotateCcw,
 } from 'lucide-vue-next'
@@ -420,14 +419,6 @@ function unreadBadgeClass(count: number): string {
               <span class="min-w-0 flex-1 truncate">{{ chat.department }}</span>
             </span>
             <span
-              v-if="chat.topic"
-              class="inbox-meta-chip inbox-meta-chip-topic inline-flex min-h-[1.25rem] min-w-0 max-w-full flex-1 basis-[min(100%,12rem)] items-center gap-0.5"
-              :title="`Тема (AI): ${chat.topic}`"
-            >
-              <Sparkles class="h-3 w-3 shrink-0 opacity-90" aria-hidden="true" />
-              <span class="min-w-0 flex-1 truncate">{{ chat.topic }}</span>
-            </span>
-            <span
               v-if="isMutedUntilActive(chat.muted_until)"
               class="inline-flex shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold"
               style="background: rgba(148,163,184,0.2); color: var(--text-muted)"
@@ -587,20 +578,9 @@ function unreadBadgeClass(count: number): string {
   border-color: color-mix(in srgb, var(--color-brand-200) 38%, var(--border-light));
 }
 
-.inbox-meta-chip-topic {
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--color-brand-200) 8%, var(--bg-inbox));
-  border-color: color-mix(in srgb, var(--color-brand-200) 28%, var(--border-light));
-}
-
 [data-theme="dark"] .inbox-meta-chip-dept {
   background: color-mix(in srgb, var(--color-brand-200) 16%, transparent);
   border-color: color-mix(in srgb, var(--color-brand-200) 42%, var(--border-light));
-}
-
-[data-theme="dark"] .inbox-meta-chip-topic {
-  background: color-mix(in srgb, var(--color-brand-200) 10%, transparent);
-  border-color: color-mix(in srgb, var(--color-brand-200) 30%, var(--border-light));
 }
 
 [data-unread="1"] .font-semibold {

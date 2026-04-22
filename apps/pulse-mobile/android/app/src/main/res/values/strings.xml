@@ -3,5 +3,6 @@
     <string name="app_name">Pulse</string>
     <string name="title_activity_main">Pulse</string>
     <string name="package_name">com.achpp.pulse</string>
-    <string name="custom_url_scheme">com.achpp.pulse</string>
+    <!-- Must match scheme in MOBILE_OAUTH_REDIRECT_URI (oauthConfig.ts): pulseapp://auth/callback -->
+    <string name="custom_url_scheme">pulseapp</string>
 </resources>
