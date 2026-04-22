@@ -135,18 +135,6 @@ function clearChannelFilters(): void {
   void chatStore.setFilters({ channels: undefined })
 }
 
-function toggleDepartmentFilter(id: number): void {
-  const cur = chatStore.filters.department_ids ?? []
-  const next = cur.includes(id) ? cur.filter((d) => d !== id) : [...cur, id]
-  void chatStore.setFilters({
-    department_ids: next.length > 0 ? next : undefined,
-  })
-}
-
-function clearDepartmentFilters(): void {
-  void chatStore.setFilters({ department_ids: undefined })
-}
-
 function isChannelChipActive(ct: string): boolean {
   const ch = chatStore.filters.channels
   return ch != null && (ch as string[]).includes(ct)
@@ -330,11 +318,11 @@ function unreadBadgeClass(count: number): string {
 
 <template>
   <section
-    class="flex h-full w-[340px] shrink-0 flex-col border-r"
+    class="flex h-full min-w-0 w-[340px] shrink-0 flex-col border-r"
     style="background: var(--bg-inbox); border-color: var(--border-light)"
   >
-    <div class="px-[18px] pt-[18px]">
-      <div class="mb-3.5 flex items-center justify-between">
+    <div class="min-w-0 w-full px-[18px] pt-[18px]">
+      <div class="mb-3 flex items-center justify-between">
         <span class="text-lg font-bold" style="color: var(--text-primary)">Обращения</span>
         <span
           class="inbox-total-badge rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -393,7 +381,7 @@ function unreadBadgeClass(count: number): string {
         </button>
       </div>
 
-      <div class="mb-3 flex gap-2">
+      <div class="mb-2.5 flex gap-2">
         <div class="relative min-w-0 flex-1">
           <Search
             class="pointer-events-none absolute left-[11px] top-1/2 h-[13px] w-[13px] -translate-y-1/2"
@@ -432,8 +420,12 @@ function unreadBadgeClass(count: number): string {
         </div>
       </div>
 
-      <div v-if="userSources.length > 0" class="mb-2 space-y-2">
-        <div class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div v-if="userSources.length > 0" class="mb-1.5 min-w-0 space-y-1.5">
+        <div
+          class="inbox-chip-scroller flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto overflow-y-hidden py-0.5"
+          role="group"
+          aria-label="Фильтр по источникам"
+        >
           <button
             type="button"
             class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
@@ -461,7 +453,9 @@ function unreadBadgeClass(count: number): string {
 
         <div
           v-if="channelTypesInSources.length > 0"
-          class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          class="inbox-chip-scroller flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto overflow-y-hidden py-0.5"
+          role="group"
+          aria-label="Фильтр по каналам"
         >
           <button
             type="button"
@@ -487,41 +481,13 @@ function unreadBadgeClass(count: number): string {
           </button>
         </div>
 
-        <div
-          v-if="departmentsLoading || userDepartments.length > 0"
-          class="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <button
-            type="button"
-            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
-            style="border-color: var(--border-light); color: var(--text-muted)"
-            :disabled="departmentsLoading"
-            @click="clearDepartmentFilters"
-          >
-            Все рубрики
-          </button>
-          <button
-            v-for="d in userDepartments"
-            :key="d.id"
-            type="button"
-            class="max-w-[11rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
-            :style="chatStore.filters.department_ids?.includes(d.id)
-              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
-              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
-            :title="d.name"
-            @click="toggleDepartmentFilter(d.id)"
-          >
-            {{ d.name }}
-          </button>
-        </div>
-
         <details class="group rounded-[var(--radius-md)] border text-left" style="border-color: var(--border-light); background: var(--bg-thread)">
           <summary
-            class="flex cursor-pointer list-none items-center gap-2 px-2.5 py-2 text-[11px] font-semibold outline-none [&::-webkit-details-marker]:hidden"
+            class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-[10.5px] font-semibold outline-none [&::-webkit-details-marker]:hidden"
             style="color: var(--text-secondary)"
           >
             <Settings class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
-            Фильтры по умолчанию (сохранить на сервер)
+            Сохранённые фильтры…
           </summary>
           <div class="space-y-3 border-t px-2.5 py-3 text-[11px]" style="border-color: var(--border-light)">
             <p v-if="prefsSaveError" class="font-medium" style="color: var(--status-closed)">
@@ -788,6 +754,22 @@ function unreadBadgeClass(count: number): string {
 </template>
 
 <style scoped>
+/* min-w-0 + overflow-x на самом flex-ряду; тонкий скролл, иначе ряд раздувает колонку и скролла нет */
+.inbox-chip-scroller {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.inbox-chip-scroller::-webkit-scrollbar {
+  height: 5px;
+}
+
+.inbox-chip-scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 50%, transparent);
+}
+
 .chat-item-m:hover {
   background: var(--bg-card-hover);
 }
