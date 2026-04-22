@@ -15,6 +15,7 @@ use App\Domains\Integration\Repository\SourceRepositoryInterface;
 use App\Events\ChatAssigned as ChatAssignedEvent;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
+use App\Support\BroadcastSenderDisplay;
 use App\Support\NewChatMessageBroadcastExtras;
 use App\Support\TelegramOutboundBusinessOptions;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -87,6 +88,7 @@ final readonly class SendMessage
             ];
 
         $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
+        $senderDisplay = BroadcastSenderDisplay::forMessage($senderId, $senderType->value);
 
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
@@ -101,6 +103,8 @@ final readonly class SendMessage
             sourceId: $chat->sourceId,
             isNewChat: $isNewChat,
             deliveryChannel: $extras['delivery_channel'] ?? null,
+            senderName: $senderDisplay['name'],
+            senderAvatarUrl: $senderDisplay['avatar_url'],
         ));
 
         $source = $this->sourceRepository->findById($chat->sourceId);

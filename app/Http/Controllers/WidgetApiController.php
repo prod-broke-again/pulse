@@ -12,6 +12,7 @@ use App\Jobs\GenerateChatTopicJob;
 use App\Models\WidgetConfig;
 use App\Services\MaybeSendOfflineAutoReply;
 use App\Services\ModeratorPresenceService;
+use App\Support\BroadcastSenderDisplay;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -194,18 +195,34 @@ final class WidgetApiController extends Controller
         $messages = MessageModel::query()
             ->where('chat_id', $chat->id)
             ->orderByDesc('id')
+            ->with(['sender' => function ($q): void {
+                $q->select('id', 'name', 'avatar_url');
+            }])
             ->limit($limit)
             ->get()
             ->reverse()
             ->values()
-            ->map(static fn (MessageModel $m): array => [
-                'id' => $m->id,
-                'sender_type' => $m->sender_type,
-                'text' => $m->text,
-                'payload' => $m->payload ?? [],
-                'created_at' => $m->created_at?->toISOString(),
-                'is_read' => $m->is_read,
-            ])
+            ->map(function (MessageModel $m): array {
+                $row = [
+                    'id' => $m->id,
+                    'sender_type' => $m->sender_type,
+                    'text' => $m->text,
+                    'payload' => $m->payload ?? [],
+                    'created_at' => $m->created_at?->toISOString(),
+                    'is_read' => $m->is_read,
+                ];
+                if ($m->sender_type === 'moderator' && $m->relationLoaded('sender') && $m->sender !== null) {
+                    $n = trim((string) $m->sender->name);
+                    $row['sender_name'] = $n !== '' ? $n : 'Модератор';
+                    $a = $m->sender->avatar_url;
+                    $row['sender_avatar_url'] = is_string($a) && $a !== '' ? $a : null;
+                } else {
+                    $row['sender_name'] = null;
+                    $row['sender_avatar_url'] = null;
+                }
+
+                return $row;
+            })
             ->all();
 
         $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($chat->source_id);
@@ -249,6 +266,7 @@ final class WidgetApiController extends Controller
 
         $message->loadMissing('replyTo');
         $extras = \App\Support\NewChatMessageBroadcastExtras::fromMessage($message);
+        $senderDisplay = BroadcastSenderDisplay::forMessage($message->sender_id, (string) $message->sender_type);
 
         $isNewChat = MessageModel::query()->where('chat_id', $chat->id)->count() === 1;
 
@@ -265,6 +283,8 @@ final class WidgetApiController extends Controller
             sourceId: (int) $chat->source_id,
             isNewChat: $isNewChat,
             deliveryChannel: $extras['delivery_channel'] ?? null,
+            senderName: $senderDisplay['name'],
+            senderAvatarUrl: $senderDisplay['avatar_url'],
         ));
 
         $clientMessageCount = MessageModel::where('chat_id', $chat->id)

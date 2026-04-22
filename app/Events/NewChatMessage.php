@@ -35,6 +35,8 @@ final class NewChatMessage implements ShouldBroadcastNow
         public int $sourceId = 0,
         public bool $isNewChat = false,
         public ?string $deliveryChannel = null,
+        public ?string $senderName = null,
+        public ?string $senderAvatarUrl = null,
     ) {}
 
     /** @return array<int, Channel|PrivateChannel> */
@@ -71,6 +73,8 @@ final class NewChatMessage implements ShouldBroadcastNow
             'source_id' => $this->sourceId > 0 ? $this->sourceId : null,
             'is_new_chat' => $this->isNewChat,
             'delivery_channel' => $this->deliveryChannel,
+            'sender_name' => $this->senderName,
+            'sender_avatar_url' => $this->senderAvatarUrl,
         ];
     }
 }

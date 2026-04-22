@@ -11,6 +11,7 @@ use App\Domains\Communication\ValueObject\SenderType;
 use App\Events\NewChatMessage as NewChatMessageEvent;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Jobs\GenerateChatTopicJob;
+use App\Support\BroadcastSenderDisplay;
 use App\Support\NewChatMessageBroadcastExtras;
 use Illuminate\Contracts\Events\Dispatcher;
 
@@ -69,6 +70,7 @@ final readonly class CreateMessage
             ];
 
         $isNewChat = MessageModel::query()->where('chat_id', $chatId)->count() === 1;
+        $senderDisplay = BroadcastSenderDisplay::forMessage($senderId, $senderType->value);
 
         $this->events->dispatch(new NewChatMessageEvent(
             chatId: $chatId,
@@ -83,6 +85,8 @@ final readonly class CreateMessage
             sourceId: $chat->sourceId,
             isNewChat: $isNewChat,
             deliveryChannel: $extras['delivery_channel'] ?? null,
+            senderName: $senderDisplay['name'],
+            senderAvatarUrl: $senderDisplay['avatar_url'],
         ));
 
         if ($senderType === SenderType::Client) {

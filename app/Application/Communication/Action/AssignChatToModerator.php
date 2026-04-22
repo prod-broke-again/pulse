@@ -106,6 +106,8 @@ final readonly class AssignChatToModerator
             sourceId: $sourceId,
             isNewChat: $isNewChat,
             deliveryChannel: $extras['delivery_channel'] ?? null,
+            senderName: null,
+            senderAvatarUrl: null,
         ));
     }
 }
