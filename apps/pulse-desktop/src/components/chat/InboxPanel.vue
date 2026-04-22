@@ -13,19 +13,16 @@ import {
   Clock,
   Infinity,
   Volume2,
-  ChevronDown,
   RotateCcw,
-  Settings,
+  ListFilter,
 } from 'lucide-vue-next'
 import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useAuthStore } from '../../stores/authStore'
 import { useChatStore } from '../../stores/chatStore'
 import type { Conversation, ConversationChannel } from '../../types/chat'
 import { isMutedUntilActive } from '../../lib/chatMute'
-import { fetchUserDepartments, type DepartmentWithSource } from '../../api/departments'
-import { useInboxFilterPrefsForm } from '../../lib/useInboxFilterPrefsForm'
 
-const CHANNEL_LABELS: Record<string, string> = {
+const PLATFORM_LABELS: Record<string, string> = {
   tg: 'Telegram',
   vk: 'VK',
   web: 'Сайт',
@@ -57,7 +54,6 @@ const emit = defineEmits<{
   (e: 'select-chat', chatId: number): void
   (e: 'change-tab', tab: 'my' | 'unassigned' | 'all'): void
   (e: 'load-more'): void
-  (e: 'change-status', status: 'open' | 'closed' | 'all'): void
   (e: 'assign-me', chatId: number): void
   (e: 'close-chat', chatId: number): void
   /** Закрытый чат: вернуть в работу (тот же API, что «назначить на меня»). */
@@ -69,24 +65,9 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 const searchQuery = ref(chatStore.filters.search)
 
-const userDepartments = ref<DepartmentWithSource[]>([])
-const departmentsLoading = ref(false)
-
-const {
-  prefEnabledSources,
-  prefEnabledChannels,
-  prefEnabledDepartments,
-  prefsSaving,
-  prefsSaveError,
-  syncLocalFromAuth: syncInboxPrefsFromUser,
-  saveInboxPrefsDefaults,
-  togglePrefId: togglePrefSourceId,
-  togglePrefStr: togglePrefChannel,
-} = useInboxFilterPrefsForm(userDepartments)
-
 const userSources = computed(() => authStore.user?.sources ?? [])
 
-const channelTypesInSources = computed(() => {
+const platformTypesInSources = computed(() => {
   const types = new Set<string>()
   for (const s of userSources.value) {
     if (s.type) {
@@ -96,8 +77,8 @@ const channelTypesInSources = computed(() => {
   return ['tg', 'vk', 'web', 'max'].filter((t) => types.has(t))
 })
 
-function channelLabel(t: string): string {
-  return CHANNEL_LABELS[t] ?? t
+function platformLabel(t: string): string {
+  return PLATFORM_LABELS[t] ?? t
 }
 
 const sourceFilterAll = computed(
@@ -112,7 +93,7 @@ function selectSourceFilter(sourceId: number | null): void {
   }
 }
 
-function toggleChannelFilter(t: string): void {
+function togglePlatformFilter(t: string): void {
   const allowed = ['tg', 'vk', 'web', 'max'] as const
   if (!(allowed as readonly string[]).includes(t)) {
     return
@@ -131,11 +112,11 @@ function toggleChannelFilter(t: string): void {
   })
 }
 
-function clearChannelFilters(): void {
+function clearPlatformFilters(): void {
   void chatStore.setFilters({ channels: undefined })
 }
 
-function isChannelChipActive(ct: string): boolean {
+function isPlatformChipActive(ct: string): boolean {
   const ch = chatStore.filters.channels
   return ch != null && (ch as string[]).includes(ct)
 }
@@ -161,22 +142,11 @@ function openMenuAt(chatId: number, e: MouseEvent): void {
 
 function onGlobalClick(): void {
   closeMenu()
+  closeFiltersPanel()
 }
 
 onMounted(() => {
   window.addEventListener('click', onGlobalClick)
-  departmentsLoading.value = true
-  void fetchUserDepartments()
-    .then((rows) => {
-      userDepartments.value = rows
-    })
-    .catch(() => {
-      userDepartments.value = []
-    })
-    .finally(() => {
-      departmentsLoading.value = false
-      syncInboxPrefsFromUser()
-    })
 })
 
 onBeforeUnmount(() => {
@@ -201,11 +171,35 @@ watch(
   },
 )
 
-const statusSelect = computed({
-  get: () => chatStore.filters.status ?? 'open',
-  set: (v: 'open' | 'closed' | 'all') => {
-    void chatStore.setFilters({ status: v })
-  },
+const filtersPanelOpen = ref(false)
+
+function closeFiltersPanel(): void {
+  filtersPanelOpen.value = false
+}
+
+function toggleFiltersPanel(): void {
+  filtersPanelOpen.value = !filtersPanelOpen.value
+}
+
+async function setStatusFilter(v: 'open' | 'closed' | 'all'): Promise<void> {
+  await chatStore.setFilters({ status: v })
+}
+
+const filterIndicatorActive = computed(() => {
+  const f = chatStore.filters
+  if ((f.status ?? 'open') !== 'open') {
+    return true
+  }
+  if (f.channels?.length) {
+    return true
+  }
+  if (f.source_ids?.length === 1) {
+    return true
+  }
+  if (f.source_id != null) {
+    return true
+  }
+  return false
 })
 
 const menuConversation = computed((): Conversation | null => {
@@ -381,7 +375,7 @@ function unreadBadgeClass(count: number): string {
         </button>
       </div>
 
-      <div class="mb-2.5 flex gap-2">
+      <div class="relative mb-2 min-w-0 flex gap-2">
         <div class="relative min-w-0 flex-1">
           <Search
             class="pointer-events-none absolute left-[11px] top-1/2 h-[13px] w-[13px] -translate-y-1/2"
@@ -395,170 +389,149 @@ function unreadBadgeClass(count: number): string {
             style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
           >
         </div>
-        <div class="relative isolate shrink-0">
-          <select
-            v-model="statusSelect"
-            class="h-10 min-w-[124px] cursor-pointer appearance-none rounded-[var(--radius-md)] border py-0 pl-2.5 pr-8 text-[13px] leading-normal outline-none transition"
-            style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary)"
-            aria-label="Фильтр по статусу обращения"
-          >
-            <option value="open">
-              Открытые
-            </option>
-            <option value="closed">
-              Закрытые
-            </option>
-            <option value="all">
-              Все
-            </option>
-          </select>
-          <ChevronDown
-            class="pointer-events-none absolute right-2 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2"
-            style="color: var(--text-muted)"
-            aria-hidden="true"
-          />
-        </div>
-      </div>
-
-      <div v-if="userSources.length > 0" class="mb-1.5 min-w-0 space-y-1.5">
-        <div
-          class="inbox-chip-scroller flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto overflow-y-hidden py-0.5"
-          role="group"
-          aria-label="Фильтр по источникам"
-        >
+        <div class="relative shrink-0">
           <button
             type="button"
-            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
-            :style="sourceFilterAll
-              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
-              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
-            @click="selectSourceFilter(null)"
+            class="relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border outline-none transition"
+            :class="filtersPanelOpen ? 'ring-2 ring-[var(--color-brand-200)] ring-offset-1' : ''"
+            style="border-color: var(--border-light); background: var(--bg-thread); color: var(--text-primary); --tw-ring-offset-color: var(--bg-thread)"
+            aria-label="Фильтры списка"
+            :aria-expanded="filtersPanelOpen"
+            aria-controls="inbox-filters-popover"
+            @click.stop="toggleFiltersPanel"
           >
-            Все источники
-          </button>
-          <button
-            v-for="src in userSources"
-            :key="src.id"
-            type="button"
-            class="max-w-[10rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
-            :style="chatStore.filters.source_ids?.length === 1 && chatStore.filters.source_ids[0] === src.id
-              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
-              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
-            :title="src.name"
-            @click="selectSourceFilter(src.id)"
-          >
-            {{ src.name }}
-          </button>
-        </div>
-
-        <div
-          v-if="channelTypesInSources.length > 0"
-          class="inbox-chip-scroller flex min-w-0 max-w-full flex-nowrap gap-1 overflow-x-auto overflow-y-hidden py-0.5"
-          role="group"
-          aria-label="Фильтр по каналам"
-        >
-          <button
-            type="button"
-            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
-            :style="!chatStore.filters.channels?.length
-              ? { borderColor: 'var(--border-light)', color: 'var(--text-muted)' }
-              : { borderColor: 'var(--border-light)', color: 'var(--text-muted)' }"
-            @click="clearChannelFilters"
-          >
-            Все каналы
-          </button>
-          <button
-            v-for="ct in channelTypesInSources"
-            :key="ct"
-            type="button"
-            class="shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition"
-            :style="isChannelChipActive(ct)
-              ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
-              : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
-            @click="toggleChannelFilter(ct)"
-          >
-            {{ channelLabel(ct) }}
-          </button>
-        </div>
-
-        <details class="group rounded-[var(--radius-md)] border text-left" style="border-color: var(--border-light); background: var(--bg-thread)">
-          <summary
-            class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-[10.5px] font-semibold outline-none [&::-webkit-details-marker]:hidden"
-            style="color: var(--text-secondary)"
-          >
-            <Settings class="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden="true" />
-            Сохранённые фильтры…
-          </summary>
-          <div class="space-y-3 border-t px-2.5 py-3 text-[11px]" style="border-color: var(--border-light)">
-            <p v-if="prefsSaveError" class="font-medium" style="color: var(--status-closed)">
-              {{ prefsSaveError }}
-            </p>
-            <div v-if="!userSources.length" style="color: var(--text-muted)">
-              Нет источников.
-            </div>
-            <ul v-else class="space-y-1.5">
-              <li v-for="s in userSources" :key="'p-src-' + s.id" class="flex items-start gap-2">
-                <input
-                  :id="'ip-src-' + s.id"
-                  type="checkbox"
-                  class="mt-0.5 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledSources.includes(s.id)"
-                  @change="prefEnabledSources = togglePrefSourceId(prefEnabledSources, s.id)"
-                >
-                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-src-' + s.id">{{ s.name }}</label>
-              </li>
-            </ul>
-            <p class="pt-1 font-semibold" style="color: var(--text-primary)">
-              Каналы
-            </p>
-            <ul v-if="channelTypesInSources.length" class="space-y-1.5">
-              <li v-for="t in channelTypesInSources" :key="'p-ch-' + t" class="flex items-start gap-2">
-                <input
-                  :id="'ip-ch-' + t"
-                  type="checkbox"
-                  class="mt-0.5 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledChannels.includes(t)"
-                  @change="prefEnabledChannels = togglePrefChannel(prefEnabledChannels, t)"
-                >
-                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-ch-' + t">{{ channelLabel(t) }}</label>
-              </li>
-            </ul>
-            <p v-else style="color: var(--text-muted)">
-              —
-            </p>
-            <p class="pt-1 font-semibold" style="color: var(--text-primary)">
-              Рубрики
-            </p>
-            <ul v-if="userDepartments.length" class="max-h-32 space-y-1.5 overflow-y-auto">
-              <li v-for="d in userDepartments" :key="'p-dep-' + d.id" class="flex items-start gap-2">
-                <input
-                  :id="'ip-dep-' + d.id"
-                  type="checkbox"
-                  class="mt-0.5 rounded border"
-                  style="border-color: var(--border-light)"
-                  :checked="prefEnabledDepartments.includes(d.id)"
-                  @change="prefEnabledDepartments = togglePrefSourceId(prefEnabledDepartments, d.id)"
-                >
-                <label class="cursor-pointer leading-snug" style="color: var(--text-secondary)" :for="'ip-dep-' + d.id">{{ d.name }}</label>
-              </li>
-            </ul>
-            <p v-else style="color: var(--text-muted)">
-              {{ departmentsLoading ? 'Загрузка…' : '—' }}
-            </p>
-            <button
-              type="button"
-              class="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] py-2 text-[11px] font-semibold text-white transition disabled:opacity-50"
+            <ListFilter class="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span
+              v-if="filterIndicatorActive"
+              class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
               style="background: var(--color-brand-200)"
-              :disabled="prefsSaving"
-              @click="saveInboxPrefsDefaults()"
+              aria-hidden="true"
+            />
+          </button>
+
+          <div
+            v-show="filtersPanelOpen"
+            id="inbox-filters-popover"
+            class="thin-scroll absolute right-0 top-full z-[120] mt-1 w-[min(300px,calc(100vw-32px))] max-h-[min(70vh,440px)] overflow-y-auto rounded-[var(--radius-md)] border px-3 py-3 shadow-lg"
+            style="background: var(--bg-thread); border-color: var(--border-light)"
+            role="dialog"
+            aria-label="Фильтры списка"
+            @click.stop
+          >
+            <p class="mb-2 text-[11px] font-bold uppercase tracking-wide" style="color: var(--text-muted)">
+              Статус
+            </p>
+            <div class="mb-4 flex gap-0.5 rounded-lg p-0.5" style="background: var(--bg-app)">
+              <button
+                type="button"
+                class="min-w-0 flex-1 rounded-md px-1.5 py-1.5 text-[11px] font-semibold leading-tight transition"
+                :style="(chatStore.filters.status ?? 'open') === 'open'
+                  ? { background: 'var(--bg-thread)', color: 'var(--color-brand-200)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
+                  : { color: 'var(--text-muted)' }"
+                @click="void setStatusFilter('open')"
+              >
+                Открытые
+              </button>
+              <button
+                type="button"
+                class="min-w-0 flex-1 rounded-md px-1.5 py-1.5 text-[11px] font-semibold leading-tight transition"
+                :style="chatStore.filters.status === 'closed'
+                  ? { background: 'var(--bg-thread)', color: 'var(--color-brand-200)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
+                  : { color: 'var(--text-muted)' }"
+                @click="void setStatusFilter('closed')"
+              >
+                Закрытые
+              </button>
+              <button
+                type="button"
+                class="min-w-0 flex-1 rounded-md px-1.5 py-1.5 text-[11px] font-semibold leading-tight transition"
+                :style="chatStore.filters.status === 'all'
+                  ? { background: 'var(--bg-thread)', color: 'var(--color-brand-200)', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }
+                  : { color: 'var(--text-muted)' }"
+                @click="void setStatusFilter('all')"
+              >
+                Все
+              </button>
+            </div>
+
+            <template v-if="userSources.length > 0">
+              <p class="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style="color: var(--text-muted)">
+                Источники
+              </p>
+              <div
+                class="inbox-chip-scroller thin-scroll mb-4 flex min-w-0 max-w-full flex-nowrap gap-1.5 overflow-x-auto overflow-y-hidden pb-1 pt-0.5"
+                role="group"
+                aria-label="Фильтр по источникам"
+              >
+                <button
+                  type="button"
+                  class="inbox-filter-chip shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                  :style="sourceFilterAll
+                    ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+                    : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+                  @click="selectSourceFilter(null)"
+                >
+                  Все
+                </button>
+                <button
+                  v-for="src in userSources"
+                  :key="src.id"
+                  type="button"
+                  class="inbox-filter-chip max-w-[10rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                  :style="chatStore.filters.source_ids?.length === 1 && chatStore.filters.source_ids[0] === src.id
+                    ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+                    : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+                  :title="src.name"
+                  @click="selectSourceFilter(src.id)"
+                >
+                  {{ src.name }}
+                </button>
+              </div>
+
+              <template v-if="platformTypesInSources.length > 0">
+                <p class="mb-1 text-[11px] font-bold uppercase tracking-wide" style="color: var(--text-muted)">
+                  Площадки
+                </p>
+                <p class="mb-1.5 text-[10px] leading-snug" style="color: var(--text-muted)">
+                  По типу источника (Telegram, VK и т.д.), как в карточке обращения.
+                </p>
+                <div
+                  class="inbox-chip-scroller thin-scroll flex min-w-0 max-w-full flex-nowrap gap-1.5 overflow-x-auto overflow-y-hidden pb-1 pt-0.5"
+                  role="group"
+                  aria-label="Фильтр по площадкам"
+                >
+                  <button
+                    type="button"
+                    class="inbox-filter-chip shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                    :style="{ borderColor: 'var(--border-light)', color: 'var(--text-muted)' }"
+                    @click="clearPlatformFilters"
+                  >
+                    Все площадки
+                  </button>
+                  <button
+                    v-for="ct in platformTypesInSources"
+                    :key="ct"
+                    type="button"
+                    class="inbox-filter-chip shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"
+                    :style="isPlatformChipActive(ct)
+                      ? { borderColor: 'var(--color-brand-200)', background: 'var(--color-brand-50)', color: 'var(--color-brand-200)' }
+                      : { borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }"
+                    @click="togglePlatformFilter(ct)"
+                  >
+                    {{ platformLabel(ct) }}
+                  </button>
+                </div>
+              </template>
+            </template>
+            <p
+              v-else
+              class="text-[11px] leading-snug"
+              style="color: var(--text-muted)"
             >
-              <Loader2 v-if="prefsSaving" class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              Сохранить
-            </button>
+              Нет привязанных источников — обратитесь к администратору. Фильтры по источникам и площадкам недоступны.
+            </p>
           </div>
-        </details>
+        </div>
       </div>
     </div>
 
@@ -754,20 +727,17 @@ function unreadBadgeClass(count: number): string {
 </template>
 
 <style scoped>
-/* min-w-0 + overflow-x на самом flex-ряду; тонкий скролл, иначе ряд раздувает колонку и скролла нет */
+/* min-w-0 + overflow-x на самом flex-ряду; горизонтальный скролл — класс .thin-scroll (глобально) */
 .inbox-chip-scroller {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  scrollbar-width: thin;
 }
 
-.inbox-chip-scroller::-webkit-scrollbar {
-  height: 5px;
+.inbox-filter-chip:hover {
+  filter: brightness(0.97);
 }
-
-.inbox-chip-scroller::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-muted) 50%, transparent);
+[data-theme='dark'] .inbox-filter-chip:hover {
+  filter: brightness(1.08);
 }
 
 .chat-item-m:hover {

@@ -13,8 +13,8 @@ export const INBOX_CHANNEL_LABELS: Record<string, string> = {
 }
 
 /**
- * Форма сохранённых фильтров инбокса (настройки + свёртка в InboxPanel).
- * @param externalDepartments если задан — список отделов снаружи (InboxPanel уже грузит); иначе загрузка внутри ensureDepartmentsLoaded.
+ * Форма сохранённых фильтров инбокса (раздел в настройках).
+ * @param externalDepartments если задан — список отделов снаружи; иначе загрузка внутри ensureDepartmentsLoaded.
  */
 export function useInboxFilterPrefsForm(externalDepartments?: Ref<DepartmentWithSource[]>) {
   const authStore = useAuthStore()

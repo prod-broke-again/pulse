@@ -735,7 +735,6 @@ async function onAiInsertComposerText(text: string): Promise<void> {
           @select-chat="(id) => void selectChat(id)"
           @change-tab="chatStore.setTab"
           @load-more="chatStore.loadMore"
-          @change-status="(s) => chatStore.setFilters({ status: s })"
           @assign-me="assignToMe"
           @close-chat="closeChatFromList"
           @reopen-chat="assignToMe"

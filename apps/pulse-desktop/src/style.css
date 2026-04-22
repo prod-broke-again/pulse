@@ -130,6 +130,26 @@ body {
   border-radius: 999px;
 }
 
+/* Тонкий скролл (вертикаль + горизонталь) — попапы фильтров, чипы */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 999px;
+}
+
 .app-drag-region {
   -webkit-app-region: drag;
 }

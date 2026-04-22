@@ -595,7 +595,7 @@ function clearCustomSound(): void {
               Фильтры инбокса по умолчанию
             </h4>
             <p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary)">
-              Какие источники, каналы и рубрики показывать в списке обращений при входе. Можно уточнять фильтр под строкой поиска без сохранения.
+              Какие источники, площадки (тип: Telegram, VK, сайт…) и рубрики учитывать в списке обращений при входе. Быстрый фильтр по статусу, источнику и площадке — в кнопке с иконкой у строки поиска; без сохранения он действует только в этой сессии.
             </p>
           </div>
           <p v-if="inboxPrefsSaveError" class="text-xs font-medium text-red-500" role="alert">
@@ -626,7 +626,7 @@ function clearCustomSound(): void {
               Нет доступных источников.
             </p>
             <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
-              Каналы
+              Площадки
             </p>
             <ul v-if="inboxChannelTypes.length" class="space-y-2">
               <li v-for="t in inboxChannelTypes" :key="'set-ch-' + t" class="flex items-start gap-2">
@@ -649,7 +649,7 @@ function clearCustomSound(): void {
             <p class="text-xs font-bold uppercase tracking-wide" style="color: var(--text-secondary)">
               Рубрики
             </p>
-            <ul v-if="inboxDepartments.length" class="max-h-48 space-y-2 overflow-y-auto">
+            <ul v-if="inboxDepartments.length" class="thin-scroll max-h-48 space-y-2 overflow-y-auto">
               <li v-for="d in inboxDepartments" :key="'set-dep-' + d.id" class="flex items-start gap-2">
                 <input
                   :id="'set-dep-' + d.id"
