@@ -8,6 +8,7 @@ import LoginPage from '../pages/LoginPage.vue'
 import SettingsPage from '../pages/SettingsPage.vue'
 import SettingsQuickLinksPage from '../pages/SettingsQuickLinksPage.vue'
 import SettingsTemplatesPage from '../pages/SettingsTemplatesPage.vue'
+import { useAuthStore } from '../stores/authStore'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -62,15 +63,18 @@ const router = createRouter({
   ],
 })
 
-const requireAuth = import.meta.env.VITE_REQUIRE_AUTH === 'true'
+/**
+ * All non-`public` routes need a token unless explicitly disabled.
+ * Set `VITE_REQUIRE_AUTH=false` in `.env` for local dev without API login.
+ */
+const skipAuthGuard = import.meta.env.VITE_REQUIRE_AUTH === 'false'
 
 router.beforeEach((to) => {
-  if (!requireAuth || to.meta.public) {
+  if (skipAuthGuard || to.meta.public) {
     return true
   }
-  const hasToken =
-    typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('api-token'))
-  if (!hasToken && to.name !== 'login') {
+  const auth = useAuthStore()
+  if (!auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   return true
