@@ -50,9 +50,19 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error?.response?.status === 401) {
-      localStorage.removeItem('api-token')
+      const { useAuthStore } = await import('../stores/authStore')
+      const auth = useAuthStore()
+      const wasAuth = auth.isAuthenticated
+      auth.clearSession()
+      if (wasAuth) {
+        const { default: router } = await import('../router')
+        const to = router.currentRoute.value
+        if (!to.meta.public) {
+          void router.replace({ name: 'login' })
+        }
+      }
     }
     return Promise.reject(error)
   },
