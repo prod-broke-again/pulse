@@ -23,6 +23,8 @@ use Illuminate\Validation\ValidationException;
 
 final class WidgetApiController extends Controller
 {
+    private const PENDING_TOKEN_KEY = 'wp';
+
     public function __construct(
         private readonly ModeratorPresenceService $moderatorPresenceService,
         private readonly MaybeSendOfflineAutoReply $maybeSendOfflineAutoReply,
@@ -141,22 +143,31 @@ final class WidgetApiController extends Controller
         ];
 
         if ($chat === null) {
-            $chat = ChatModel::create([
-                'source_id' => $source->id,
-                'department_id' => $department->id,
-                'external_user_id' => $visitorId,
-                'user_metadata' => array_filter($metadata, static fn ($v) => $v !== null && $v !== []),
-                'status' => 'new',
-                'assigned_to' => null,
-                'previous_chat_id' => $lastAny?->id,
+            $userMeta = array_filter($metadata, static fn ($v) => $v !== null && $v !== []);
+            $chatToken = $this->makePendingWidgetToken(
+                $source->id,
+                $visitorId,
+                $department->id,
+                $userMeta,
+                $lastAny?->id,
+            );
+            $guestName = isset($userMeta['name']) ? (string) $userMeta['name'] : null;
+            $guestEmail = isset($userMeta['email']) ? (string) $userMeta['email'] : null;
+            $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource($source->id);
+
+            return response()->json([
+                'ok' => true,
+                'chat_token' => $chatToken,
+                'is_online' => $isOnline,
+                'chat' => [
+                    'id' => null,
+                    'status' => null,
+                    'department' => $department->name,
+                    'guest_name' => $guestName,
+                    'guest_email' => $guestEmail,
+                    'is_online' => $isOnline,
+                ],
             ]);
-            $userMetaNew = $chat->user_metadata ?? [];
-            if (($userMetaNew['name'] ?? null) !== null || ($userMetaNew['email'] ?? null) !== null) {
-                event(new \App\Events\ChatGuestUpdated($chat->id, [
-                    'name' => $userMetaNew['name'] ?? null,
-                    'email' => $userMetaNew['email'] ?? null,
-                ]));
-            }
         } else {
             $chat->department_id = $department->id;
             $previousMeta = $chat->user_metadata ?? [];
@@ -203,7 +214,19 @@ final class WidgetApiController extends Controller
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $chat = $this->resolveChatByToken($data['chat_token']);
+        $parsed = $this->parseChatToken($data['chat_token']);
+        if ($parsed['type'] === 'pending') {
+            $isOnline = $this->moderatorPresenceService->anyModeratorOnlineForSource(
+                (int) $parsed['source_id'],
+            );
+
+            return response()->json([
+                'ok' => true,
+                'is_online' => $isOnline,
+                'messages' => [],
+            ]);
+        }
+        $chat = $parsed['chat'];
         $limit = (int) ($data['limit'] ?? 50);
 
         $messages = MessageModel::query()
@@ -257,7 +280,13 @@ final class WidgetApiController extends Controller
             'payload' => ['nullable', 'array'],
         ]);
 
-        $chat = $this->resolveChatByToken($data['chat_token']);
+        $parsed = $this->parseChatToken($data['chat_token']);
+        $fromPending = $parsed['type'] === 'pending';
+        if ($fromPending) {
+            $chat = $this->createChatFromPendingToken($parsed);
+        } else {
+            $chat = $parsed['chat'];
+        }
         $oldChatId = (int) $chat->id;
         $text = trim((string) $data['text']);
         if ($text === '') {
@@ -308,7 +337,7 @@ final class WidgetApiController extends Controller
                 'created_at' => $msgRow?->created_at?->toISOString(),
             ],
         ];
-        if ((int) $chat->id !== $oldChatId) {
+        if ($fromPending || (int) $chat->id !== $oldChatId) {
             $payload['chat_token'] = $this->makeChatToken($chat);
             $payload['chat'] = [
                 'id' => $chat->id,
@@ -329,7 +358,11 @@ final class WidgetApiController extends Controller
                 \App\Support\AiClientActionPayload::A_RESOLVED_NO,
             ])],
         ]);
-        $chat = $this->resolveChatByToken($data['chat_token']);
+        $parsed = $this->parseChatToken($data['chat_token']);
+        if ($parsed['type'] === 'pending') {
+            return response()->json(['ok' => false, 'error' => 'Chat not yet started'], 422);
+        }
+        $chat = $parsed['chat'];
         $r = $this->handleAiClientControl->run(
             (int) $chat->source_id,
             $chat->id,
@@ -349,7 +382,11 @@ final class WidgetApiController extends Controller
             'chat_token' => ['required', 'string'],
         ]);
 
-        $chat = $this->resolveChatByToken($data['chat_token']);
+        $parsed = $this->parseChatToken($data['chat_token']);
+        if ($parsed['type'] === 'pending') {
+            return response()->json(['ok' => true]);
+        }
+        $chat = $parsed['chat'];
         $userMeta = $chat->user_metadata ?? [];
         $guestName = isset($userMeta['name']) ? (string) $userMeta['name'] : null;
 
@@ -371,7 +408,11 @@ final class WidgetApiController extends Controller
             'up_to_message_id' => ['sometimes', 'integer'],
         ]);
 
-        $chat = $this->resolveChatByToken($data['chat_token']);
+        $parsed = $this->parseChatToken($data['chat_token']);
+        if ($parsed['type'] === 'pending') {
+            return response()->json(['ok' => true]);
+        }
+        $chat = $parsed['chat'];
         $messageIds = $data['message_ids'] ?? null;
         if ($messageIds === null && isset($data['up_to_message_id'])) {
             $messageIds = MessageModel::where('chat_id', $chat->id)
@@ -429,12 +470,65 @@ final class WidgetApiController extends Controller
         return Crypt::encryptString($payload);
     }
 
-    private function resolveChatByToken(string $token): ChatModel
+    private function makePendingWidgetToken(
+        int $sourceId,
+        string $visitorId,
+        int $departmentId,
+        array $userMetadata,
+        ?int $previousChatId,
+    ): string {
+        $payload = [
+            't' => self::PENDING_TOKEN_KEY,
+            'source_id' => $sourceId,
+            'external_user_id' => $visitorId,
+            'department_id' => $departmentId,
+            'user_metadata' => $userMetadata,
+            'previous_chat_id' => $previousChatId,
+        ];
+
+        return Crypt::encryptString(json_encode($payload, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array{
+     *     type: 'pending',
+     *     source_id: int,
+     *     external_user_id: string,
+     *     department_id: int,
+     *     user_metadata: array,
+     *     previous_chat_id: int|null
+     * }|array{type: 'chat', chat: ChatModel}
+     */
+    private function parseChatToken(string $token): array
     {
         try {
             $decrypted = Crypt::decryptString($token);
         } catch (\Throwable) {
             throw ValidationException::withMessages(['chat_token' => 'Invalid chat token.']);
+        }
+
+        $trim = trim($decrypted);
+        if ($trim !== '' && $trim[0] === '{') {
+            $json = json_decode($decrypted, true);
+            if (is_array($json) && ($json['t'] ?? null) === self::PENDING_TOKEN_KEY) {
+                if (! isset($json['source_id'], $json['external_user_id'], $json['department_id'])) {
+                    throw ValidationException::withMessages(['chat_token' => 'Malformed chat token.']);
+                }
+
+                $prev = $json['previous_chat_id'] ?? null;
+
+                return [
+                    'type' => 'pending',
+                    'source_id' => (int) $json['source_id'],
+                    'external_user_id' => (string) $json['external_user_id'],
+                    'department_id' => (int) $json['department_id'],
+                    'user_metadata' => is_array($json['user_metadata'] ?? null) ? $json['user_metadata'] : [],
+                    'previous_chat_id' => $prev === null || $prev === '' ? null : (int) $prev,
+                ];
+            }
+            if (is_array($json) && array_key_exists('t', $json)) {
+                throw ValidationException::withMessages(['chat_token' => 'Malformed chat token.']);
+            }
         }
 
         [$chatId, $sourceId, $externalUserId] = array_pad(explode('|', $decrypted, 3), 3, null);
@@ -450,6 +544,60 @@ final class WidgetApiController extends Controller
 
         if ($chat === null) {
             throw ValidationException::withMessages(['chat_token' => 'Chat not found.']);
+        }
+
+        return ['type' => 'chat', 'chat' => $chat];
+    }
+
+    /**
+     * @param  array{
+     *     type: 'pending',
+     *     source_id: int,
+     *     external_user_id: string,
+     *     department_id: int,
+     *     user_metadata: array,
+     *     previous_chat_id: int|null
+     * }  $pending
+     */
+    private function createChatFromPendingToken(array $pending): ChatModel
+    {
+        $source = SourceModel::query()
+            ->whereKey($pending['source_id'])
+            ->where('type', 'web')
+            ->first();
+        if ($source === null) {
+            throw ValidationException::withMessages(['chat_token' => 'Source not found.']);
+        }
+
+        $department = DepartmentModel::query()
+            ->whereKey($pending['department_id'])
+            ->where('source_id', $source->id)
+            ->where('is_active', true)
+            ->first();
+        if ($department === null) {
+            throw ValidationException::withMessages(['chat_token' => 'Invalid department.']);
+        }
+
+        $userMeta = is_array($pending['user_metadata'] ?? null) ? $pending['user_metadata'] : [];
+        $chat = ChatModel::create([
+            'source_id' => $source->id,
+            'department_id' => $department->id,
+            'external_user_id' => $pending['external_user_id'],
+            'user_metadata' => array_filter(
+                $userMeta,
+                static fn ($v) => $v !== null && $v !== []
+            ),
+            'status' => 'new',
+            'assigned_to' => null,
+            'previous_chat_id' => $pending['previous_chat_id'] ?? null,
+        ]);
+
+        $um = $chat->user_metadata ?? [];
+        if (($um['name'] ?? null) !== null || ($um['email'] ?? null) !== null) {
+            event(new \App\Events\ChatGuestUpdated($chat->id, [
+                'name' => $um['name'] ?? null,
+                'email' => $um['email'] ?? null,
+            ]));
         }
 
         return $chat;

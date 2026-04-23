@@ -839,9 +839,14 @@
             sessionResponse = result;
             chatToken = result.chat_token;
             localStorage.setItem(chatTokenKey, chatToken);
-            if (result.chat && result.chat.id != null) {
-                chatId = String(result.chat.id);
-                localStorage.setItem(chatIdKey, chatId);
+            if (result.chat) {
+                if (result.chat.id != null) {
+                    chatId = String(result.chat.id);
+                    localStorage.setItem(chatIdKey, chatId);
+                } else {
+                    chatId = null;
+                    try { localStorage.removeItem(chatIdKey); } catch (e) { /* empty */ }
+                }
             }
             if (result.chat && result.chat.guest_name) {
                 guestDataFromParent = { name: result.chat.guest_name, email: result.chat.guest_email || null };
@@ -1029,6 +1034,17 @@
             if (input) { input.value = ''; input.style.height = 'auto'; }
             try {
                 const result = await request('/messages', { method: 'POST', body: JSON.stringify({ chat_token: chatToken, text: text, payload: {} }) });
+                if (result.chat_token) {
+                    chatToken = result.chat_token;
+                    localStorage.setItem(chatTokenKey, chatToken);
+                }
+                if (result.chat && result.chat.id != null) {
+                    chatId = String(result.chat.id);
+                    localStorage.setItem(chatIdKey, chatId);
+                    if (!echoChannel) {
+                        connectReverb();
+                    }
+                }
                 if (result.message) {
                     lastSentMessageId = result.message.id;
                     renderMessage({ id: result.message.id, text: result.message.text, sender_type: 'client', created_at: result.message.created_at, sender_name: null, sender_avatar_url: null });

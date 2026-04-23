@@ -70,6 +70,7 @@ final readonly class ListChatsQuery
         $tab = $filters['tab'] ?? 'my';
 
         $query = ChatModel::query()
+            ->whereHas('messages')
             ->with([
                 'source',
                 'department',

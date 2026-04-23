@@ -153,22 +153,7 @@ final readonly class ProcessInboundWebhook
 
         $businessConnectionId = $this->webhookPayloadExtractor->extractBusinessConnectionId($payload);
 
-        $chat = $this->inboundChatUpsert->resolve(
-            $sourceId,
-            $departmentId,
-            $externalUserId,
-            $userMetadata,
-            $businessConnectionId,
-        );
-
         $attachments = $this->resolveTelegramFileUrls($attachments, $source->type, $source->settings, $sourceId);
-
-        $replyToExternalId = $this->webhookPayloadExtractor->extractReplyToExternalMessageId($payload);
-        $replyToInternalId = null;
-        if ($replyToExternalId !== null && $replyToExternalId !== '') {
-            $replied = $this->messageRepository->findByChatAndExternalMessageId($chat->id, $replyToExternalId);
-            $replyToInternalId = $replied?->id;
-        }
 
         $mediaGroupId = $source->type === SourceType::Tg
             ? $this->webhookPayloadExtractor->extractTelegramMediaGroupId($payload)
@@ -178,6 +163,25 @@ final readonly class ProcessInboundWebhook
             if ($resolvedForDownloads === []) {
                 return;
             }
+        }
+
+        $chat = $this->inboundChatUpsert->resolve(
+            $sourceId,
+            $departmentId,
+            $externalUserId,
+            $userMetadata,
+            $businessConnectionId,
+        );
+
+        $replyToExternalId = $this->webhookPayloadExtractor->extractReplyToExternalMessageId($payload);
+        $replyToInternalId = null;
+        if ($replyToExternalId !== null && $replyToExternalId !== '') {
+            $replied = $this->messageRepository->findByChatAndExternalMessageId($chat->id, $replyToExternalId);
+            $replyToInternalId = $replied?->id;
+        }
+
+        if ($mediaGroupId !== null && $mediaGroupId !== '') {
+            $resolvedForDownloads = $this->onlyAttachmentsWithUrl($attachments);
             $rawCaption = $this->webhookPayloadExtractor->extractRawTelegramMessageText($payload);
             $this->telegramMediaGroupInboundBuffer->appendAndSchedule(
                 $sourceId,

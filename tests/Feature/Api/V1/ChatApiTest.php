@@ -53,9 +53,9 @@ final class ChatApiTest extends TestCase
         $this->moderator->sources()->sync([$this->source->id]);
     }
 
-    private function createChat(array $overrides = []): ChatModel
+    private function createChat(array $overrides = [], bool $withMessage = true): ChatModel
     {
-        return ChatModel::create(array_merge([
+        $chat = ChatModel::create(array_merge([
             'source_id' => $this->source->id,
             'department_id' => $this->department->id,
             'external_user_id' => 'ext_user_'.uniqid(),
@@ -63,6 +63,19 @@ final class ChatApiTest extends TestCase
             'status' => 'new',
             'assigned_to' => null,
         ], $overrides));
+
+        if ($withMessage) {
+            MessageModel::create([
+                'chat_id' => $chat->id,
+                'sender_id' => null,
+                'sender_type' => 'client',
+                'text' => 'Test',
+                'payload' => null,
+                'is_read' => false,
+            ]);
+        }
+
+        return $chat;
     }
 
     // --- LIST CHATS ---
@@ -222,14 +235,6 @@ final class ChatApiTest extends TestCase
     public function test_list_chats_includes_mobile_fields_and_unread_count(): void
     {
         $chat = $this->createChat(['status' => 'new']);
-        MessageModel::create([
-            'chat_id' => $chat->id,
-            'sender_id' => null,
-            'sender_type' => 'client',
-            'text' => 'Hello',
-            'payload' => null,
-            'is_read' => false,
-        ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
             ->getJson('/api/v1/chats?tab=all');
@@ -275,7 +280,7 @@ final class ChatApiTest extends TestCase
 
     public function test_read_chat_updates_cursor_and_marks_client_messages(): void
     {
-        $chat = $this->createChat(['status' => 'new']);
+        $chat = $this->createChat(['status' => 'new'], false);
         $m1 = MessageModel::create([
             'chat_id' => $chat->id,
             'sender_id' => null,
