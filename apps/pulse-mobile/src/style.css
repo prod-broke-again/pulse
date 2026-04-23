@@ -163,8 +163,34 @@
     animation: toast-in 0.3s ease;
   }
 
+  /* В одну строку — 40px под кнопки; line-height/паддинги выравнивают текст и плейсхолдер по вертикали. */
+  .composer-textarea-mobile {
+    min-height: 2.5rem;
+    max-height: 168px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-appearance: none;
+    margin: 0;
+    /* UA часто даёт несимметричный внутренний отступ — убираем, центр через leading в Vue */
+    padding: 0;
+  }
+
+  .composer-textarea-mobile::placeholder {
+    line-height: inherit;
+  }
+
+  .composer-box-mobile {
+    overflow: hidden;
+  }
+
   .ai-panel-slide {
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .ai-panel-slide {
+    box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.45);
   }
 
   .ai-overlay-fade {

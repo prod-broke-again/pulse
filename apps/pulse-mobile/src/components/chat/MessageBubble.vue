@@ -56,7 +56,7 @@ const hasMedia = computed(
 
 <template>
   <div
-    class="flex max-w-[82%] flex-col"
+    class="flex min-w-0 max-w-[82%] flex-col"
     :data-message-id="message.kind !== 'system' ? message.id : undefined"
     :class="{
       'self-start': message.kind === 'incoming',
@@ -67,7 +67,7 @@ const hasMedia = computed(
   >
     <div
       v-if="message.kind === 'system'"
-      class="rounded-[18px] bg-transparent px-3 py-1.5 text-center text-xs text-[var(--zinc-400)]"
+      class="max-w-full rounded-[18px] bg-transparent px-3 py-1.5 text-center text-xs break-words text-[var(--zinc-400)] whitespace-pre-wrap [overflow-wrap:anywhere]"
     >
       <Bot class="mb-0.5 mr-1 inline size-3.5 align-middle" aria-hidden="true" />
       {{ message.text }}
@@ -85,20 +85,20 @@ const hasMedia = computed(
       <button
         v-if="message.reply_to && replyQuoteTargetId() != null"
         type="button"
-        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-left text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-left text-[11px] leading-snug break-words text-[var(--zinc-500)] [overflow-wrap:anywhere] dark:text-[var(--zinc-400)]"
         @click="onReplyQuoteClick"
       >
         {{ message.reply_to.text }}
       </button>
       <p
         v-else-if="message.reply_to"
-        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-[11px] leading-snug text-[var(--zinc-500)] dark:text-[var(--zinc-400)]"
+        class="mb-1 max-w-full border-l-2 border-[var(--color-brand)]/50 pl-2 text-[11px] leading-snug break-words text-[var(--zinc-500)] [overflow-wrap:anywhere] dark:text-[var(--zinc-400)]"
       >
         {{ message.reply_to.text }}
       </p>
       <div
         v-if="hasText"
-        class="rounded-[18px] rounded-bl-md bg-white px-3.5 py-2.5 text-sm leading-[1.55] text-[var(--color-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-100)]"
+        class="max-w-full rounded-[18px] rounded-bl-md bg-white px-3.5 py-2.5 text-sm leading-[1.55] break-words whitespace-pre-wrap text-[var(--color-dark)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] [overflow-wrap:anywhere] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-100)]"
       >
         {{ message.text }}
       </div>
@@ -142,23 +142,28 @@ const hasMedia = computed(
         Ответить
       </button>
       <div
-        class="rounded-[18px] rounded-br-md bg-[var(--color-brand)] px-3.5 py-2.5 text-sm leading-[1.55] text-white"
+        class="min-w-0 max-w-full rounded-[18px] rounded-br-md bg-[var(--color-brand)] px-3.5 py-2.5 text-sm leading-[1.55] text-white"
       >
         <button
           v-if="message.reply_to && replyQuoteTargetId() != null"
           type="button"
-          class="mb-2 w-full border-l-2 border-white/50 pl-2 text-left text-[11px] text-white/90"
+          class="mb-2 w-full border-l-2 border-white/50 pl-2 text-left text-[11px] break-words text-white/90 [overflow-wrap:anywhere]"
           @click="onReplyQuoteClick"
         >
           {{ message.reply_to.text }}
         </button>
         <p
           v-else-if="message.reply_to"
-          class="mb-2 border-l-2 border-white/50 pl-2 text-[11px] text-white/90"
+          class="mb-2 border-l-2 border-white/50 pl-2 text-[11px] break-words text-white/90 [overflow-wrap:anywhere]"
         >
           {{ message.reply_to.text }}
         </p>
-        {{ message.text }}
+        <div
+          v-if="hasText"
+          class="break-words whitespace-pre-wrap [overflow-wrap:anywhere]"
+        >
+          {{ message.text }}
+        </div>
       </div>
       <ReplyMarkupInline
         v-if="message.reply_markup && message.reply_markup.length > 0"

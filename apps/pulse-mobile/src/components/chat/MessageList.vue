@@ -422,7 +422,7 @@ defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelecti
   <div class="relative flex min-h-0 flex-1 flex-col">
     <div
       ref="root"
-      class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[var(--zinc-50)] px-4 py-4 [-webkit-overflow-scrolling:touch] dark:bg-[var(--zinc-900)]"
+      class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[var(--zinc-100)] px-4 py-4 [-webkit-overflow-scrolling:touch] dark:bg-[var(--zinc-900)]"
       @scroll.passive="onScroll"
       @touchstart.passive="onPtrStart"
       @touchmove.passive="onPtrMove"
@@ -443,9 +443,9 @@ defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelecti
         v-for="m in messages"
         :key="m.id"
         :class="[
-          'flex w-full',
+          'flex min-w-0 w-full',
           m.kind === 'outgoing' ? 'justify-end' : m.kind === 'system' ? 'justify-center' : 'justify-start',
-          selectionMode && isSelected(m) ? 'rounded-2xl ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--zinc-50)] dark:ring-offset-[var(--zinc-900)]' : '',
+          selectionMode && isSelected(m) ? 'rounded-2xl ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--zinc-100)] dark:ring-offset-[var(--zinc-900)]' : '',
         ]"
         @pointerdown="onPointerDownRow(m, $event)"
         @pointerup="onPointerUpRow"
@@ -469,7 +469,7 @@ defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelecti
 
     <div
       v-if="selectionMode"
-      class="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-gray-line)] bg-white px-3 py-2.5 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-850)]"
+      class="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-gray-line)] bg-[var(--zinc-100)] px-3 py-2.5 dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-850)]"
     >
       <span class="mr-auto text-[10px] text-[var(--zinc-500)]">Выбор · долгое нажатие для старта</span>
       <button

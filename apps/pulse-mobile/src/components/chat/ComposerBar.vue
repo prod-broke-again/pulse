@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Paperclip, Send, Sparkles, X, Zap } from 'lucide-vue-next'
+import { FileUp, MoreHorizontal, Send, Sparkles, X, Zap } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '../../stores/chatStore'
 import type { ReplyMarkupButton } from '../../types/chat'
 
@@ -10,6 +10,7 @@ const {
   composerText,
   canSend,
   composerLocked,
+  composerFocusSeq,
   threadMeta,
   pendingReplyMarkup,
   cannedQuickReplies,
@@ -17,22 +18,43 @@ const {
   replyToMessageId,
 } = storeToRefs(chat)
 const fileInput = ref<HTMLInputElement | null>(null)
-const actionsDetails = ref<HTMLDetailsElement | null>(null)
+const composerTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const menuDetails = ref<HTMLDetailsElement | null>(null)
 
-function pickPreset(btn: ReplyMarkupButton) {
+function closeMenu() {
+  menuDetails.value?.removeAttribute('open')
+}
+
+function pickQuickLink(btn: ReplyMarkupButton) {
   chat.addReplyMarkupPreset(btn)
-  actionsDetails.value?.removeAttribute('open')
+  closeMenu()
+}
+
+function onMenuAttach() {
+  closeMenu()
+  fileInput.value?.click()
+}
+
+function onMenuOpenAi() {
+  closeMenu()
+  chat.openAiPanel()
+}
+
+function onMenuInsertTemplate(text: string) {
+  chat.insertQuickReply(text)
+  closeMenu()
 }
 
 function onPickFiles(e: Event) {
   const input = e.target as HTMLInputElement
   const files = input.files
-  if (!files?.length) return
+  if (!files?.length) {
+    return
+  }
   void chat.sendWithAttachments(Array.from(files))
   input.value = ''
 }
 
-/** Used when API returns no canned responses. */
 const fallbackQuickReplies = [
   {
     label: 'Уточню информацию',
@@ -53,13 +75,57 @@ const quickReplies = computed(() =>
 )
 
 function onSend() {
+  if (!canSend.value) {
+    return
+  }
   chat.sendMessage()
 }
+
+function onComposerKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    onSend()
+  }
+}
+
+function focusComposer() {
+  void nextTick(() => {
+    composerTextareaRef.value?.focus()
+  })
+}
+
+defineExpose({
+  insertFromAi: (text: string) => {
+    chat.insertFromAi(text)
+  },
+  focusComposer,
+})
+
+watch(composerFocusSeq, () => {
+  focusComposer()
+  void nextTick(() => {
+    syncTextareaHeight()
+  })
+})
 
 const isChatClosed = computed(() => threadMeta.value?.status === 'closed')
 const isOtherModerator = computed(
   () => composerLocked.value && !isChatClosed.value,
 )
+
+const isMultiline = computed(() => composerText.value.includes('\n'))
+
+const COMPOSER_LINE_H = 40
+
+function syncTextareaHeight() {
+  const el = composerTextareaRef.value
+  if (!el) {
+    return
+  }
+  el.style.height = 'auto'
+  const h = Math.min(Math.max(el.scrollHeight, COMPOSER_LINE_H), 168)
+  el.style.height = `${h}px`
+}
 
 watch(
   composerText,
@@ -67,33 +133,31 @@ watch(
     if (t.trim().length > 0) {
       chat.scheduleTypingNotify()
     }
+    void nextTick(() => {
+      syncTextareaHeight()
+    })
   },
 )
+
+function onComposerInput(e: Event) {
+  const t = (e.target as HTMLTextAreaElement).value
+  chat.setComposerText(t)
+  void nextTick(() => {
+    syncTextareaHeight()
+  })
+}
+
+onMounted(() => {
+  void nextTick(() => {
+    syncTextareaHeight()
+  })
+})
 </script>
 
 <template>
   <div
     class="shrink-0 border-t border-[var(--color-gray-line)] bg-white dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-850)]"
   >
-    <div class="-mx-1 flex gap-1.5 overflow-x-auto px-4 pb-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <button
-        type="button"
-        class="shrink-0 cursor-pointer whitespace-nowrap rounded-2xl border-[1.5px] border-[var(--color-brand-200)] bg-gradient-to-br from-[rgba(85,23,94,0.1)] to-[rgba(154,95,168,0.1)] px-3 py-1.5 text-xs font-medium text-[var(--color-brand)] transition-all active:bg-[var(--color-brand)] active:text-white dark:border-[var(--color-brand-500)] dark:from-[rgba(85,23,94,0.3)] dark:to-[rgba(154,95,168,0.15)] dark:text-[var(--color-brand-200)]"
-        @click="chat.openAiPanel()"
-      >
-        <Sparkles class="mr-0.5 inline size-2.5 align-middle" aria-hidden="true" />
-        AI-ответ
-      </button>
-      <button
-        v-for="(q, i) in quickReplies"
-        :key="i"
-        type="button"
-        class="shrink-0 cursor-pointer whitespace-nowrap rounded-2xl border-[1.5px] border-[var(--color-brand-50)] bg-[var(--color-brand-50)] px-3 py-1.5 text-xs font-medium text-[var(--color-brand)] transition-all active:bg-[var(--color-brand)] active:text-white dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--color-brand-200)]"
-        @click="chat.insertQuickReply(q.text)"
-      >
-        {{ q.label }}
-      </button>
-    </div>
     <div class="px-3 pt-2.5">
       <div
         v-if="isChatClosed"
@@ -154,7 +218,7 @@ watch(
       </div>
     </div>
     <div
-      class="flex items-end gap-2 px-3 pb-[calc(10px+var(--safe-bottom))] pt-0"
+      class="flex min-h-0 items-end gap-2 px-3 pb-[calc(10px+var(--safe-bottom))] pt-0"
     >
       <input
         ref="fileInput"
@@ -165,56 +229,113 @@ watch(
         @change="onPickFiles"
       />
       <details
-        ref="actionsDetails"
+        ref="menuDetails"
         class="group relative shrink-0"
       >
         <summary
           class="flex size-10 cursor-pointer list-none items-center justify-center rounded-xl border-none bg-[var(--zinc-100)] text-[var(--zinc-500)] marker:hidden dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-400)] [&::-webkit-details-marker]:hidden"
-          aria-label="Действия"
+          aria-label="Вложения, ИИ, шаблоны"
         >
-          <Zap class="size-4" aria-hidden="true" />
+          <MoreHorizontal class="size-5" aria-hidden="true" />
         </summary>
         <div
-          class="absolute bottom-[calc(100%+6px)] left-0 z-20 min-w-[220px] overflow-hidden rounded-xl border border-[var(--zinc-700)] bg-[var(--zinc-850)] py-1 shadow-lg dark:bg-[var(--zinc-850)]"
+          class="composer-actions-menu absolute bottom-[calc(100%+8px)] left-0 z-40 max-h-[min(70vh,420px)] w-[min(calc(100vw-1.5rem),280px)] overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-gray-line)] bg-white py-1.5 text-[var(--color-dark)] shadow-lg dark:border-[var(--zinc-600)]/80 dark:bg-[var(--zinc-850)] dark:text-[var(--zinc-100)]"
         >
           <div
-            v-if="quickLinkPresets.length === 0"
-            class="px-3 py-2.5 text-xs text-[var(--zinc-400)]"
+            class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--zinc-500)]"
           >
-            Нет быстрых ссылок для этого источника
+            Действия
           </div>
           <button
-            v-for="(preset, idx) in quickLinkPresets"
-            :key="`${preset.url}-${idx}`"
             type="button"
-            class="flex w-full cursor-pointer px-3 py-2.5 text-left text-sm text-[var(--zinc-100)] transition-colors hover:bg-[var(--zinc-800)]"
-            @click="pickPreset(preset)"
+            class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-[var(--color-dark)] transition-colors active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            :disabled="composerLocked"
+            @click="onMenuAttach"
           >
-            {{ preset.text }}
+            <FileUp class="size-4 shrink-0 opacity-80" aria-hidden="true" />
+            Прикрепить файл
           </button>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-[var(--color-dark)] transition-colors active:bg-[var(--zinc-100)] dark:text-[var(--zinc-100)] dark:active:bg-[var(--zinc-800)]"
+            @click="onMenuOpenAi"
+          >
+            <Sparkles
+              class="size-4 shrink-0 text-[var(--color-brand)] dark:text-[var(--color-brand-200)]"
+              aria-hidden="true"
+            />
+            AI-ассистент
+          </button>
+
+          <div
+            v-if="quickReplies.length > 0"
+            class="mt-1 border-t border-[var(--zinc-200)] pt-1.5 dark:border-[var(--zinc-700)]/80"
+          >
+            <div
+              class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--zinc-500)]"
+            >
+              Шаблоны ответов
+            </div>
+            <button
+              v-for="(q, i) in quickReplies"
+              :key="`tpl-${i}`"
+              type="button"
+              class="flex w-full px-3 py-2.5 text-left text-sm leading-snug text-[var(--zinc-700)] transition-colors active:bg-[var(--zinc-100)] dark:text-[var(--zinc-200)] dark:active:bg-[var(--zinc-800)]"
+              :disabled="composerLocked"
+              @click="onMenuInsertTemplate(q.text)"
+            >
+              {{ q.label }}
+            </button>
+          </div>
+
+          <div class="mt-1 border-t border-[var(--zinc-200)] pt-1.5 dark:border-[var(--zinc-700)]/80">
+            <div
+              class="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--zinc-500)]"
+            >
+              Кнопки (ссылки)
+            </div>
+            <template v-if="quickLinkPresets.length > 0">
+              <button
+                v-for="(preset, idx) in quickLinkPresets"
+                :key="`${preset.url}-${idx}`"
+                type="button"
+                class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm leading-snug text-[var(--zinc-700)] transition-colors active:bg-[var(--zinc-100)] dark:text-[var(--zinc-200)] dark:active:bg-[var(--zinc-800)]"
+                :disabled="composerLocked"
+                @click="pickQuickLink(preset)"
+              >
+                <Zap class="size-3.5 shrink-0 text-[var(--zinc-500)]" aria-hidden="true" />
+                <span class="min-w-0 break-words">{{ preset.text }}</span>
+              </button>
+            </template>
+            <p
+              v-else
+              class="px-3 py-2 text-center text-xs text-[var(--zinc-500)]"
+            >
+              Нет кнопок-ссылок для этого источника
+            </p>
+          </div>
         </div>
       </details>
-      <button
-        type="button"
-        class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-[var(--zinc-100)] text-base text-[var(--zinc-500)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-400)]"
-        aria-label="Вложение"
-        :disabled="composerLocked"
-        @click="fileInput?.click()"
-      >
-        <Paperclip class="size-4" />
-      </button>
       <div
-        class="flex min-h-10 max-h-[120px] flex-1 items-center rounded-[20px] border-[1.5px] border-transparent bg-[var(--zinc-100)] px-4 py-2 transition-[border-color] focus-within:border-[var(--color-brand-200)] dark:bg-[var(--zinc-800)]"
+        class="composer-box-mobile flex min-h-10 min-w-0 max-h-[180px] flex-1 rounded-[20px] border-[1.5px] border-transparent bg-[var(--zinc-100)] px-2.5 transition-[border-color] focus-within:border-[var(--color-brand-200)] dark:bg-[var(--zinc-800)]"
+        :class="isMultiline ? 'items-stretch py-1.5' : 'items-center py-0'"
       >
-        <input
+        <textarea
+          id="chat-composer-textarea"
+          ref="composerTextareaRef"
           :value="composerText"
-          type="text"
-          class="max-h-[100px] min-w-0 flex-1 border-none bg-transparent text-sm leading-snug text-[var(--color-dark)] outline-none placeholder:text-[var(--zinc-400)] dark:text-[var(--zinc-100)]"
-          placeholder="Написать ответ..."
+          rows="1"
+          class="composer-textarea-mobile max-h-[168px] min-w-0 flex-1 resize-none border-none bg-transparent text-sm text-[var(--color-dark)] outline-none placeholder:font-normal placeholder:text-[var(--zinc-400)] dark:text-[var(--zinc-100)]"
+          :class="[
+            isMultiline
+              ? 'self-stretch py-1.5 font-medium leading-[1.5]'
+              : 'self-center py-0 font-normal leading-10',
+          ]"
+          placeholder="Написать ответ…"
           autocomplete="off"
           :disabled="composerLocked"
-          @input="chat.setComposerText(($event.target as HTMLInputElement).value)"
-          @keydown.enter.prevent="canSend && onSend()"
+          @input="onComposerInput"
+          @keydown="onComposerKeydown"
         />
       </div>
       <button

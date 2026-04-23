@@ -58,6 +58,8 @@ export const useChatStore = defineStore('chat', () => {
   const activeChatId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
   const composerText = ref('')
+  /** Increments to request focus on composer (textarea) after insert from AI, etc. */
+  const composerFocusSeq = ref(0)
   /** Pulse message id to reply to (POST reply_to_message_id). */
   const replyToMessageId = ref<number | null>(null)
   const isTyping = ref(false)
@@ -74,6 +76,8 @@ export const useChatStore = defineStore('chat', () => {
 
   /** Сеть догружает тред (фон, после кеша). */
   const threadSyncing = ref(false)
+  /** Кнопка «3 варианта» в панели AI. */
+  const aiPanelSuggestionsLoading = ref(false)
   let saveCacheDebounce: ReturnType<typeof setTimeout> | null = null
 
   let unsubscribeRealtime: (() => void) | null = null
@@ -349,20 +353,23 @@ export const useChatStore = defineStore('chat', () => {
     const force = options?.force === true
     const prev = activeChatId.value
     const switching = prev != null && prev !== chatId
+    /** Не гасим панель AI при force-обновлении того же треда (refresh, app resume, pull). */
+    const sameChatRefresh = !switching && prev != null && prev === chatId && force
 
     if (switching) {
       saveActiveThreadToCacheNow()
     }
-    const chatUi = useChatUiStore()
-    chatUi.closeAiPanel()
-    chatUi.clearAiTimers()
+    if (!sameChatRefresh) {
+      const chatUi = useChatUiStore()
+      chatUi.closeAiPanel()
+      chatUi.clearAiTimers()
+    }
     activeChatId.value = chatId
     leaveThread()
     if (switching) {
       resetForThreadSwitch()
     }
 
-    const sameChatRefresh = !switching && prev === chatId && force
     const cached = getThreadCache(chatId)
 
     if (sameChatRefresh) {
@@ -424,6 +431,19 @@ export const useChatStore = defineStore('chat', () => {
 
   function setComposerText(value: string) {
     composerText.value = value
+  }
+
+  /** Как на desktop: дописывает в черновик, затем требует фокус на поле ввода. */
+  function insertFromAi(text: string) {
+    if (composerLocked.value) {
+      return
+    }
+    const t = text.trim()
+    if (!t) {
+      return
+    }
+    composerText.value = composerText.value ? `${composerText.value}\n${t}` : t
+    composerFocusSeq.value += 1
   }
 
   /** Throttled POST /typing while moderator types (как на desktop). */
@@ -603,9 +623,60 @@ export const useChatStore = defineStore('chat', () => {
     composerText.value = text
   }
 
+  /** Вставить текст из панели AI в композер (как десктоп, без закрытия панели). */
   function useAiReply(text: string) {
-    composerText.value = text
-    useChatUiStore().closeAiPanel()
+    insertFromAi(text)
+  }
+
+  async function refreshAiPanelSuggestions(): Promise<void> {
+    const id = parseApiChatId(activeChatId.value)
+    if (id == null) {
+      return
+    }
+    aiPanelSuggestionsLoading.value = true
+    try {
+      const sug = await aiApi.fetchAiSuggestions(id).catch(() => null)
+      if (parseApiChatId(activeChatId.value) !== id) {
+        return
+      }
+      if (aiContent.value) {
+        aiContent.value = {
+          ...aiContent.value,
+          replies: (sug?.replies ?? []).map((r) => ({ id: r.id, text: r.text })),
+        }
+        scheduleSaveThreadCache()
+      }
+    } finally {
+      aiPanelSuggestionsLoading.value = false
+    }
+  }
+
+  async function insertAiDraftReply(): Promise<void> {
+    const firstExisting = aiContent.value?.replies?.[0]?.text?.trim()
+    if (firstExisting) {
+      insertFromAi(firstExisting)
+      return
+    }
+    await refreshAiPanelSuggestions()
+    const t = aiContent.value?.replies?.[0]?.text?.trim()
+    if (t) {
+      insertFromAi(t)
+    } else {
+      useUiStore().pushToast('Нет варианта черновика от AI', 'error')
+    }
+  }
+
+  function insertAiSummaryRecommendation(): void {
+    const s = aiContent.value?.summary?.trim() ?? ''
+    if (!s) {
+      useUiStore().pushToast('Нет текста рекомендации', 'error')
+      return
+    }
+    if (s === AI_HINT || s === 'Нет данных AI для этого чата.' || s === 'Загрузка...') {
+      useUiStore().pushToast('Нет текста рекомендации', 'error')
+      return
+    }
+    insertFromAi(s)
   }
 
   function setTyping(value: boolean) {
@@ -829,6 +900,9 @@ export const useChatStore = defineStore('chat', () => {
     activeChatId,
     messages,
     composerText,
+    composerFocusSeq,
+    insertFromAi,
+    aiPanelSuggestionsLoading,
     replyToMessageId,
     isTyping,
     aiContent,
@@ -862,6 +936,9 @@ export const useChatStore = defineStore('chat', () => {
     openAiPanel,
     closeAiPanel,
     useAiReply,
+    refreshAiPanelSuggestions,
+    insertAiDraftReply,
+    insertAiSummaryRecommendation,
     setTyping,
     subscribeThread,
     leaveThread,

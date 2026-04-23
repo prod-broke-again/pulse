@@ -14,7 +14,7 @@ defineProps<{
       :href="btn.url"
       target="_blank"
       rel="noopener noreferrer"
-      class="block w-full min-w-0 rounded-xl border border-[var(--zinc-700)]/40 bg-zinc-100/90 px-3 py-2.5 text-center text-sm font-medium leading-snug text-[var(--color-brand-500)] shadow-sm transition-[opacity,background-color] hover:opacity-95 dark:border-[var(--zinc-700)]/50 dark:bg-zinc-900/20 dark:text-[var(--color-brand-400)]"
+      class="block w-full min-w-0 rounded-xl border border-[var(--zinc-700)]/40 bg-zinc-100/90 px-3 py-2.5 text-center text-sm font-medium leading-snug break-words text-[var(--color-brand-500)] shadow-sm transition-[opacity,background-color] hover:opacity-95 [overflow-wrap:anywhere] dark:border-[var(--zinc-700)]/50 dark:bg-zinc-900/20 dark:text-[var(--color-brand-400)]"
     >
       {{ btn.text }}
     </a>
