@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      backgroundColor: '#ffffff',
+      backgroundColor: '#e6e0ec',
       androidScaleType: 'CENTER_INSIDE',
     },
   },
