@@ -2,11 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 /**
- * AI assist overlay / panel animation state (decoupled from thread messages).
+ * AI assist overlay / panel (открытие только по кнопке, без фиктивного таймера).
  */
 export const useChatUiStore = defineStore('chatUi', () => {
   const overlayVisible = ref(false)
   const panelOpen = ref(false)
+  /** Пока грузим резюме/подсказки при первом открытии. */
   const aiProcessing = ref(false)
 
   let aiTimers: number[] = []
@@ -23,10 +24,11 @@ export const useChatUiStore = defineStore('chatUi', () => {
     const t1 = window.setTimeout(() => {
       panelOpen.value = true
     }, 10)
-    const t2 = window.setTimeout(() => {
-      aiProcessing.value = false
-    }, 1200)
-    aiTimers.push(t1, t2)
+    aiTimers.push(t1)
+  }
+
+  function setAiPanelContentReady() {
+    aiProcessing.value = false
   }
 
   function closeAiPanel() {
@@ -44,6 +46,7 @@ export const useChatUiStore = defineStore('chatUi', () => {
     aiProcessing,
     openAiPanel,
     closeAiPanel,
+    setAiPanelContentReady,
     clearAiTimers,
   }
 })

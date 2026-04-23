@@ -14,6 +14,12 @@ import type { ChatMessageUpdatedPayload } from '../lib/realtime'
 import { mapApiChatToPreview } from '../mappers/chatMapper'
 import { applyChatMessageUpdatedPayload, mapApiMessageToChatMessage } from '../mappers/messageMapper'
 import { appendRealtimeMessageIfNew, mergeFetchedNewerRows } from './chat/realtimeMerge'
+import {
+  getThreadCache,
+  patchCacheMetaFromApiChatIfPresent,
+  setThreadCache,
+  snapshotToEntry,
+} from '../lib/chatThreadCache'
 import { useAuthStore } from './authStore'
 import { useChatUiStore } from './chatUiStore'
 import { useInboxStore } from './inboxStore'
@@ -27,6 +33,26 @@ import type {
   ChatThreadMeta,
   ReplyMarkupButton,
 } from '../types/chat'
+
+const AI_HINT = 'Нажмите «AI-ответ» ниже, чтобы открыть резюме и подсказки.'
+
+function buildSkeletonThreadMeta(chatId: string): ChatThreadMeta {
+  return {
+    id: chatId,
+    userName: 'Загрузка…',
+    status: 'open',
+    channel: 'web',
+    channelLabel: '…',
+    externalUserId: null,
+    departmentLabel: '…',
+    departmentIcon: null,
+    sourceId: null,
+    departmentId: null,
+    aiSummaryBar: AI_HINT,
+    assignedToUserId: null,
+    muted_until: null,
+  }
+}
 
 export const useChatStore = defineStore('chat', () => {
   const activeChatId = ref<string | null>(null)
@@ -45,6 +71,10 @@ export const useChatStore = defineStore('chat', () => {
   const cannedQuickReplies = ref<Array<{ label: string; text: string }>>([])
   /** Quick link buttons for Zap menu (from API). */
   const quickLinkPresets = ref<ReplyMarkupButton[]>([])
+
+  /** Сеть догружает тред (фон, после кеша). */
+  const threadSyncing = ref(false)
+  let saveCacheDebounce: ReturnType<typeof setTimeout> | null = null
 
   let unsubscribeRealtime: (() => void) | null = null
   let typingClearTimer: number | null = null
@@ -84,10 +114,55 @@ export const useChatStore = defineStore('chat', () => {
       departmentIcon: preview.departmentIcon ?? null,
       sourceId: chat.source_id ?? null,
       departmentId: chat.department_id ?? chat.department?.id ?? null,
-      aiSummaryBar: prev?.aiSummaryBar ?? 'Нет данных AI для этого чата.',
+      aiSummaryBar: prev?.aiSummaryBar ?? AI_HINT,
       assignedToUserId: assigneeUserId(chat),
       muted_until: chat.muted_until ?? null,
     }
+  }
+
+  function applyCacheToState(entry: import('../lib/chatThreadCache').ThreadCacheEntry): void {
+    threadMeta.value = { ...entry.threadMeta }
+    messages.value = entry.messages.map((m) => ({ ...m }))
+    oldestMessageId.value = entry.oldestMessageId
+    hasMoreOlder.value = entry.hasMoreOlder
+    aiContent.value = entry.aiContent ? { ...entry.aiContent, replies: [...entry.aiContent.replies] } : null
+    cannedQuickReplies.value = entry.cannedQuickReplies.map((x) => ({ ...x }))
+    quickLinkPresets.value = entry.quickLinkPresets.map((x) => ({ ...x }))
+  }
+
+  function saveActiveThreadToCacheNow(): void {
+    const id = activeChatId.value
+    if (!id || !threadMeta.value) {
+      return
+    }
+    setThreadCache(
+      id,
+      snapshotToEntry({
+        threadMeta: threadMeta.value,
+        messages: messages.value,
+        oldestMessageId: oldestMessageId.value,
+        hasMoreOlder: hasMoreOlder.value,
+        aiContent: aiContent.value,
+        cannedQuickReplies: cannedQuickReplies.value,
+        quickLinkPresets: quickLinkPresets.value,
+      }),
+    )
+  }
+
+  function scheduleSaveThreadCache(): void {
+    if (saveCacheDebounce != null) {
+      clearTimeout(saveCacheDebounce)
+    }
+    saveCacheDebounce = window.setTimeout(() => {
+      saveCacheDebounce = null
+      saveActiveThreadToCacheNow()
+    }, 350)
+  }
+
+  function resetForThreadSwitch(): void {
+    pendingReplyMarkup.value = []
+    replyToMessageId.value = null
+    composerText.value = ''
   }
 
   async function assignToMe(): Promise<void> {
@@ -98,6 +173,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const chat = await chatApi.assignMe(id)
       applyThreadMetaFromApiChat(chat, chatId!)
+      scheduleSaveThreadCache()
       await useInboxStore().loadInbox()
       ui.pushToast('Чат назначен на вас', 'success')
     } catch {
@@ -113,6 +189,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const chat = await chatApi.closeChat(id)
       applyThreadMetaFromApiChat(chat, chatId!)
+      scheduleSaveThreadCache()
       await useInboxStore().loadInbox()
       ui.pushToast('Чат закрыт', 'success')
     } catch {
@@ -129,6 +206,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const chat = await chatApi.assignMe(id)
       applyThreadMetaFromApiChat(chat, chatId!)
+      scheduleSaveThreadCache()
       await useInboxStore().loadInbox()
       ui.pushToast('Чат снова в работе', 'success')
     } catch {
@@ -144,6 +222,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const chat = await chatApi.changeChatDepartment(id, departmentId)
       applyThreadMetaFromApiChat(chat, chatId!)
+      scheduleSaveThreadCache()
       await useInboxStore().loadInbox()
       ui.pushToast('Отдел обновлён', 'success')
     } catch {
@@ -167,104 +246,152 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function fetchThread(chatId: string): Promise<void> {
+  async function loadThreadFromServer(chatId: string): Promise<void> {
     const id = parseApiChatId(chatId)
-    if (id == null) return
+    if (id == null) {
+      return
+    }
 
-    activeChatId.value = chatId
-    loadingOlder.value = true
-    hasMoreOlder.value = true
-    pendingReplyMarkup.value = []
-    replyToMessageId.value = null
-    cannedQuickReplies.value = []
-    quickLinkPresets.value = []
+    const chat = await chatApi.fetchChat(id)
+    if (activeChatId.value !== chatId) {
+      return
+    }
 
-    try {
-      const chat = await chatApi.fetchChat(id)
-      const [rows, aiSummary, cannedRows, linkRows] = await Promise.all([
-        msgApi.fetchMessages(id, { limit: 50 }),
-        aiApi.fetchAiSummary(id).catch(() => null),
-        cannedApi
-          .fetchCannedResponses(
-            chat.source_id != null
-              ? {
-                  source_id: chat.source_id,
-                  department_id: chat.department_id ?? chat.department?.id ?? undefined,
-                  chat_context: true,
-                }
-              : undefined,
-          )
-          .catch(() => []),
-        quickLinkApi
-          .fetchQuickLinks(
-            chat.source_id != null
-              ? {
-                  source_id: chat.source_id,
-                  department_id: chat.department_id ?? chat.department?.id ?? undefined,
-                  chat_context: true,
-                }
-              : undefined,
-          )
-          .catch(() => []),
-      ])
+    const [rows, cannedRows, linkRows] = await Promise.all([
+      msgApi.fetchMessages(id, { limit: 50 }),
+      cannedApi
+        .fetchCannedResponses(
+          chat.source_id != null
+            ? {
+                source_id: chat.source_id,
+                department_id: chat.department_id ?? chat.department?.id ?? undefined,
+                chat_context: true,
+              }
+            : undefined,
+        )
+        .catch(() => []),
+      quickLinkApi
+        .fetchQuickLinks(
+          chat.source_id != null
+            ? {
+                source_id: chat.source_id,
+                department_id: chat.department_id ?? chat.department?.id ?? undefined,
+                chat_context: true,
+              }
+            : undefined,
+        )
+        .catch(() => []),
+    ])
 
-      cannedQuickReplies.value = cannedRows.map((r) => ({
-        label: (r.title?.trim() || r.code?.trim() || `Шаблон #${r.id}`).slice(0, 80),
-        text: r.text,
-      }))
+    if (activeChatId.value !== chatId) {
+      return
+    }
 
-      quickLinkPresets.value = linkRows.map((l) => ({
-        text: l.title,
-        url: l.url,
-      }))
+    cannedQuickReplies.value = cannedRows.map((r) => ({
+      label: (r.title?.trim() || r.code?.trim() || `Шаблон #${r.id}`).slice(0, 80),
+      text: r.text,
+    }))
 
-      const preview = mapApiChatToPreview(chat)
-      threadMeta.value = {
-        id: chatId,
-        userName: preview.name,
-        status: preview.status,
-        channel: preview.channel,
-        channelLabel: chat.channel_label ?? 'Web',
-        externalUserId: chat.external_user_id != null && String(chat.external_user_id).trim() !== '' ? String(chat.external_user_id) : null,
-        departmentLabel: preview.department,
-        departmentIcon: preview.departmentIcon ?? null,
-        sourceId: chat.source_id ?? null,
-        departmentId: chat.department_id ?? chat.department?.id ?? null,
-        aiSummaryBar:
-          aiSummary?.summary?.trim() ||
-          aiSummary?.intent_tag?.trim() ||
-          'Нет данных AI для этого чата.',
-        assignedToUserId: assigneeUserId(chat),
-        muted_until: chat.muted_until ?? null,
-      }
+    quickLinkPresets.value = linkRows.map((l) => ({
+      text: l.title,
+      url: l.url,
+    }))
 
-      messages.value = rows.map(mapApiMessageToChatMessage)
-      oldestMessageId.value = rows.length > 0 ? rows[0]!.id : null
-      if (rows.length < 50) hasMoreOlder.value = false
+    const preview = mapApiChatToPreview(chat)
+    threadMeta.value = {
+      id: chatId,
+      userName: preview.name,
+      status: preview.status,
+      channel: preview.channel,
+      channelLabel: chat.channel_label ?? 'Web',
+      externalUserId: chat.external_user_id != null && String(chat.external_user_id).trim() !== '' ? String(chat.external_user_id) : null,
+      departmentLabel: preview.department,
+      departmentIcon: preview.departmentIcon ?? null,
+      sourceId: chat.source_id ?? null,
+      departmentId: chat.department_id ?? chat.department?.id ?? null,
+      aiSummaryBar: AI_HINT,
+      assignedToUserId: assigneeUserId(chat),
+      muted_until: chat.muted_until ?? null,
+    }
 
+    messages.value = rows.map(mapApiMessageToChatMessage)
+    oldestMessageId.value = rows.length > 0 ? rows[0]!.id : null
+    hasMoreOlder.value = rows.length >= 50
+
+    if (aiContent.value == null) {
       aiContent.value = {
-        summary: aiSummary?.summary ?? threadMeta.value.aiSummaryBar,
-        intentTag: aiSummary?.intent_tag ?? 'Общее обращение',
+        summary: AI_HINT,
+        intentTag: 'Общее обращение',
         replies: [],
         actionTitle: 'Продолжить диалог',
         actionDesc: '',
         actionButtonLabel: 'Ок',
       }
+    }
 
-      try {
-        const sug = await aiApi.fetchAiSuggestions(id)
-        if (aiContent.value && sug.replies?.length) {
-          aiContent.value = {
-            ...aiContent.value,
-            replies: sug.replies.map((r) => ({ id: r.id, text: r.text })),
-          }
-        }
-      } catch {
-        /* optional */
-      }
-
+    saveActiveThreadToCacheNow()
+    try {
       await markAsRead(id)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * @param force — принудительное обновление с сервера (при кеше тред показываем сразу, данные сети догоняют).
+   */
+  async function fetchThread(chatId: string, options?: { force?: boolean }): Promise<void> {
+    const id = parseApiChatId(chatId)
+    if (id == null) {
+      return
+    }
+
+    const force = options?.force === true
+    const prev = activeChatId.value
+    const switching = prev != null && prev !== chatId
+
+    if (switching) {
+      saveActiveThreadToCacheNow()
+    }
+    const chatUi = useChatUiStore()
+    chatUi.closeAiPanel()
+    chatUi.clearAiTimers()
+    activeChatId.value = chatId
+    leaveThread()
+    if (switching) {
+      resetForThreadSwitch()
+    }
+
+    const sameChatRefresh = !switching && prev === chatId && force
+    const cached = getThreadCache(chatId)
+
+    if (sameChatRefresh) {
+      /* оставляем экран, обновит loadThreadFromServer */
+    } else if (cached) {
+      applyCacheToState(cached)
+      hasMoreOlder.value = cached.hasMoreOlder
+      loadingOlder.value = false
+    } else {
+      hasMoreOlder.value = true
+      aiContent.value = null
+      threadMeta.value = buildSkeletonThreadMeta(chatId)
+      messages.value = []
+      loadingOlder.value = true
+    }
+
+    subscribeThread(chatId)
+    threadSyncing.value = true
+    try {
+      await loadThreadFromServer(chatId)
+    } catch {
+      if (activeChatId.value === chatId && threadMeta.value && threadMeta.value.userName === 'Загрузка…') {
+        threadMeta.value = {
+          ...threadMeta.value!,
+          userName: 'Не удалось загрузить',
+        }
+      }
     } finally {
+      threadSyncing.value = false
       loadingOlder.value = false
     }
   }
@@ -292,6 +419,7 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       loadingOlder.value = false
     }
+    scheduleSaveThreadCache()
   }
 
   function setComposerText(value: string) {
@@ -436,6 +564,7 @@ export const useChatStore = defineStore('chat', () => {
       replyToMessageId.value = null
       useUiStore().pushToast('Сообщение отправлено', 'success')
       await markAsRead(id)
+      scheduleSaveThreadCache()
     } catch {
       messages.value = messages.value.filter((m) => m.id !== tempId && m.clientMessageId !== clientMessageId)
       useUiStore().pushToast('Не удалось отправить', 'error')
@@ -463,7 +592,7 @@ export const useChatStore = defineStore('chat', () => {
         attachments: paths,
         client_message_id: clientMessageId,
       })
-      await fetchThread(chatId)
+      await fetchThread(chatId, { force: true })
       useUiStore().pushToast('Файл отправлен', 'success')
     } catch {
       useUiStore().pushToast('Не удалось отправить файл', 'error')
@@ -517,6 +646,7 @@ export const useChatStore = defineStore('chat', () => {
             vibrateIncoming(settings.vibration)
           }
           useInboxStore().scheduleInboxRefreshFromRealtime()
+          scheduleSaveThreadCache()
         })()
       },
       onChatMessageUpdated: (payload: ChatMessageUpdatedPayload) => {
@@ -524,6 +654,7 @@ export const useChatStore = defineStore('chat', () => {
           return
         }
         messages.value = applyChatMessageUpdatedPayload(messages.value, payload)
+        scheduleSaveThreadCache()
       },
       onMessageRead: (payload) => {
         if (payload.chatId !== id || payload.messageIds.length === 0) return
@@ -532,6 +663,7 @@ export const useChatStore = defineStore('chat', () => {
           readIds.has(m.id) && m.kind === 'incoming' ? { ...m, isRead: true } : m,
         )
         useInboxStore().scheduleInboxRefreshFromRealtime()
+        scheduleSaveThreadCache()
       },
       onTyping: (payload) => {
         if (payload.sender_type === 'moderator') {
@@ -555,6 +687,8 @@ export const useChatStore = defineStore('chat', () => {
             if (activeChatId.value === chatId) {
               applyThreadMetaFromApiChat(chat, chatId)
             }
+            patchCacheMetaFromApiChatIfPresent(chatId, chat)
+            scheduleSaveThreadCache()
             useInboxStore().scheduleInboxRefreshFromRealtime()
           } catch {
             /* ignore */
@@ -589,6 +723,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clearThread() {
+    if (activeChatId.value) {
+      saveActiveThreadToCacheNow()
+    }
+    if (saveCacheDebounce != null) {
+      clearTimeout(saveCacheDebounce)
+      saveCacheDebounce = null
+    }
+    activeChatId.value = null
     leaveThread()
     readRequestInFlight = false
     lastSentReadWatermarkKey = null
@@ -599,6 +741,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     messages.value = []
     threadMeta.value = null
+    aiContent.value = null
     oldestMessageId.value = null
     hasMoreOlder.value = true
     pendingReplyMarkup.value = []
@@ -607,9 +750,47 @@ export const useChatStore = defineStore('chat', () => {
     quickLinkPresets.value = []
   }
 
-  /** Delegates to {@link useChatUiStore} for backwards-compatible API. */
+  async function loadAiPanelData(): Promise<void> {
+    const chatUi = useChatUiStore()
+    const id = parseApiChatId(activeChatId.value)
+    if (id == null) {
+      chatUi.setAiPanelContentReady()
+      return
+    }
+    try {
+      const [summary, sug] = await Promise.all([
+        aiApi.fetchAiSummary(id).catch(() => null),
+        aiApi.fetchAiSuggestions(id).catch(() => null),
+      ])
+      if (parseApiChatId(activeChatId.value) !== id) {
+        return
+      }
+      const s = summary?.summary?.trim() || summary?.intent_tag?.trim() || 'Нет данных AI для этого чата.'
+      const intent = summary?.intent_tag?.trim() || 'Общее обращение'
+      aiContent.value = {
+        summary: s,
+        intentTag: intent,
+        replies: (sug?.replies ?? []).map((r) => ({ id: r.id, text: r.text })),
+        actionTitle: 'Продолжить диалог',
+        actionDesc: '',
+        actionButtonLabel: 'Ок',
+      }
+      if (threadMeta.value) {
+        threadMeta.value = {
+          ...threadMeta.value,
+          aiSummaryBar: s.length > 120 ? `${s.slice(0, 120)}…` : s,
+        }
+      }
+      scheduleSaveThreadCache()
+    } finally {
+      chatUi.setAiPanelContentReady()
+    }
+  }
+
   function openAiPanel() {
-    useChatUiStore().openAiPanel()
+    const chatUi = useChatUiStore()
+    chatUi.openAiPanel()
+    void loadAiPanelData()
   }
 
   function closeAiPanel() {
@@ -627,6 +808,7 @@ export const useChatStore = defineStore('chat', () => {
       byId.set(m.id, m)
     }
     messages.value = Array.from(byId.values()).sort((a, b) => Number(a.id) - Number(b.id))
+    scheduleSaveThreadCache()
   }
 
   async function ensureReplyMessageLoaded(replyToId: number): Promise<boolean> {
@@ -653,11 +835,18 @@ export const useChatStore = defineStore('chat', () => {
     loadingOlder,
     hasMoreOlder,
     threadMeta,
+    threadSyncing,
     pendingReplyMarkup,
     cannedQuickReplies,
     quickLinkPresets,
     channelSource,
     fetchThread,
+    refreshThread: () => {
+      const id = activeChatId.value
+      if (id) {
+        void fetchThread(id, { force: true })
+      }
+    },
     loadOlderMessages,
     setComposerText,
     scheduleTypingNotify,

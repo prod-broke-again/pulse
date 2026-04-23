@@ -19,6 +19,53 @@ const chat = useChatStore()
 const auth = useAuthStore()
 const { isTyping } = storeToRefs(chat)
 
+const ptrPull = ref(0)
+let ptrStartY = 0
+let ptrArmed = false
+
+function onPtrStart(e: TouchEvent): void {
+  const r = root.value
+  if (!r || r.scrollTop > 0) {
+    ptrArmed = false
+    return
+  }
+  const t = e.touches[0]
+  if (!t) {
+    return
+  }
+  ptrArmed = true
+  ptrStartY = t.clientY
+  ptrPull.value = 0
+}
+
+function onPtrMove(e: TouchEvent): void {
+  if (!ptrArmed) {
+    return
+  }
+  const r = root.value
+  if (!r || r.scrollTop > 0) {
+    ptrPull.value = 0
+    return
+  }
+  const t = e.touches[0]
+  if (!t) {
+    return
+  }
+  const dy = t.clientY - ptrStartY
+  ptrPull.value = dy > 0 ? Math.min(dy, 72) : 0
+}
+
+function onPtrEnd(): void {
+  if (!ptrArmed) {
+    return
+  }
+  ptrArmed = false
+  if (ptrPull.value >= 48) {
+    chat.refreshThread()
+  }
+  ptrPull.value = 0
+}
+
 const selectionMode = ref(false)
 const selectedIds = ref<string[]>([])
 const selectAnchorId = ref<string | null>(null)
@@ -377,7 +424,18 @@ defineExpose({ scrollToEnd, scrollToMessageById, enterSelectionMode, exitSelecti
       ref="root"
       class="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[var(--zinc-50)] px-4 py-4 [-webkit-overflow-scrolling:touch] dark:bg-[var(--zinc-900)]"
       @scroll.passive="onScroll"
+      @touchstart.passive="onPtrStart"
+      @touchmove.passive="onPtrMove"
+      @touchend="onPtrEnd"
+      @touchcancel="onPtrEnd"
     >
+      <div
+        v-if="ptrPull > 8"
+        class="flex shrink-0 justify-center pb-1 text-[11px] text-[var(--zinc-400)]"
+        :style="{ height: `${Math.min(ptrPull, 48)}px` }"
+      >
+        {{ ptrPull >= 48 ? 'Отпустите для обновления' : 'Потяните для обновления' }}
+      </div>
       <div class="py-2 text-center text-[11px] font-medium text-[var(--zinc-400)]">
         Сегодня
       </div>

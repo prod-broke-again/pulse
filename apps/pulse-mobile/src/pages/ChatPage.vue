@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ChevronRight, Sparkles } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -12,7 +11,7 @@ import { useChatStore } from '../stores/chatStore'
 const route = useRoute()
 const chat = useChatStore()
 
-const { threadMeta, messages } = storeToRefs(chat)
+const { threadMeta, messages, threadSyncing } = storeToRefs(chat)
 
 const listRef = ref<InstanceType<typeof MessageList> | null>(null)
 
@@ -68,29 +67,16 @@ watch(
     >
       Чат закрыт — клиент не получит ответ, пока чат снова не в работе.
     </div>
-
-    <button
-      type="button"
-      class="flex shrink-0 cursor-pointer items-start gap-2 border-b border-[var(--color-gray-line)] bg-gradient-to-br from-[rgba(85,23,94,0.06)] to-[rgba(154,95,168,0.06)] px-4 py-2.5 text-left dark:border-[var(--zinc-700)] dark:from-[rgba(85,23,94,0.15)] dark:to-[rgba(154,95,168,0.08)]"
-      @click="chat.openAiPanel()"
+    <div
+      v-if="threadSyncing"
+      class="h-0.5 shrink-0 overflow-hidden bg-[var(--zinc-200)] dark:bg-[var(--zinc-700)]"
+      role="status"
+      aria-label="Синхронизация с сервером"
     >
       <div
-        class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] text-xs text-white"
-      >
-        <Sparkles class="size-3" aria-hidden="true" />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div
-          class="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-brand)] dark:text-[var(--color-brand-200)]"
-        >
-          AI-резюме
-        </div>
-        <div class="text-xs leading-normal text-[var(--zinc-600)] dark:text-[var(--zinc-300)]">
-          {{ threadMeta.aiSummaryBar }}
-        </div>
-      </div>
-      <ChevronRight class="mt-0.5 size-3 shrink-0 text-[var(--zinc-400)]" aria-hidden="true" />
-    </button>
+        class="h-full w-2/5 max-w-[120px] bg-[var(--color-brand)] motion-safe:animate-pulse dark:bg-[var(--color-brand-300)]"
+      />
+    </div>
 
     <MessageList ref="listRef" :messages="messages" />
 

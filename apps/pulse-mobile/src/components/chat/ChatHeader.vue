@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy, History } from 'lucide-vue-next'
+import { ChevronLeft, UserPlus, X, Loader2, RotateCw, Copy, History, RefreshCw } from 'lucide-vue-next'
 import { Teleport, computed, ref } from 'vue'
 import { resolveDepartmentIcon } from '../../constants/departmentIcons'
 import { useRouter } from 'vue-router'
@@ -90,6 +90,10 @@ function goClientHistory() {
   void router.push({ name: 'client-history', params: { externalUserId: eid } })
 }
 
+function onRefreshThread(): void {
+  chat.refreshThread()
+}
+
 async function onSyncHistory(): Promise<void> {
   const id = parseApiChatId(props.meta.id)
   if (id == null || syncLoading.value) return
@@ -97,7 +101,7 @@ async function onSyncHistory(): Promise<void> {
   const ui = useUiStore()
   try {
     await chatApi.syncChatHistory(id)
-    await chat.fetchThread(props.meta.id)
+    await chat.fetchThread(props.meta.id, { force: true })
     ui.pushToast('История синхронизирована', 'success')
   } catch {
     ui.pushToast('Не удалось синхронизировать', 'error')
@@ -182,6 +186,16 @@ function pickDepartment(id: number): void {
       </div>
     </div>
     <div class="flex gap-1">
+      <button
+        type="button"
+        class="flex cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-[var(--color-gray-line)] bg-white p-1.5 text-xs font-medium text-[var(--zinc-600)] transition-all active:scale-[0.97] dark:border-[var(--zinc-700)] dark:bg-[var(--zinc-800)] dark:text-[var(--zinc-300)]"
+        :class="{ 'opacity-50': chat.threadSyncing }"
+        :disabled="chat.threadSyncing"
+        aria-label="Обновить чат"
+        @click="onRefreshThread"
+      >
+        <RefreshCw class="size-3.5" :class="{ 'motion-safe:animate-spin': chat.threadSyncing }" />
+      </button>
       <button
         v-if="meta.externalUserId"
         type="button"

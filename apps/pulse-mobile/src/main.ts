@@ -26,7 +26,7 @@ initializeCapacitor({
     void useInboxStore().loadInbox()
     const chat = useChatStore()
     if (chat.activeChatId) {
-      void chat.fetchThread(chat.activeChatId)
+      void chat.fetchThread(chat.activeChatId, { force: true })
     }
   },
 })
