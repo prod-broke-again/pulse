@@ -33,20 +33,40 @@ initializeCapacitor({
 
 setupPushNotificationDeepLinks(router)
 
-/** Native: return from IdP via pulseapp://auth/callback?... */
+/**
+ * Native OAuth return via pulseapp://auth/callback?...
+ * - appUrlOpen: works when the app is already running (in-app browser return).
+ * - getLaunchUrl after mount: cold start — the OS often fires appUrlOpen before
+ *   this JS module registers a listener, so the callback was previously lost
+ *   until the user tapped "Войти" again.
+ */
+let consumeNativeOAuthLaunchUrl: (() => Promise<void>) | null = null
+
 if (Capacitor.isNativePlatform()) {
+  const seenOAuth = new Set<string>()
+
   const handleOAuthReturn = async (url: string) => {
     if (!url.includes('callback')) {
       return
     }
     const p = parseOAuthCallbackParams(url)
     if (p.code && p.state) {
+      const dedupe = `c:${p.code}`
+      if (seenOAuth.has(dedupe)) {
+        return
+      }
+      seenOAuth.add(dedupe)
       await Browser.close().catch(() => {})
       await router.replace({
         name: 'auth-callback',
         query: { code: p.code, state: p.state },
       })
     } else if (p.error) {
+      const dedupe = `e:${p.error}:${p.error_description ?? ''}`
+      if (seenOAuth.has(dedupe)) {
+        return
+      }
+      seenOAuth.add(dedupe)
       await Browser.close().catch(() => {})
       await router.replace({
         name: 'auth-callback',
@@ -61,6 +81,14 @@ if (Capacitor.isNativePlatform()) {
   void CapacitorApp.addListener('appUrlOpen', ({ url }) => {
     void handleOAuthReturn(url)
   })
+
+  consumeNativeOAuthLaunchUrl = async () => {
+    await router.isReady()
+    const launch = await CapacitorApp.getLaunchUrl()
+    if (launch?.url) {
+      await handleOAuthReturn(launch.url)
+    }
+  }
 }
 
 const ui = useUiStore()
@@ -77,6 +105,10 @@ if (typeof window !== 'undefined' && window.visualViewport) {
 }
 
 app.mount('#app')
+
+if (consumeNativeOAuthLaunchUrl) {
+  void consumeNativeOAuthLaunchUrl()
+}
 
 /** Ensure inbox realtime (moderator channel) subscribes even before first inbox visit. */
 useInboxStore()
