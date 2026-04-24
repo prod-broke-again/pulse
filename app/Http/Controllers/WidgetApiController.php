@@ -12,6 +12,7 @@ use App\Infrastructure\Persistence\Eloquent\DepartmentModel;
 use App\Infrastructure\Persistence\Eloquent\MessageModel;
 use App\Infrastructure\Persistence\Eloquent\SourceModel;
 use App\Models\WidgetConfig;
+use App\Models\WidgetGlobalSettings;
 use App\Services\MaybeSendOfflineAutoReply;
 use App\Services\ModeratorPresenceService;
 use Illuminate\Http\JsonResponse;
@@ -93,11 +94,17 @@ final class WidgetApiController extends Controller
         }
         $data['allowed_origins'] = $allowedOrigins;
 
+        $data = array_merge($data, WidgetGlobalSettings::publicRuntimeForWidget());
+
         return response()->json($data);
     }
 
     public function session(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'source_identifier' => ['required', 'string', 'max:255'],
             'visitor_id' => ['required', 'string', 'max:191'],
@@ -209,6 +216,10 @@ final class WidgetApiController extends Controller
 
     public function messages(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'chat_token' => ['required', 'string'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -274,6 +285,10 @@ final class WidgetApiController extends Controller
 
     public function send(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'chat_token' => ['required', 'string'],
             'text' => ['required', 'string', 'max:4000'],
@@ -350,6 +365,10 @@ final class WidgetApiController extends Controller
 
     public function chatAction(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'chat_token' => ['required', 'string'],
             'action' => ['required', 'string', 'in:'.implode(',', [
@@ -378,6 +397,10 @@ final class WidgetApiController extends Controller
 
     public function typing(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'chat_token' => ['required', 'string'],
         ]);
@@ -401,6 +424,10 @@ final class WidgetApiController extends Controller
 
     public function markRead(Request $request): JsonResponse
     {
+        if ($r = $this->widgetDisabledResponseIfNeeded()) {
+            return $r;
+        }
+
         $data = $request->validate([
             'chat_token' => ['required', 'string'],
             'message_ids' => ['sometimes', 'array'],
@@ -437,6 +464,19 @@ final class WidgetApiController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    private function widgetDisabledResponseIfNeeded(): ?JsonResponse
+    {
+        if (WidgetGlobalSettings::publicRuntimeForWidget()['widgetEnabled']) {
+            return null;
+        }
+
+        return response()->json([
+            'ok' => false,
+            'error' => 'widget_disabled',
+            'message' => 'Web widget is temporarily unavailable.',
+        ], 503);
     }
 
     private function resolveDepartment(int $sourceId, ?string $slug): ?DepartmentModel

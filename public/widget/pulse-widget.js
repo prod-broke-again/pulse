@@ -42,7 +42,11 @@
         closeTabNotificationText: defaultCloseTabNotificationText,
         primaryColor: '#55175e',
         textColor: '#ffffff',
-        iconSvg: defaultIconSvg
+        iconSvg: defaultIconSvg,
+        widgetEnabled: true,
+        disabledTitle: 'Сейчас чат на сайте недоступен',
+        disabledText: 'Пожалуйста, напишите нам в удобный мессенджер — мы ответим там.',
+        contactLinks: { telegram: null, vk: null, max: null }
     };
 
     let allowedOrigins = [window.location.origin];
@@ -74,6 +78,25 @@
     }
     if (script.dataset.closeHint) {
         config.closeTabNotificationText = script.dataset.closeHint;
+    }
+    if (typeof config.widgetEnabled !== 'boolean') {
+        config.widgetEnabled = true;
+    }
+    const clIn = config.contactLinks;
+    if (!clIn || typeof clIn !== 'object') {
+        config.contactLinks = { telegram: null, vk: null, max: null };
+    } else {
+        config.contactLinks = {
+            telegram: typeof clIn.telegram === 'string' && String(clIn.telegram).trim() ? String(clIn.telegram).trim() : null,
+            vk: typeof clIn.vk === 'string' && String(clIn.vk).trim() ? String(clIn.vk).trim() : null,
+            max: typeof clIn.max === 'string' && String(clIn.max).trim() ? String(clIn.max).trim() : null
+        };
+    }
+    if (typeof config.disabledTitle !== 'string' || !String(config.disabledTitle).trim()) {
+        config.disabledTitle = 'Сейчас чат на сайте недоступен';
+    }
+    if (typeof config.disabledText !== 'string' || !String(config.disabledText).trim()) {
+        config.disabledText = 'Пожалуйста, напишите нам в удобный мессенджер — мы ответим там.';
     }
 
     if (script.dataset.mockGuest) {
@@ -156,6 +179,204 @@
         if (mode === 'dark') return true;
         if (mode === 'light') return false;
         return detectSystemDark();
+    }
+
+    if (config.widgetEnabled === false) {
+        (function mountWidgetDisabled() {
+            function escHtmlStub(t) {
+                return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            const headTitle = String(config.title).replace(/</g, '&lt;');
+            const stubTitle = escHtmlStub(config.disabledTitle);
+            const stubText = escHtmlStub(config.disabledText);
+            const hostD = document.createElement('div');
+            hostD.id = 'pulse-widget-host';
+            hostD.style.position = 'fixed';
+            hostD.style.zIndex = '2147483646';
+            hostD.style.bottom = '24px';
+            hostD.style[position] = '24px';
+            document.body.appendChild(hostD);
+            const shadowD = hostD.attachShadow({ mode: 'open' });
+            const rootD = document.createElement('div');
+            rootD.id = 'pulse-widget-root';
+            let themeModeD = readStoredThemeMode();
+            function applyPwThemeD() {
+                const isDark = resolveDarkByMode(themeModeD);
+                rootD.dataset.pwTheme = isDark ? 'dark' : 'light';
+                rootD.style.setProperty('--pw-primary', config.primaryColor);
+                rootD.style.setProperty('--pw-on-primary', config.textColor);
+                rootD.style.setProperty('--pw-composer', PULSE_COMPOSER_BRAND);
+                rootD.style.setProperty('--pw-composer-ring', 'color-mix(in srgb, ' + PULSE_COMPOSER_BRAND + ' 24%, transparent)');
+            }
+            applyPwThemeD();
+            rootD.style.fontFamily = 'Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+            if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+                const mm = window.matchMedia('(prefers-color-scheme: dark)');
+                const onSystem = function () { if (themeModeD === 'system') applyPwThemeD(); };
+                if (typeof mm.addEventListener === 'function') mm.addEventListener('change', onSystem);
+                else if (typeof mm.addListener === 'function') mm.addListener(onSystem);
+            }
+            const styleD = document.createElement('style');
+            styleD.textContent = `
+      :host { all: initial; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      button { outline: none; font-family: inherit; cursor: pointer; }
+      .pw-icon { width: 20px; height: 20px; display: block; }
+      #pulse-widget-root { --pw-radius-lg: 14px; --pw-radius-md: 10px; --pw-radius-full: 9999px; font-size: 15px; accent-color: var(--pw-composer); }
+      #pulse-widget-root[data-pw-theme="light"] {
+        --pw-bg-panel: #ffffff; --pw-bg-thread: #f8f7fa; --pw-text: #1a1a1a; --pw-text-muted: #6b6578; --pw-border: #e8e4ed; --pw-shadow: 0 4px 16px rgba(85, 23, 94, 0.08);
+      }
+      #pulse-widget-root[data-pw-theme="dark"] {
+        --pw-bg-panel: #201a26; --pw-bg-thread: #1c1722; --pw-text: #e8e4ed; --pw-text-muted: #9b95a3; --pw-border: #2d2535; --pw-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      }
+      .pw-fab-wrap { position: absolute; bottom: 0; ${position}: 0; z-index: 2; }
+      .pw-fab {
+        width: 56px; height: 56px; border-radius: var(--pw-radius-full); border: none;
+        color: var(--pw-on-primary); background: var(--pw-primary);
+        box-shadow: var(--pw-shadow);
+        display: flex; align-items: center; justify-content: center;
+        transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative;
+      }
+      .pw-fab:hover { transform: scale(1.06); }
+      .pw-fab-badge { display: none !important; }
+      .pw-panel {
+        width: min(400px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px));
+        background: var(--pw-bg-panel); border-radius: var(--pw-radius-lg);
+        box-shadow: var(--pw-shadow);
+        display: none; flex-direction: column; overflow: hidden; opacity: 0;
+        transform: translateY(12px) scale(0.99);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        border: 1px solid var(--pw-border);
+        transform-origin: bottom ${position};
+        position: absolute; bottom: 0; ${position}: 0; z-index: 1;
+        color: var(--pw-text);
+      }
+      .pw-panel.pw-open { display: flex; opacity: 1; transform: translateY(0) scale(1); }
+      .pw-head {
+        padding: 14px 16px; background: var(--pw-bg-panel);
+        border-bottom: 1px solid var(--pw-border);
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-shrink: 0;
+      }
+      .pw-title { font-size: 16px; font-weight: 700; color: var(--pw-text); }
+      .pw-head-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+      .pw-icon-btn {
+        width: 34px; height: 34px; border: 1px solid var(--pw-border); border-radius: var(--pw-radius-full);
+        background: var(--pw-bg-panel); color: var(--pw-text-muted);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .pw-icon--xs { width: 10px !important; height: 10px !important; }
+      .pw-theme-dual { display: inline-flex; align-items: center; gap: 0; width: 20px; height: 20px; }
+      .pw-stub { flex: 1; overflow-y: auto; padding: 20px 16px; background: var(--pw-bg-thread); }
+      .pw-stub__title { font-size: 15px; font-weight: 700; color: var(--pw-text); margin: 0 0 10px; line-height: 1.35; }
+      .pw-stub__text { font-size: 14px; color: var(--pw-text); line-height: 1.5; margin: 0 0 16px; }
+      .pw-stub__links { display: flex; flex-direction: column; gap: 8px; }
+      .pw-stub__link {
+        display: block; text-align: center; padding: 12px 16px; border-radius: var(--pw-radius-md);
+        background: var(--pw-composer); color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none;
+      }
+      .pw-stub__hint { font-size: 12.5px; color: var(--pw-text-muted); line-height: 1.45; }
+      @media (max-width: 640px) {
+        :host { bottom: 0 !important; left: 0 !important; right: 0 !important; top: 0 !important; width: 100%; height: 100%; }
+        .pw-fab-wrap { bottom: 20px; ${position}: 20px; }
+        .pw-panel { width: 100%; height: 100%; max-height: 100vh; border-radius: 0; border: none; }
+      }
+    `;
+            shadowD.appendChild(styleD);
+            const svgPanelCloseD = PW_ICONS['close-outline.svg'];
+            const svgSunD = PW_ICONS['sunny-outline.svg'];
+            const svgMoonD = PW_ICONS['moon-outline.svg'];
+            function svgWithClassD(svg, extraClass) {
+                if (!svg) return '';
+                return svg.replace('<svg', '<svg class="pw-icon' + (extraClass ? ' ' + extraClass : '') + '" focusable="false" aria-hidden="true"');
+            }
+            rootD.innerHTML = `
+      <div class="pw-fab-wrap">
+        <button class="pw-fab" type="button" aria-label="Открыть сообщение">
+          ${config.iconSvg || defaultIconSvg}
+        </button>
+      </div>
+      <section class="pw-panel" role="dialog" aria-label="Сообщение">
+        <header class="pw-head">
+          <div class="pw-title">${headTitle}</div>
+          <div class="pw-head-actions">
+            <button class="pw-icon-btn pw-theme-toggle" type="button" data-pw-theme-cycle title="Смена темы" aria-label="Сменить тему"></button>
+            <button class="pw-icon-btn pw-close" type="button" aria-label="Закрыть"></button>
+          </div>
+        </header>
+        <div class="pw-stub">
+          <p class="pw-stub__title">${stubTitle}</p>
+          <p class="pw-stub__text">${stubText}</p>
+          <div class="pw-stub__links" id="pw-stub-links-d"></div>
+          <p class="pw-stub__hint" id="pw-stub-hint-d" hidden>Ссылок на мессенджеры пока не настроено — загляните позже.</p>
+        </div>
+      </section>
+    `;
+            shadowD.appendChild(rootD);
+            const linksWrap = rootD.querySelector('#pw-stub-links-d');
+            const hintEl = rootD.querySelector('#pw-stub-hint-d');
+            const linkPairs = [
+                { label: 'Написать в Telegram', url: config.contactLinks.telegram, key: 'tg' },
+                { label: 'Написать в VK', url: config.contactLinks.vk, key: 'vk' },
+                { label: 'Написать в MAX', url: config.contactLinks.max, key: 'max' }
+            ];
+            let hasAny = false;
+            linkPairs.forEach(function (p) {
+                if (!p.url) return;
+                hasAny = true;
+                const a = document.createElement('a');
+                a.className = 'pw-stub__link';
+                a.href = p.url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.textContent = p.label;
+                if (linksWrap) linksWrap.appendChild(a);
+            });
+            if (!hasAny && hintEl) {
+                hintEl.hidden = false;
+            }
+            const fabWrapD = rootD.querySelector('.pw-fab-wrap');
+            const fabD = rootD.querySelector('.pw-fab');
+            const panelD = rootD.querySelector('.pw-panel');
+            const closeD = rootD.querySelector('.pw-close');
+            const themeBtnD = rootD.querySelector('[data-pw-theme-cycle]');
+            if (closeD && svgPanelCloseD) { closeD.innerHTML = svgWithClassD(svgPanelCloseD); }
+            function renderThemeButtonD() {
+                if (!themeBtnD) return;
+                const themeTitles = { system: 'Как в системе', light: 'Светлая тема', dark: 'Тёмная тема' };
+                const modeLabel = themeTitles[themeModeD] || themeTitles.system;
+                themeBtnD.setAttribute('title', modeLabel);
+                themeBtnD.setAttribute('aria-label', 'Сменить тему: ' + modeLabel);
+                if (themeModeD === 'light' && svgSunD) {
+                    themeBtnD.innerHTML = svgWithClassD(svgSunD);
+                } else if (themeModeD === 'dark' && svgMoonD) {
+                    themeBtnD.innerHTML = svgWithClassD(svgMoonD);
+                } else if (svgSunD && svgMoonD) {
+                    themeBtnD.innerHTML = '<span class="pw-theme-dual" aria-hidden="true">' + svgWithClassD(svgSunD, 'pw-icon--xs') + svgWithClassD(svgMoonD, 'pw-icon--xs') + '</span>';
+                }
+            }
+            function setOpenD(open) {
+                if (open) {
+                    if (panelD) panelD.classList.add('pw-open');
+                    if (fabWrapD) fabWrapD.style.display = 'none';
+                } else {
+                    if (panelD) panelD.classList.remove('pw-open');
+                    setTimeout(function () { if (fabWrapD) fabWrapD.style.display = 'block'; }, 250);
+                }
+            }
+            function cycleThemeD() {
+                const order = ['system', 'light', 'dark'];
+                const i = order.indexOf(themeModeD);
+                themeModeD = order[(i + 1) % order.length];
+                try { localStorage.setItem(themeStorageKey, themeModeD); } catch (e) { /* empty */ }
+                applyPwThemeD();
+                renderThemeButtonD();
+            }
+            renderThemeButtonD();
+            if (themeBtnD) { themeBtnD.addEventListener('click', function (e) { e.stopPropagation(); cycleThemeD(); }); }
+            if (fabD) { fabD.addEventListener('click', function () { setOpenD(true); }); }
+            if (closeD) { closeD.addEventListener('click', function () { setOpenD(false); }); }
+        })();
+        return;
     }
 
     let visitorId = localStorage.getItem(storageKey);
