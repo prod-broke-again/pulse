@@ -199,6 +199,30 @@
         return detectSystemDark();
     }
 
+    /** Согласован с @media (max-width: 640px) в shadow-стилях виджета. */
+    const PW_LAYOUT_MOBILE_MAX = 640;
+    function applyPulseHostInsets(hostEl) {
+        if (!hostEl || !hostEl.style) return;
+        const edge = typeof window !== 'undefined' && window.innerWidth > PW_LAYOUT_MOBILE_MAX ? '16px' : '24px';
+        hostEl.style.bottom = edge;
+        hostEl.style[position] = edge;
+        const other = position === 'right' ? 'left' : 'right';
+        hostEl.style.removeProperty(other);
+        hostEl.style.removeProperty('top');
+    }
+    let pulseHostResizeTimer = null;
+    function attachPulseHostInsetListener(hostEl) {
+        function onResize() {
+            if (pulseHostResizeTimer) clearTimeout(pulseHostResizeTimer);
+            pulseHostResizeTimer = setTimeout(function () {
+                applyPulseHostInsets(hostEl);
+            }, 120);
+        }
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', onResize);
+        }
+    }
+
     if (config.widgetEnabled === false) {
         (function mountWidgetDisabled() {
             function escHtmlStub(t) {
@@ -211,8 +235,8 @@
             hostD.id = 'pulse-widget-host';
             hostD.style.position = 'fixed';
             hostD.style.zIndex = '2147483646';
-            hostD.style.bottom = '24px';
-            hostD.style[position] = '24px';
+            applyPulseHostInsets(hostD);
+            attachPulseHostInsetListener(hostD);
             document.body.appendChild(hostD);
             const shadowD = hostD.attachShadow({ mode: 'open' });
             const rootD = document.createElement('div');
@@ -250,8 +274,8 @@
       .pw-fab-wrap { position: absolute; bottom: 0; ${position}: 0; z-index: 2; }
       .pw-fab {
         width: 56px; height: 56px; border-radius: var(--pw-radius-full); border: none;
-        color: var(--pw-on-primary); background: var(--pw-primary);
-        box-shadow: var(--pw-shadow);
+        color: #ffffff; background: var(--pw-composer);
+        box-shadow: 0 4px 16px color-mix(in srgb, var(--pw-composer) 28%, transparent);
         display: flex; align-items: center; justify-content: center;
         transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative;
       }
@@ -430,8 +454,8 @@
     host.id = 'pulse-widget-host';
     host.style.position = 'fixed';
     host.style.zIndex = '2147483646';
-    host.style.bottom = '24px';
-    host.style[position] = '24px';
+    applyPulseHostInsets(host);
+    attachPulseHostInsetListener(host);
     document.body.appendChild(host);
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
@@ -483,8 +507,8 @@
       .pw-fab-wrap { position: absolute; bottom: 0; ${position}: 0; z-index: 2; }
       .pw-fab {
         width: 56px; height: 56px; border-radius: var(--pw-radius-full); border: none;
-        color: var(--pw-on-primary); background: var(--pw-primary);
-        box-shadow: var(--pw-shadow);
+        color: #ffffff; background: var(--pw-composer);
+        box-shadow: 0 4px 16px color-mix(in srgb, var(--pw-composer) 28%, transparent);
         display: flex; align-items: center; justify-content: center;
         transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative;
       }
