@@ -31,6 +31,24 @@
         'x.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
     };
 
+    /** Базовый URL папки со скриптом (для PNG MAX рядом с `pulse-widget.js`). */
+    const widgetScriptBase = (function () {
+        try {
+            const s = script.getAttribute('src') || script.src || '';
+            if (!s || !/^https?:\/\//i.test(s)) return '';
+            return String(s).replace(/\/[^/]+$/, '');
+        } catch (e) {
+            return '';
+        }
+    })();
+    const PW_SOCIAL_MAX_IMG = widgetScriptBase ? `${widgetScriptBase}/social/max-logo-2025.png` : '';
+    /** Telegram: исходник из брендового набора (круг + градиент). */
+    const PW_SOCIAL_ICON_TELEGRAM =
+        '<svg class="pw-stub__link__svg pw-stub__link__svg--round" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="pwGradTg" x1="50%" y1="0%" x2="50%" y2="99.2583404%"><stop stop-color="#2AABEE" offset="0%"/><stop stop-color="#229ED9" offset="100%"/></linearGradient></defs><circle fill="url(#pwGradTg)" cx="500" cy="500" r="500"/><path fill="#FFFFFF" d="M226.328419,494.722069 C372.088573,431.216685 469.284839,389.350049 517.917216,369.122161 C656.772535,311.36743 685.625481,301.334815 704.431427,301.003532 C708.567621,300.93067 717.815839,301.955743 723.806446,306.816707 C728.864797,310.92121 730.256552,316.46581 730.922551,320.357329 C731.588551,324.248848 732.417879,333.113828 731.758626,340.040666 C724.234007,419.102486 691.675104,610.964674 675.110982,699.515267 C668.10208,736.984342 654.301336,749.547532 640.940618,750.777006 C611.904684,753.448938 589.856115,731.588035 561.733393,713.153237 C517.726886,684.306416 492.866009,666.349181 450.150074,638.200013 C400.78442,605.66878 432.786119,587.789048 460.919462,558.568563 C468.282091,550.921423 596.21508,434.556479 598.691227,424.000355 C599.00091,422.680135 599.288312,417.758981 596.36474,415.160431 C593.441168,412.561881 589.126229,413.450484 586.012448,414.157198 C581.598758,415.158943 511.297793,461.625274 375.109553,553.556189 C355.154858,567.258623 337.080515,573.934908 320.886524,573.585046 C303.033948,573.199351 268.692754,563.490928 243.163606,555.192408 C211.851067,545.013936 186.964484,539.632504 189.131547,522.346309 C190.260287,513.342589 202.659244,504.134509 226.328419,494.722069 Z"/></svg>';
+    /** VK: официальный Blue SVG 64×64 (Logo_VK / SVG / Blue). */
+    const PW_SOCIAL_ICON_VK =
+        '<svg class="pw-stub__link__svg pw-stub__link__svg--round" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g clip-path="url(#pwVkClip)"><path d="M30.6867 64H33.3517C47.8182 64 55.0528 64 59.5456 59.5072C64.0384 55.0144 64 47.7824 64 33.3517V30.6483C64 16.2202 64 8.98561 59.5456 4.49281C55.0912 1.26953e-05 47.8182 0 33.3517 0H30.6867C16.2176 0 8.9856 1.26953e-05 4.4928 4.49281C-2.92969e-06 8.98561 0 16.215 0 30.6483V33.3517C0 47.7824 -2.92969e-06 55.0144 4.4928 59.5072C8.9856 64 16.2176 64 30.6867 64Z" fill="#0077FF"/><path d="M34.3434 46.1437C19.9127 46.1437 11.1549 36.1316 10.8145 19.4941H18.1233C18.3511 31.7156 23.9114 36.9021 28.1738 37.9594V19.4941H35.1805V30.0388C39.2919 29.5831 43.5927 24.7857 45.0417 19.4941H51.9306C50.8273 26.0042 46.145 30.8017 42.8324 32.7805C46.145 34.3805 51.4749 38.5687 53.5306 46.1437H45.9556C44.3556 41.08 40.4337 37.1581 35.1805 36.6257V46.1437H34.3434Z" fill="white"/></g><defs><clipPath id="pwVkClip"><rect width="64" height="64" fill="white"/></clipPath></defs></svg>';
+
     const defaultResponseSlaText = 'Стараемся ответить в течение рабочего дня.';
     const defaultCloseTabNotificationText =
         'Пока эта страница открыта, при ответе вы услышите сигнал, увидите число на вкладке и, при разрешённых уведомлениях браузера, всплывающее уведомление. Если вы закроете страницу и не оставили email, переписка не пропадёт: ответ останется в чате — его можно прочитать, снова открыв виджет на этом сайте. С email в анкете дублируем ответ письмом.';
@@ -269,10 +287,27 @@
       .pw-stub { flex: 1; overflow-y: auto; padding: 20px 16px; background: var(--pw-bg-thread); }
       .pw-stub__title { font-size: 15px; font-weight: 700; color: var(--pw-text); margin: 0 0 10px; line-height: 1.35; }
       .pw-stub__text { font-size: 14px; color: var(--pw-text); line-height: 1.5; margin: 0 0 16px; }
-      .pw-stub__links { display: flex; flex-direction: column; gap: 8px; }
+      .pw-stub__links { display: flex; flex-direction: column; gap: 10px; }
       .pw-stub__link {
-        display: block; text-align: center; padding: 12px 16px; border-radius: var(--pw-radius-md);
-        background: var(--pw-composer); color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none;
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        padding: 12px 16px; border-radius: var(--pw-radius-md);
+        font-weight: 600; font-size: 14px; line-height: 1.25; text-decoration: none;
+        border: 1px solid transparent;
+        color: #ffffff;
+        transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+      }
+      .pw-stub__link:hover { transform: translateY(-1px); filter: brightness(1.04); }
+      .pw-stub__link:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+      .pw-stub__link__svg { width: 24px; height: 24px; flex-shrink: 0; display: block; }
+      .pw-stub__link__svg--round { border-radius: 9999px; }
+      .pw-stub__link__icon { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+      .pw-stub__link__icon img { width: 28px; height: 28px; display: block; border-radius: 8px; object-fit: contain; }
+      .pw-stub__link__text { text-align: left; }
+      .pw-stub__link--telegram { background: #229ED9; box-shadow: 0 2px 10px rgba(34, 158, 217, 0.35); }
+      .pw-stub__link--vk { background: #0077FF; box-shadow: 0 2px 10px rgba(0, 119, 255, 0.35); }
+      .pw-stub__link--max {
+        background: linear-gradient(135deg, #2ec4ff 0%, #5b2d9e 55%, #4a1f7a 100%);
+        box-shadow: 0 2px 12px rgba(91, 45, 158, 0.35);
       }
       .pw-stub__hint { font-size: 12.5px; color: var(--pw-text-muted); line-height: 1.45; }
       @media (max-width: 640px) {
@@ -315,20 +350,26 @@
             const linksWrap = rootD.querySelector('#pw-stub-links-d');
             const hintEl = rootD.querySelector('#pw-stub-hint-d');
             const linkPairs = [
-                { label: 'Написать в Telegram', url: config.contactLinks.telegram, key: 'tg' },
-                { label: 'Написать в VK', url: config.contactLinks.vk, key: 'vk' },
-                { label: 'Написать в MAX', url: config.contactLinks.max, key: 'max' }
+                { label: 'Написать в Telegram', url: config.contactLinks.telegram, css: 'telegram', icon: PW_SOCIAL_ICON_TELEGRAM },
+                { label: 'Написать в VK', url: config.contactLinks.vk, css: 'vk', icon: PW_SOCIAL_ICON_VK },
+                { label: 'Написать в MAX', url: config.contactLinks.max, css: 'max', icon: '' }
             ];
             let hasAny = false;
             linkPairs.forEach(function (p) {
                 if (!p.url) return;
                 hasAny = true;
                 const a = document.createElement('a');
-                a.className = 'pw-stub__link';
+                a.className = 'pw-stub__link pw-stub__link--' + p.css;
                 a.href = p.url;
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
-                a.textContent = p.label;
+                let iconHtml = '';
+                if (p.css === 'max' && PW_SOCIAL_MAX_IMG) {
+                    iconHtml = '<span class="pw-stub__link__icon" aria-hidden="true"><img src="' + String(PW_SOCIAL_MAX_IMG).replace(/"/g, '') + '" alt="" width="28" height="28" decoding="async" loading="lazy"/></span>';
+                } else if (p.icon) {
+                    iconHtml = p.icon;
+                }
+                a.innerHTML = iconHtml + '<span class="pw-stub__link__text">' + escHtmlStub(p.label) + '</span>';
                 if (linksWrap) linksWrap.appendChild(a);
             });
             if (!hasAny && hintEl) {
