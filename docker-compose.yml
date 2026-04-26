@@ -9,13 +9,16 @@ services:
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
+    env_file:
+      - path: .env.docker
+        required: false
     environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: pulse
-      DB_USERNAME: pulse
-      DB_PASSWORD: pulse
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-pulse}
+      DB_USERNAME: ${MYSQL_USER:-pulse}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
       REDIS_HOST: redis
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
@@ -23,35 +26,42 @@ services:
     networks:
       - pulse
     depends_on:
-      - postgres
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   nginx:
     image: nginx:alpine
     container_name: pulse-nginx
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "${HTTP_PORT:-8080}:80"
     volumes:
-      - .:/var/www/html
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - .:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - pulse
     depends_on:
       - app
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: pulse-postgres
+  mysql:
+    image: mysql:8.4
+    container_name: pulse-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: pulse
-      POSTGRES_USER: pulse
-      POSTGRES_PASSWORD: pulse
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pulse}
+      MYSQL_USER: ${MYSQL_USER:-pulse}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootsecret}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     networks:
       - pulse
 
@@ -59,8 +69,65 @@ services:
     image: redis:7-alpine
     container_name: pulse-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    networks:
+      - pulse
+
+  queue:
+    image: pulse-app
+    container_name: pulse-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_DATABASE: ${MYSQL_DATABASE:-pulse}
+      DB_USERNAME: ${MYSQL_USER:-pulse}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+    command: >
+      php artisan queue:work redis
+      --sleep=3
+      --tries=3
+      --timeout=90
+      --max-time=3600
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
+    networks:
+      - pulse
+
+  scheduler:
+    image: pulse-app
+    container_name: pulse-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_DATABASE: ${MYSQL_DATABASE:-pulse}
+      DB_USERNAME: ${MYSQL_USER:-pulse}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      REDIS_HOST: redis
+    command: php artisan schedule:work
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app:
+        condition: service_started
     networks:
       - pulse
 
@@ -69,29 +136,55 @@ services:
     container_name: pulse-reverb
     restart: unless-stopped
     working_dir: /var/www/html
-    command: php artisan reverb:start
     volumes:
       - .:/var/www/html
+    env_file:
+      - path: .env.docker
+        required: false
     environment:
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_DATABASE: pulse
-      DB_USERNAME: pulse
-      DB_PASSWORD: pulse
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_DATABASE: ${MYSQL_DATABASE:-pulse}
+      DB_USERNAME: ${MYSQL_USER:-pulse}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
       REDIS_HOST: redis
-      REVERB_HOST: 0.0.0.0
+      REVERB_SERVER_HOST: 0.0.0.0
       REVERB_PORT: 8080
+    command: php artisan reverb:start
     ports:
-      - "8081:8080"
+      - "${REVERB_PORT:-8081}:8080"
     networks:
       - pulse
     depends_on:
       - app
       - redis
 
+  ssr:
+    image: pulse-app
+    container_name: pulse-ssr
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_DATABASE: ${MYSQL_DATABASE:-pulse}
+      DB_USERNAME: ${MYSQL_USER:-pulse}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      REDIS_HOST: redis
+    command: php artisan inertia:start-ssr
+    depends_on:
+      - app
+    networks:
+      - pulse
+
 networks:
   pulse:
     driver: bridge
 
 volumes:
-  postgres_data:
+  mysql_data:
