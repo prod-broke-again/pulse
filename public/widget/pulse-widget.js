@@ -335,9 +335,10 @@
       }
       .pw-stub__hint { font-size: 12.5px; color: var(--pw-text-muted); line-height: 1.45; }
       @media (max-width: 640px) {
-        :host { bottom: 0 !important; left: 0 !important; right: 0 !important; top: 0 !important; width: 100%; height: 100%; }
-        .pw-fab-wrap { bottom: 20px; ${position}: 20px; }
-        .pw-panel { width: 100%; height: 100%; max-height: 100vh; border-radius: 0; border: none; }
+        :host { bottom: 0 !important; left: 0 !important; right: 0 !important; top: 0 !important; pointer-events: none; width: 100%; height: 100%; }
+        #pulse-widget-root { width: 100%; height: 100%; pointer-events: none; }
+        .pw-fab-wrap { bottom: 20px; ${position}: 20px; pointer-events: auto; }
+        .pw-panel { width: 100%; height: 100%; max-height: 100vh; border-radius: 0; border: none; pointer-events: auto; }
       }
     `;
             shadowD.appendChild(styleD);

@@ -109,7 +109,7 @@ final class UserResource extends JsonResource
                 'source_id' => (int) $dept->source_id,
                 'name' => (string) $dept->name,
                 'slug' => (string) $dept->slug,
-                'category' => (string) $dept->category,
+                'category' => $dept->category instanceof \BackedEnum ? $dept->category->value : (string) $dept->category,
                 'icon' => $dept->icon,
                 'ai_enabled' => (bool) $dept->ai_enabled,
                 'is_active' => (bool) $dept->is_active,

@@ -7,9 +7,21 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
+    $messengerPath = public_path('messenger/index.html');
+
+    if (!file_exists($messengerPath)) {
+        return Inertia::render('Welcome', [
+            'canRegister' => Features::enabled(Features::registration()),
+        ]);
+    }
+
+    $html = file_get_contents($messengerPath);
+
+    // Replace relative paths with absolute paths starting with /messenger/
+    $html = str_replace('./assets/', '/messenger/assets/', $html);
+    $html = str_replace('./logo.png', '/messenger/logo.png', $html);
+
+    return response($html);
 })->name('home');
 
 Route::get('dashboard', function () {
