@@ -16,6 +16,7 @@ import { mapApiChatToPreview } from '../mappers/chatMapper'
 import { useAuthStore } from './authStore'
 import { useSettingsStore } from './settingsStore'
 import type { BottomNavId, ChatPreviewItem, FilterId, InboxTab } from '../types/chat'
+import type { InboxSummaryData } from '../api/types'
 
 let moderatorUnsub: (() => void) | null = null
 let sourceInboxUnsubs: Array<() => void> = []

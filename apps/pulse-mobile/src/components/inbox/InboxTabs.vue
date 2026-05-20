@@ -13,8 +13,8 @@ const emit = defineEmits<{
 }>()
 
 const tabs = computed(() => {
-  const list = [
-    { id: 'all' as const, label: 'Все', count: props.summary?.all?.open ?? 0 }
+  const list: Array<{ id: 'all' | number; label: string; count: number }> = [
+    { id: 'all', label: 'Все', count: props.summary?.all?.open ?? 0 }
   ]
   for (const dept of props.departments) {
     const sDept = props.summary?.departments?.find(d => d.id === dept.id)

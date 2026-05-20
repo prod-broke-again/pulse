@@ -12,7 +12,7 @@ import ChatCard from '../components/inbox/ChatCard.vue'
 import InboxHeader from '../components/inbox/InboxHeader.vue'
 import InboxFiltersSheet from '../components/inbox/InboxFiltersSheet.vue'
 import InboxTabs from '../components/inbox/InboxTabs.vue'
-import type { FilterId } from '../types/chat'
+import type { FilterId, ChatPreviewItem } from '../types/chat'
 import * as chatApi from '../api/chatRepository'
 import { isMutedUntilActive } from '../lib/chatMute'
 import { useInboxStore } from '../stores/inboxStore'
@@ -25,14 +25,12 @@ const ui = useUiStore()
 const authStore = useAuthStore()
 
 const {
-  activeTab,
   activeDepartmentTab,
   inboxSummary,
   activeFilters,
   searchQuery,
   isLoadingList,
   loadError,
-  tabBadges,
   inboxBadge,
   filteredChats,
   showEmptyState,
@@ -58,7 +56,7 @@ const actionChatId = ref<string | null>(null)
 const actionChat = computed(() =>
   actionChatId.value == null
     ? null
-    : filteredChats.value.find((c) => c.id === actionChatId.value) ?? null,
+    : filteredChats.value.find((c: ChatPreviewItem) => c.id === actionChatId.value) ?? null,
 )
 
 const filterDefs: { id: FilterId; label: string; dot?: 'green' | 'grey' | 'none'; channel?: FilterId }[] = [

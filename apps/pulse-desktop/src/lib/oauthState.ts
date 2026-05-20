@@ -2,7 +2,7 @@ import { resolveOAuthPlatform } from './oauthConfig'
 
 export type OAuthStatePayload = {
   /** Hint for IdP / logging */
-  platform: 'desktop'
+  platform: 'desktop' | 'web'
   /** CSRF nonce */
   n: string
 }

@@ -365,6 +365,19 @@ onMounted(async () => {
         oauthExchangeError.value = result.message
       }
     })
+  } else if (!isElectron && typeof window !== 'undefined') {
+    const url = window.location.href
+    if (url.includes('code=') && url.includes('state=')) {
+      oauthExchangeError.value = null
+      const result = await completeOAuthFromCallbackUrl(url)
+      if (result.ok) {
+        const cleanUrl = window.location.protocol + '//' + window.location.host + window.location.pathname
+        window.history.replaceState({ path: cleanUrl }, '', cleanUrl)
+        await onLoginSuccess()
+      } else {
+        oauthExchangeError.value = result.message
+      }
+    }
   }
 
   try {

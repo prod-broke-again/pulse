@@ -6,11 +6,16 @@ export const DESKTOP_OAUTH_REDIRECT_URI = 'pulse-desktop://auth/callback'
  * Desktop always uses the custom protocol registered in Electron.
  */
 export function resolveOAuthRedirectUri(): string {
-  return DESKTOP_OAUTH_REDIRECT_URI
+  const isElectron = typeof window !== 'undefined' && typeof window.appWindow !== 'undefined'
+  if (isElectron) {
+    return DESKTOP_OAUTH_REDIRECT_URI
+  }
+  return typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : ''
 }
 
-export function resolveOAuthPlatform(): 'desktop' {
-  return 'desktop'
+export function resolveOAuthPlatform(): 'desktop' | 'web' {
+  const isElectron = typeof window !== 'undefined' && typeof window.appWindow !== 'undefined'
+  return isElectron ? 'desktop' : 'web'
 }
 
 /** Default `*` if unset; IdP may map to allowed scopes (e.g. basic). */

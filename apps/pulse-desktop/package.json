@@ -24,6 +24,7 @@
     "prebuild": "node ./scripts/sync-public-logo.mjs && node ./scripts/ensure-electron-local.mjs",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "build:web": "vue-tsc --noEmit && vite build --config vite.config.web.ts && node ./scripts/deploy-to-laravel.mjs",
     "release:patch": "node ./scripts/release.mjs patch",
     "release:minor": "node ./scripts/release.mjs minor",
     "release:major": "node ./scripts/release.mjs major",
