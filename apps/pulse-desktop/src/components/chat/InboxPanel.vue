@@ -185,6 +185,26 @@ async function setStatusFilter(v: 'open' | 'closed' | 'all'): Promise<void> {
   await chatStore.setFilters({ status: v })
 }
 
+function toggleFilter(key: 'assigned_to_me' | 'unassigned_only' | 'unread_only') {
+  const current = chatStore.filters[key]
+  void chatStore.setFilters({ [key]: current ? undefined : true })
+}
+
+function toggleNewFilter() {
+  const current = chatStore.filters.chat_status
+  void chatStore.setFilters({ chat_status: current === 'new' ? undefined : 'new' })
+}
+
+const userDepartments = computed(() => {
+  return authStore.user?.departments ?? []
+})
+
+function getDeptCount(deptId: number): number {
+  if (!chatStore.inboxSummary) return 0
+  const dept = chatStore.inboxSummary.departments.find(d => d.id === deptId)
+  return dept ? dept.open : 0
+}
+
 const filterIndicatorActive = computed(() => {
   const f = chatStore.filters
   if ((f.status ?? 'open') !== 'open') {
@@ -197,6 +217,9 @@ const filterIndicatorActive = computed(() => {
     return true
   }
   if (f.source_id != null) {
+    return true
+  }
+  if (f.assigned_to_me || f.unassigned_only || f.unread_only || f.chat_status != null) {
     return true
   }
   return false
@@ -326,52 +349,40 @@ function unreadBadgeClass(count: number): string {
         </span>
       </div>
 
-      <div class="mb-3 flex gap-0.5 rounded-[var(--radius-md)] p-0.5" style="background: var(--bg-app)">
+      <div class="mb-3 flex overflow-x-auto gap-0.5 rounded-[var(--radius-md)] p-0.5 thin-scroll" style="background: var(--bg-app)">
         <button
           type="button"
-          class="flex flex-1 items-center justify-center gap-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition"
-          :style="activeTab === 'my'
+          class="shrink-0 flex items-center justify-center gap-1 rounded-[7px] px-3 py-[7px] text-[12.5px] font-medium transition cursor-pointer"
+          :style="chatStore.activeDepartmentTab === 'all'
             ? { background: 'var(--bg-inbox)', color: 'var(--text-primary)', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }
             : { color: 'var(--text-muted)' }"
-          @click="emit('change-tab', 'my')"
-        >
-          <span>Мои</span>
-          <span
-            v-if="tabCounts && tabCounts.my > 0"
-            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
-            style="background: var(--color-brand-50); color: var(--color-brand-200)"
-          >{{ tabCounts.my > 99 ? '99+' : tabCounts.my }}</span>
-        </button>
-        <button
-          type="button"
-          class="flex flex-1 items-center justify-center gap-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition"
-          :style="activeTab === 'unassigned'
-            ? { background: 'var(--bg-inbox)', color: 'var(--text-primary)', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }
-            : { color: 'var(--text-muted)' }"
-          title="Нераспределённые"
-          @click="emit('change-tab', 'unassigned')"
-        >
-          <span>Свободные</span>
-          <span
-            v-if="tabCounts && tabCounts.unassigned > 0"
-            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
-            style="background: var(--color-brand-50); color: var(--color-brand-200)"
-          >{{ tabCounts.unassigned > 99 ? '99+' : tabCounts.unassigned }}</span>
-        </button>
-        <button
-          type="button"
-          class="flex flex-1 items-center justify-center gap-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition"
-          :style="activeTab === 'all'
-            ? { background: 'var(--bg-inbox)', color: 'var(--text-primary)', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }
-            : { color: 'var(--text-muted)' }"
-          @click="emit('change-tab', 'all')"
+          @click="chatStore.setDepartmentTab('all')"
         >
           <span>Все</span>
           <span
-            v-if="tabCounts && tabCounts.all > 0"
-            class="tab-count-badge min-w-[18px] rounded-full px-1 text-[10px] font-semibold leading-tight"
+            v-if="chatStore.inboxSummary?.all && chatStore.inboxSummary.all.open > 0"
+            class="tab-count-badge min-w-[18px] rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-tight"
             style="background: var(--color-brand-50); color: var(--color-brand-200)"
-          >{{ tabCounts.all > 99 ? '99+' : tabCounts.all }}</span>
+          >{{ chatStore.inboxSummary.all.open > 99 ? '99+' : chatStore.inboxSummary.all.open }}</span>
+        </button>
+
+        <button
+          v-for="dept in userDepartments"
+          :key="dept.id"
+          type="button"
+          class="shrink-0 flex items-center justify-center gap-1 rounded-[7px] px-3 py-[7px] text-[12.5px] font-medium transition cursor-pointer"
+          :style="chatStore.activeDepartmentTab === dept.id
+            ? { background: 'var(--bg-inbox)', color: 'var(--text-primary)', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }
+            : { color: 'var(--text-muted)' }"
+          :title="dept.name"
+          @click="chatStore.setDepartmentTab(dept.id)"
+        >
+          <span>{{ dept.name }}</span>
+          <span
+            v-if="getDeptCount(dept.id) > 0"
+            class="tab-count-badge min-w-[18px] rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-tight"
+            style="background: var(--color-brand-50); color: var(--color-brand-200)"
+          >{{ getDeptCount(dept.id) > 99 ? '99+' : getDeptCount(dept.id) }}</span>
         </button>
       </div>
 
@@ -452,6 +463,51 @@ function unreadBadgeClass(count: number): string {
               >
                 Все
               </button>
+            </div>
+
+            <p class="mb-2 text-[11px] font-bold uppercase tracking-wide" style="color: var(--text-muted)">
+              Параметры
+            </p>
+            <div class="mb-4 space-y-2">
+              <label class="flex items-center gap-2 text-[12px] font-medium cursor-pointer" style="color: var(--text-primary)">
+                <input
+                  type="checkbox"
+                  :checked="chatStore.filters.assigned_to_me"
+                  @change="toggleFilter('assigned_to_me')"
+                  class="rounded border-[var(--border-light)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] h-3.5 w-3.5"
+                >
+                <span>Назначены на меня</span>
+              </label>
+
+              <label class="flex items-center gap-2 text-[12px] font-medium cursor-pointer" style="color: var(--text-primary)">
+                <input
+                  type="checkbox"
+                  :checked="chatStore.filters.unassigned_only"
+                  @change="toggleFilter('unassigned_only')"
+                  class="rounded border-[var(--border-light)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] h-3.5 w-3.5"
+                >
+                <span>Без ответственного</span>
+              </label>
+
+              <label class="flex items-center gap-2 text-[12px] font-medium cursor-pointer" style="color: var(--text-primary)">
+                <input
+                  type="checkbox"
+                  :checked="chatStore.filters.unread_only"
+                  @change="toggleFilter('unread_only')"
+                  class="rounded border-[var(--border-light)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] h-3.5 w-3.5"
+                >
+                <span>Непрочитанные</span>
+              </label>
+
+              <label class="flex items-center gap-2 text-[12px] font-medium cursor-pointer" style="color: var(--text-primary)">
+                <input
+                  type="checkbox"
+                  :checked="chatStore.filters.chat_status === 'new'"
+                  @change="toggleNewFilter"
+                  class="rounded border-[var(--border-light)] text-[var(--color-brand)] focus:ring-[var(--color-brand)] h-3.5 w-3.5"
+                >
+                <span>Новые</span>
+              </label>
             </div>
 
             <template v-if="userSources.length > 0">

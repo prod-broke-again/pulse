@@ -5,6 +5,7 @@ import type {
   ChatsListResponse,
   ChatResponse,
   TabCountsData,
+  InboxSummaryData,
 } from '../types/dto/chat.types'
 
 export type ChatTabCountsParams = Pick<
@@ -55,6 +56,18 @@ export function serializeChatListQuery(f: ChatListFilters): Record<
   if (f.channels != null && f.channels.length > 0) {
     out.channels = f.channels
   }
+  if (f.assigned_to_me != null) {
+    out.assigned_to_me = f.assigned_to_me ? 1 : 0
+  }
+  if (f.unassigned_only != null) {
+    out.unassigned_only = f.unassigned_only ? 1 : 0
+  }
+  if (f.unread_only != null) {
+    out.unread_only = f.unread_only ? 1 : 0
+  }
+  if (f.chat_status != null) {
+    out.chat_status = f.chat_status
+  }
   return out
 }
 
@@ -64,6 +77,11 @@ export async function fetchChats(filters: ChatListFilters = {}): Promise<ChatsLi
 
 export async function fetchTabCounts(params: ChatTabCountsParams = {}): Promise<TabCountsData> {
   const response = await api.get<{ data: TabCountsData }>('/chats/tab-counts', serializeChatListQuery(params))
+  return response.data
+}
+
+export async function fetchInboxSummary(params: ChatTabCountsParams = {}): Promise<InboxSummaryData> {
+  const response = await api.get<{ data: InboxSummaryData }>('/chats/inbox-summary', serializeChatListQuery(params))
   return response.data
 }
 

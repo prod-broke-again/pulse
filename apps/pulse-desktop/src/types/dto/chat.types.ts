@@ -71,6 +71,10 @@ export interface ChatListFilters {
   channels?: Array<'tg' | 'vk' | 'web' | 'max'>
   search?: string
   status?: 'open' | 'closed' | 'all'
+  assigned_to_me?: boolean
+  unassigned_only?: boolean
+  unread_only?: boolean
+  chat_status?: 'new' | 'active'
   per_page?: number
   page?: number
 }
@@ -79,6 +83,11 @@ export interface TabCountsData {
   my: number
   unassigned: number
   all: number
+}
+
+export interface InboxSummaryData {
+  all: { open: number; unread: number }
+  departments: Array<{ id: number; name: string; open: number; unread: number }>
 }
 
 export interface MessageListParams {

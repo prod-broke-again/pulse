@@ -17,13 +17,17 @@ import * as chatApi from '../api/chatRepository'
 import { isMutedUntilActive } from '../lib/chatMute'
 import { useInboxStore } from '../stores/inboxStore'
 import { useUiStore } from '../stores/uiStore'
+import { useAuthStore } from '../stores/authStore'
 
 const router = useRouter()
 const inbox = useInboxStore()
 const ui = useUiStore()
+const authStore = useAuthStore()
 
 const {
   activeTab,
+  activeDepartmentTab,
+  inboxSummary,
   activeFilters,
   searchQuery,
   isLoadingList,
@@ -36,6 +40,8 @@ const {
   filterSourceIds,
   filterDepartmentIds,
 } = storeToRefs(inbox)
+
+const userDepartments = computed(() => authStore.user?.departments ?? [])
 
 const ptrRefreshing = computed(() => ui.ptrRefreshing)
 
@@ -58,6 +64,10 @@ const actionChat = computed(() =>
 const filterDefs: { id: FilterId; label: string; dot?: 'green' | 'grey' | 'none'; channel?: FilterId }[] = [
   { id: 'open', label: 'Открытые', dot: 'green' },
   { id: 'closed', label: 'Закрытые', dot: 'grey' },
+  { id: 'assigned_to_me', label: 'На мне' },
+  { id: 'unassigned_only', label: 'Без ответственного' },
+  { id: 'unread_only', label: 'Непрочитанные' },
+  { id: 'chat_status_new', label: 'Новые' },
   { id: 'tg', label: 'Telegram', channel: 'tg' },
   { id: 'vk', label: 'VK', channel: 'vk' },
   { id: 'web', label: 'Web', channel: 'web' },
@@ -194,7 +204,12 @@ onMounted(() => {
 <template>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
     <InboxHeader />
-    <InboxTabs :active="activeTab" :badges="tabBadges" @select="(t) => inbox.setActiveTab(t)" />
+    <InboxTabs
+      :active="activeDepartmentTab"
+      :departments="userDepartments"
+      :summary="inboxSummary"
+      @select="(t) => inbox.setActiveDepartmentTab(t)"
+    />
 
     <div
       class="flex shrink-0 flex-col gap-2 bg-white px-4 py-3 dark:bg-[var(--zinc-850)]"

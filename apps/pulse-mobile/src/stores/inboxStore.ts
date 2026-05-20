@@ -41,7 +41,9 @@ function deriveChannelFilters(filters: Set<FilterId>): Array<'tg' | 'vk' | 'web'
 
 export const useInboxStore = defineStore('inbox', () => {
   const chats = ref<ChatPreviewItem[]>([])
-  const activeTab = ref<InboxTab>('my')
+  const activeTab = ref<InboxTab>('all')
+  const activeDepartmentTab = ref<'all' | number>('all')
+  const inboxSummary = ref<InboxSummaryData | null>(null)
   const activeFilters = ref<Set<FilterId>>(new Set(['open']))
   const searchQuery = ref('')
   const bottomNav = ref<BottomNavId>('inbox')
@@ -72,7 +74,17 @@ export const useInboxStore = defineStore('inbox', () => {
 
   function commonListParams(): Pick<
     chatApi.ChatListFilters,
-    'search' | 'status' | 'source_id' | 'source_ids' | 'department_id' | 'department_ids' | 'channels'
+    | 'search'
+    | 'status'
+    | 'source_id'
+    | 'source_ids'
+    | 'department_id'
+    | 'department_ids'
+    | 'channels'
+    | 'assigned_to_me'
+    | 'unassigned_only'
+    | 'unread_only'
+    | 'chat_status'
   > {
     const chans = deriveChannelFilters(activeFilters.value)
     return {
@@ -81,6 +93,10 @@ export const useInboxStore = defineStore('inbox', () => {
       source_ids: filterSourceIds.value,
       department_ids: filterDepartmentIds.value,
       channels: chans,
+      assigned_to_me: activeFilters.value.has('assigned_to_me') ? true : undefined,
+      unassigned_only: activeFilters.value.has('unassigned_only') ? true : undefined,
+      unread_only: activeFilters.value.has('unread_only') ? true : undefined,
+      chat_status: activeFilters.value.has('chat_status_new') ? 'new' : undefined,
     }
   }
 
@@ -164,24 +180,35 @@ export const useInboxStore = defineStore('inbox', () => {
     void loadInbox()
   }
 
+  function setActiveDepartmentTab(tab: 'all' | number) {
+    activeDepartmentTab.value = tab
+  }
+
   async function loadInbox(): Promise<void> {
     isLoadingList.value = true
     loadError.value = false
     try {
       const base = commonListParams()
-      const [listRes, counts] = await Promise.all([
+      const [listRes, counts, summary] = await Promise.all([
         chatApi.fetchChats({
-          tab: activeTab.value,
+          tab: 'all',
           ...base,
+          department_ids: activeDepartmentTab.value === 'all'
+            ? (base.department_ids && base.department_ids.length > 0 ? base.department_ids : undefined)
+            : [activeDepartmentTab.value],
           page: 1,
           per_page: 50,
         }),
         chatApi.fetchTabCounts({
           ...base,
         }),
+        chatApi.fetchInboxSummary({
+          ...base,
+        }),
       ])
       chats.value = listRes.data.map(mapApiChatToPreview)
       tabBadges.value = counts
+      inboxSummary.value = summary
       inboxBadge.value = chats.value.reduce((s, c) => s + (c.unreadCount ?? (c.unread ? 1 : 0)), 0)
     } catch {
       loadError.value = true
@@ -210,7 +237,7 @@ export const useInboxStore = defineStore('inbox', () => {
     }
   }
 
-  watch([activeTab, activeFilters, filterSourceIds, filterDepartmentIds], () => {
+  watch([activeTab, activeDepartmentTab, activeFilters, filterSourceIds, filterDepartmentIds], () => {
     void loadInbox()
   }, { deep: true })
 
@@ -357,6 +384,8 @@ export const useInboxStore = defineStore('inbox', () => {
   return {
     chats,
     activeTab,
+    activeDepartmentTab,
+    inboxSummary,
     activeFilters,
     searchQuery,
     bottomNav,
@@ -374,6 +403,7 @@ export const useInboxStore = defineStore('inbox', () => {
     filterSourceIds,
     filterDepartmentIds,
     setActiveTab,
+    setActiveDepartmentTab,
     toggleFilter,
     setSearchQuery,
     setHistorySearchQuery,

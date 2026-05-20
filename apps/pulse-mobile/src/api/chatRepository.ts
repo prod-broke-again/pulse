@@ -1,5 +1,5 @@
 import { http } from '../lib/http'
-import type { ApiChatRow, ApiPaginatedLinks, ApiPaginatedMeta, ApiTabCounts } from './types'
+import type { ApiChatRow, ApiPaginatedLinks, ApiPaginatedMeta, ApiTabCounts, InboxSummaryData } from './types'
 
 export type ChatTab = 'my' | 'unassigned' | 'all'
 
@@ -12,6 +12,10 @@ export type ChatListFilters = {
   channels?: Array<'tg' | 'vk' | 'web' | 'max'>
   search?: string
   status?: 'open' | 'closed' | 'all'
+  assigned_to_me?: boolean
+  unassigned_only?: boolean
+  unread_only?: boolean
+  chat_status?: 'new' | 'active'
   per_page?: number
   page?: number
 }
@@ -51,6 +55,18 @@ export function serializeChatListQuery(
   }
   if (f.channels != null && f.channels.length > 0) {
     out.channels = f.channels
+  }
+  if (f.assigned_to_me != null) {
+    out.assigned_to_me = f.assigned_to_me ? 1 : 0
+  }
+  if (f.unassigned_only != null) {
+    out.unassigned_only = f.unassigned_only ? 1 : 0
+  }
+  if (f.unread_only != null) {
+    out.unread_only = f.unread_only ? 1 : 0
+  }
+  if (f.chat_status != null) {
+    out.chat_status = f.chat_status
   }
   return out
 }
@@ -134,5 +150,12 @@ export type ChatMuteMode = '1h' | '8h' | 'forever' | 'unmute'
 
 export async function muteChat(chatId: number, mode: ChatMuteMode): Promise<ApiChatRow> {
   const res = await http.post<{ data: ApiChatRow }>(`/chats/${chatId}/mute`, { mode })
+  return res.data.data
+}
+
+export async function fetchInboxSummary(params: ChatTabCountsParams): Promise<InboxSummaryData> {
+  const res = await http.get<{ data: InboxSummaryData }>('/chats/inbox-summary', {
+    params: serializeChatListQuery(params),
+  })
   return res.data.data
 }

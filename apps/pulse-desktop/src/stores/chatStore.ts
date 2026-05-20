@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import {
   fetchChats,
   fetchTabCounts,
+  fetchInboxSummary,
   type ChatTabCountsParams,
   assignMe as apiAssignMe,
   closeChat as apiCloseChat,
@@ -11,7 +12,7 @@ import {
 } from '../api/chats'
 import type { ChatMuteMode } from '../api/chats'
 import { api } from '../api/client'
-import type { ApiChat, ChatListFilters, ChatResponse, TabCountsData } from '../types/dto/chat.types'
+import type { ApiChat, ChatListFilters, ChatResponse, TabCountsData, InboxSummaryData } from '../types/dto/chat.types'
 import type { ApiUser } from '../types/dto/auth.types'
 import type { ChatGuestUpdatedPayload, NewChatMessagePayload } from '../lib/realtime'
 import { pendingListFiltersFromPrefs } from '../lib/inboxFilterPrefs'
@@ -19,7 +20,9 @@ import { pendingListFiltersFromPrefs } from '../lib/inboxFilterPrefs'
 export const useChatStore = defineStore('chat', () => {
   const chats = ref<ApiChat[]>([])
   const selectedChatId = ref<number | null>(null)
-  const activeTab = ref<ChatListFilters['tab']>('my')
+  const activeTab = ref<ChatListFilters['tab']>('all')
+  const activeDepartmentTab = ref<'all' | number>('all')
+  const inboxSummary = ref<InboxSummaryData | null>(null)
   const isLoading = ref(false)
   const filters = ref<Omit<ChatListFilters, 'tab' | 'page' | 'per_page'>>({
     search: '',
@@ -27,6 +30,10 @@ export const useChatStore = defineStore('chat', () => {
     source_ids: undefined,
     department_ids: undefined,
     channels: undefined,
+    assigned_to_me: undefined,
+    unassigned_only: undefined,
+    unread_only: undefined,
+    chat_status: undefined,
   })
   const tabCounts = ref<TabCountsData>({ my: 0, unassigned: 0, all: 0 })
   const pagination = ref({
@@ -68,6 +75,15 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function refreshInboxSummary(): Promise<void> {
+    try {
+      const data = await fetchInboxSummary(tabCountsParams())
+      inboxSummary.value = data
+    } catch (e) {
+      console.error('Failed to load inbox summary:', e)
+    }
+  }
+
   /** Синхронизация ограничений инбокса из профиля / PATCH prefs (без поиска и статуса). */
   async function syncInboxFiltersFromAuthUser(user: ApiUser): Promise<void> {
     const prefsSlice = pendingListFiltersFromPrefs(user.inbox_filter_prefs ?? null)
@@ -100,6 +116,7 @@ export const useChatStore = defineStore('chat', () => {
     tabCountsDebounce = setTimeout(() => {
       tabCountsDebounce = null
       void refreshTabCounts()
+      void refreshInboxSummary()
     }, 400)
   }
 
@@ -167,13 +184,17 @@ export const useChatStore = defineStore('chat', () => {
     }
     try {
       const response = await fetchChats({
-        tab: activeTab.value,
+        tab: 'all',
         page,
         ...filters.value,
+        department_ids: activeDepartmentTab.value === 'all'
+          ? (filters.value.department_ids && filters.value.department_ids.length > 0 ? filters.value.department_ids : undefined)
+          : [activeDepartmentTab.value],
       })
       if (page === 1) {
         chats.value = response.data
         await refreshTabCounts()
+        await refreshInboxSummary()
       } else {
         chats.value = [...chats.value, ...response.data]
       }
@@ -195,6 +216,11 @@ export const useChatStore = defineStore('chat', () => {
 
   async function setTab(tab: ChatListFilters['tab']) {
     activeTab.value = tab
+    await loadChats(1)
+  }
+
+  async function setDepartmentTab(tab: 'all' | number) {
+    activeDepartmentTab.value = tab
     await loadChats(1)
   }
 
@@ -324,15 +350,19 @@ export const useChatStore = defineStore('chat', () => {
     selectedChatId,
     selectedChat,
     activeTab,
+    activeDepartmentTab,
+    inboxSummary,
     isLoading,
     filters,
     tabCounts,
     pagination,
     loadChats,
     refreshTabCounts,
+    refreshInboxSummary,
     scheduleListRefreshFromRealtime,
     bumpChatFromRealtime,
     setTab,
+    setDepartmentTab,
     setFilters,
     syncInboxFiltersFromAuthUser,
     tabCountsParams,

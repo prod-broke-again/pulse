@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function (): void {
         // Chats
         Route::get('/chats', [ChatController::class, 'index'])->name('api.v1.chats.index');
         Route::get('/chats/tab-counts', [ChatController::class, 'tabCounts'])->name('api.v1.chats.tab-counts');
+        Route::get('/chats/inbox-summary', [ChatController::class, 'inboxSummary'])->name('api.v1.chats.inbox-summary');
         Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('api.v1.chats.show');
         Route::post('/chats/{chat}/assign-me', [ChatController::class, 'assignMe'])->name('api.v1.chats.assign-me');
         Route::patch('/chats/{chat}/department', [ChatController::class, 'changeDepartment'])->name('api.v1.chats.department');

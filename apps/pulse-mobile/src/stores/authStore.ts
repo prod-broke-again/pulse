@@ -21,6 +21,8 @@ export type PulseUser = {
   /** Optional labels for sources (from API) — used in inbox filter UI. */
   sources?: Array<{ id: number; name: string; type: string }>
   department_ids: number[]
+  /** Optional list of accessible departments with metadata. */
+  departments?: Array<{ id: number; source_id: number; name: string; slug: string; category?: string; icon?: string | null; ai_enabled?: boolean; is_active?: boolean }>
   notification_sound_prefs?: NotificationSoundPrefs | null
   inbox_filter_prefs?: InboxFilterPrefs | null
 }

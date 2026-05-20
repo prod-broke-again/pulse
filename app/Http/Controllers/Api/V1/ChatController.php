@@ -70,6 +70,18 @@ final class ChatController extends Controller
         ]);
     }
 
+    public function inboxSummary(ListChatsRequest $request, ListChatsQuery $listChats): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+        /** @var array<string, mixed> $filters */
+        $filters = $request->validated();
+
+        return response()->json([
+            'data' => $listChats->inboxSummary($user, $filters),
+        ]);
+    }
+
     public function assignMe(ChatModel $chat, AssignChatToModerator $assignChat): JsonResponse
     {
         Gate::authorize('update', $chat);

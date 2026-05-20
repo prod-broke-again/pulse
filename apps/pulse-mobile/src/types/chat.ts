@@ -2,7 +2,7 @@ export type ChannelSource = 'tg' | 'vk' | 'web' | 'max'
 
 export type InboxTab = 'my' | 'unassigned' | 'all'
 
-export type FilterId = 'open' | 'closed' | 'tg' | 'vk' | 'web' | 'max'
+export type FilterId = 'open' | 'closed' | 'tg' | 'vk' | 'web' | 'max' | 'assigned_to_me' | 'unassigned_only' | 'unread_only' | 'chat_status_new'
 
 export type BottomNavId = 'inbox' | 'history' | 'settings'
 

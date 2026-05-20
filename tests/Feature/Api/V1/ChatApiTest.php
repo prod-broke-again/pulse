@@ -162,6 +162,87 @@ final class ChatApiTest extends TestCase
         }
     }
 
+    public function test_list_chats_filters_by_assigned_to_me(): void
+    {
+        $this->createChat(['assigned_to' => $this->moderator->id, 'status' => 'active']);
+        $this->createChat(['assigned_to' => null, 'status' => 'new']);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson('/api/v1/chats?assigned_to_me=1');
+
+        $response->assertOk();
+        foreach ($response->json('data') as $chat) {
+            $this->assertEquals($this->moderator->id, $chat['assigned_to']);
+        }
+    }
+
+    public function test_list_chats_filters_by_unassigned_only(): void
+    {
+        $this->createChat(['assigned_to' => $this->moderator->id, 'status' => 'active']);
+        $this->createChat(['assigned_to' => null, 'status' => 'new']);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson('/api/v1/chats?unassigned_only=1');
+
+        $response->assertOk();
+        foreach ($response->json('data') as $chat) {
+            $this->assertNull($chat['assigned_to']);
+        }
+    }
+
+    public function test_list_chats_filters_by_unread_only(): void
+    {
+        $chatUnread = $this->createChat(); // has client message, initially unread
+        $chatRead = $this->createChat();
+
+        // Mark chatRead as read
+        \App\Infrastructure\Persistence\Eloquent\ChatUserReadStateModel::create([
+            'chat_id' => $chatRead->id,
+            'user_id' => $this->moderator->id,
+            'last_read_message_id' => $chatRead->messages()->max('id') ?? 1,
+        ]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson('/api/v1/chats?unread_only=1&tab=all');
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($chatUnread->id, $ids);
+        $this->assertNotContains($chatRead->id, $ids);
+    }
+
+    public function test_list_chats_filters_by_chat_status(): void
+    {
+        $this->createChat(['status' => 'new']);
+        $this->createChat(['status' => 'active']);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/chats?chat_status=new');
+
+        $response->assertOk();
+        foreach ($response->json('data') as $chat) {
+            $this->assertEquals('new', $chat['status']);
+        }
+    }
+
+    public function test_inbox_summary_returns_aggregated_results(): void
+    {
+        $this->createChat(['status' => 'new', 'department_id' => $this->department->id]);
+
+        $response = $this->actingAs($this->moderator, 'sanctum')
+            ->getJson('/api/v1/chats/inbox-summary');
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'all' => ['open', 'unread'],
+                    'departments' => [
+                        '*' => ['id', 'name', 'open', 'unread'],
+                    ],
+                ],
+            ]);
+    }
+
     public function test_list_chats_returns_401_without_auth(): void
     {
         $response = $this->getJson('/api/v1/chats');

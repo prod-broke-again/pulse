@@ -99,3 +99,8 @@ export interface ApiQuickLink {
   is_active?: boolean
   sort_order?: number
 }
+
+export interface InboxSummaryData {
+  all: { open: number; unread: number }
+  departments: Array<{ id: number; name: string; open: number; unread: number }>
+}

@@ -29,6 +29,7 @@ final class UserResource extends JsonResource
             'source_ids' => $this->pulseSourceIds($user),
             'sources' => $this->pulseSources($user),
             'department_ids' => $user->departments()->pluck('departments.id')->values(),
+            'departments' => $this->pulseDepartments($user),
             'notification_sound_prefs' => app(\App\Services\NotificationSoundPreferencesService::class)->forUser($user),
             'inbox_filter_prefs' => app(InboxFilterPreferencesService::class)->forUser($user),
         ];
@@ -76,6 +77,42 @@ final class UserResource extends JsonResource
                 'id' => (int) $source->id,
                 'name' => (string) $source->name,
                 'type' => (string) $source->type,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{id:int,source_id:int,name:string,slug:string,category:string,icon:string|null,ai_enabled:bool,is_active:bool}>
+     */
+    private function pulseDepartments(User $user): array
+    {
+        $query = \App\Infrastructure\Persistence\Eloquent\DepartmentModel::query()
+            ->select(['id', 'source_id', 'name', 'slug', 'category', 'icon', 'ai_enabled', 'is_active'])
+            ->where('is_active', true)
+            ->orderBy('id');
+
+        if (! $user->hasRole('admin')) {
+            $pivotDeptIds = $user->departments()->pluck('departments.id')->all();
+            if ($pivotDeptIds !== []) {
+                $query->whereIn('id', $pivotDeptIds);
+            } else {
+                $sourceIds = $user->sources()->pluck('sources.id')->all();
+                $query->whereIn('source_id', $sourceIds);
+            }
+        }
+
+        return $query
+            ->get()
+            ->map(static fn (\App\Infrastructure\Persistence\Eloquent\DepartmentModel $dept): array => [
+                'id' => (int) $dept->id,
+                'source_id' => (int) $dept->source_id,
+                'name' => (string) $dept->name,
+                'slug' => (string) $dept->slug,
+                'category' => (string) $dept->category,
+                'icon' => $dept->icon,
+                'ai_enabled' => (bool) $dept->ai_enabled,
+                'is_active' => (bool) $dept->is_active,
             ])
             ->values()
             ->all();
