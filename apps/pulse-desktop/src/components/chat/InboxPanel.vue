@@ -67,6 +67,15 @@ const searchQuery = ref(chatStore.filters.search)
 
 const userSources = computed(() => authStore.user?.sources ?? [])
 
+const displayedSources = computed(() => {
+  const allSources = userSources.value
+  const activeChannels = chatStore.filters.channels
+  if (!activeChannels || activeChannels.length === 0) {
+    return allSources
+  }
+  return allSources.filter((src) => src.type && (activeChannels as string[]).includes(src.type))
+})
+
 const platformTypesInSources = computed(() => {
   const types = new Set<string>()
   for (const s of userSources.value) {
@@ -107,8 +116,20 @@ function togglePlatformFilter(t: string): void {
   } else {
     cur.push(ct)
   }
+
+  // If a source is selected, but it is not compatible with the newly selected platforms, clear the source filter.
+  let nextSourceIds = chatStore.filters.source_ids
+  if (cur.length > 0 && nextSourceIds && nextSourceIds.length > 0) {
+    const compatible = nextSourceIds.filter((id) => {
+      const src = userSources.value.find((s) => s.id === id)
+      return src && src.type && (cur as string[]).includes(src.type)
+    })
+    nextSourceIds = compatible.length > 0 ? compatible : undefined
+  }
+
   void chatStore.setFilters({
     channels: cur.length > 0 ? cur : undefined,
+    source_ids: nextSourceIds,
   })
 }
 
@@ -510,7 +531,7 @@ function unreadBadgeClass(count: number): string {
               </label>
             </div>
 
-            <template v-if="userSources.length > 0">
+            <template v-if="displayedSources.length > 0">
               <p class="mb-1.5 text-[11px] font-bold uppercase tracking-wide" style="color: var(--text-muted)">
                 Источники
               </p>
@@ -530,7 +551,7 @@ function unreadBadgeClass(count: number): string {
                   Все
                 </button>
                 <button
-                  v-for="src in userSources"
+                  v-for="src in displayedSources"
                   :key="src.id"
                   type="button"
                   class="inbox-filter-chip max-w-[10rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--color-brand-200)]"

@@ -60,7 +60,8 @@ final readonly class ListChatsQuery
      */
     public function inboxSummary(User $user, array $filters): array
     {
-        unset($filters['department_id'], $filters['department_ids'], $filters['tab']);
+        unset($filters['department_id'], $filters['department_ids']);
+        $filters['tab'] = 'all';
         $filters['status'] = 'open';
 
         $userDepts = \App\Infrastructure\Persistence\Eloquent\DepartmentModel::query()
