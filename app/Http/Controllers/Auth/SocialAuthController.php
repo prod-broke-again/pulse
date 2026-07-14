@@ -42,7 +42,7 @@ final class SocialAuthController extends Controller
 
     private function validateProvider(string $provider): void
     {
-        if (! in_array($provider, ['vkontakte', 'telegram'], true)) {
+        if (! in_array($provider, ['vkontakte'], true)) {
             abort(404);
         }
     }
